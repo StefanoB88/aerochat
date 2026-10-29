@@ -1,0 +1,438 @@
+{
+  "sourceLanguage" : "it",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "comment" : "Bundle display name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AeroChat"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat"
+          }
+        }
+      }
+    },
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "MyApp"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "MyApp"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "MyApp"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "MyApp"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "MyApp"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "MyApp"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "MyApp"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "MyApp"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "MyApp"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "MyApp"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "MyApp"
+          }
+        }
+      }
+    },
+    "NSBluetoothAlwaysUsageDescription" : {
+      "comment" : "Privacy - Bluetooth Always Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat bruger Bluetooth til at udveksle krypterede beskeder med rejsemakkere i nærheden, også uden Wi-Fi eller mobilnetværk."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat nutzt Bluetooth, um verschlüsselte Nachrichten mit Reisebuddys in der Nähe auszutauschen – auch ohne WLAN oder Mobilfunk."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat uses Bluetooth to exchange encrypted messages with nearby travel buddies, even without Wi-Fi or cellular service."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat usa el Bluetooth para intercambiar mensajes cifrados con los compañeros de viaje cercanos, incluso sin Wi‑Fi ni red móvil."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat utilise le Bluetooth pour échanger des messages chiffrés avec les compagnons de voyage à proximité, même sans Wi-Fi ni réseau cellulaire."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AeroChat usa il Bluetooth per scambiare messaggi cifrati con i compagni di volo vicini, anche senza Wi-Fi o rete cellulare."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat bruker Bluetooth til å utveksle krypterte meldinger med reisekamerater i nærheten, også uten Wi-Fi eller mobilnett."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat gebruikt Bluetooth om versleutelde berichten uit te wisselen met reisgenoten in de buurt, ook zonder wifi of mobiel netwerk."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat używa Bluetooth do wymiany zaszyfrowanych wiadomości z towarzyszami podróży w pobliżu, nawet bez Wi‑Fi i sieci komórkowej."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "A AeroChat usa o Bluetooth para trocar mensagens cifradas com os companheiros de viagem por perto, mesmo sem Wi‑Fi nem rede móvel."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat använder Bluetooth för att utbyta krypterade meddelanden med resekompisar i närheten, även utan Wi-Fi eller mobilnät."
+          }
+        }
+      }
+    },
+    "NSCameraUsageDescription" : {
+      "comment" : "Privacy - Camera Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat bruger kameraet til at scanne dine rejsemakkeres QR-koder og til at tage fotos, du vil sende."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat nutzt die Kamera, um die QR-Codes deiner Reisebuddys zu scannen und Fotos zum Senden aufzunehmen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat uses the camera to scan your travel buddies’ QR codes and to take photos to send."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat usa la cámara para escanear el código QR de tus compañeros de viaje y para hacer las fotos que quieras enviar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat utilise l’appareil photo pour scanner le QR code de tes compagnons de voyage et prendre les photos à envoyer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AeroChat usa la fotocamera per inquadrare il QR Code dei compagni di volo e per scattare le foto da inviare."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat bruker kameraet til å skanne QR-kodene til reisekameratene og til å ta bilder du vil sende."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat gebruikt de camera om de QR-code van je reisgenoten te scannen en om foto’s te maken die je wilt versturen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat używa aparatu do skanowania kodów QR towarzyszy podróży i robienia zdjęć do wysłania."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "A AeroChat usa a câmara para digitalizar o código QR dos teus companheiros de viagem e para tirar as fotos que queres enviar."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat använder kameran för att skanna dina resekompisars QR-koder och för att ta foton att skicka."
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "comment" : "Privacy - Microphone Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat bruger mikrofonen til at optage talebeskeder, som du sender til dine rejsemakkere."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat nutzt das Mikrofon, um Sprachnotizen für deine Reisebuddys aufzunehmen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat uses the microphone to record voice notes to send to your travel buddies."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat usa el micrófono para grabar las notas de voz que envías a tus compañeros de viaje."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat utilise le micro pour enregistrer les notes vocales à envoyer à tes compagnons de voyage."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AeroChat usa il microfono per registrare le note vocali da inviare ai compagni di volo."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat bruker mikrofonen til å ta opp talemeldinger som du sender til reisekameratene."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat gebruikt de microfoon om spraakberichten op te nemen die je naar je reisgenoten stuurt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat używa mikrofonu do nagrywania wiadomości głosowych wysyłanych do towarzyszy podróży."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "A AeroChat usa o microfone para gravar as notas de voz que envias aos teus companheiros de viagem."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat använder mikrofonen för att spela in röstmeddelanden som du skickar till dina resekompisar."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryUsageDescription" : {
+      "comment" : "Privacy - Photo Library Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat får adgang til de fotos, du vælger at dele med dine rejsemakkere."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat greift auf die Fotos zu, die du mit deinen Reisebuddys teilen möchtest."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat accesses the photos you choose to share with your travel buddies."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat accede a las fotos que eliges compartir con tus compañeros de viaje."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat accède aux photos que tu choisis de partager avec tes compagnons de voyage."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AeroChat accede alle foto che scegli di condividere con i compagni di volo."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat får tilgang til bildene du velger å dele med reisekameratene."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat heeft toegang tot de foto’s die je met je reisgenoten wilt delen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat uzyskuje dostęp do zdjęć, które wybierzesz do udostępnienia towarzyszom podróży."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "A AeroChat acede às fotos que escolhes partilhar com os teus companheiros de viagem."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat får tillgång till de foton du väljer att dela med dina resekompisar."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.3"
+}
