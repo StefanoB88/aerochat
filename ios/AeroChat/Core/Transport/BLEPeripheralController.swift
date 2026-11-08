@@ -23,8 +23,15 @@ final class BLEPeripheralController: NSObject, CBPeripheralManagerDelegate, @unc
 
     private var manager: CBPeripheralManager?
     private var psm: CBL2CAPPSM = 0
+    /// Canale L2CAP pubblicato *da questo processo*. Dopo un rilancio (State Restoration) iOS ci
+    /// restituisce il servizio con il vecchio PSM, ma quel canale non esiste piu': va ripubblicato,
+    /// altrimenti ogni central legge un PSM morto e `openL2CAPChannel` fallisce sempre.
+    private var channelPublished = false
+    private var publishInFlight = false
     private var serviceAdded = false
     private var nodeInfoCharacteristic: CBMutableCharacteristic?
+    /// Central iscritti alle notify del Node Info (per i risvegli di `nudge`).
+    private var subscribedCentrals: [UUID: CBCentral] = [:]
     private var isAdvertising = false
     private var wantsAdvertising = true
 
@@ -63,7 +70,10 @@ final class BLEPeripheralController: NSObject, CBPeripheralManagerDelegate, @unc
             if psm != 0 { manager.unpublishL2CAPChannel(psm) }
             manager.removeAllServices()
             serviceAdded = false
+            subscribedCentrals.removeAll()
             psm = 0
+            channelPublished = false
+            publishInFlight = false
             isAdvertising = false
             self.manager = nil
             handler(.advertisingChanged(false))
@@ -84,12 +94,23 @@ final class BLEPeripheralController: NSObject, CBPeripheralManagerDelegate, @unc
         }
     }
 
+    /// Risveglia il central dopo un invio L2CAP: notify del nostro `node_id` sul Node Info.
+    /// Su un iPhone bloccato la notify risveglia l'app sospesa (`bluetooth-central`).
+    func nudge(centralID: UUID) {
+        queue.async { [self] in
+            guard let manager, let nodeInfoCharacteristic, let central = subscribedCentrals[centralID] else { return }
+            _ = manager.updateValue(localNodeID, for: nodeInfoCharacteristic, onSubscribedCentrals: [central])
+        }
+    }
+
     // MARK: - Setup
 
     private func setUpIfNeeded() {
         guard let manager, manager.state == .poweredOn else { return }
-        if psm == 0 {
+        if !channelPublished {
             // 1. Canale L2CAP senza encryption di sistema: la sicurezza e' E2EE a livello app.
+            guard !publishInFlight else { return }
+            publishInFlight = true
             manager.publishL2CAPChannel(withEncryption: false)
         } else if !serviceAdded {
             addService()
@@ -136,7 +157,10 @@ final class BLEPeripheralController: NSObject, CBPeripheralManagerDelegate, @unc
             setUpIfNeeded()
         default:
             serviceAdded = false
+            subscribedCentrals.removeAll()
             psm = 0
+            channelPublished = false
+            publishInFlight = false
             if isAdvertising {
                 isAdvertising = false
                 handler(.advertisingChanged(false))
@@ -152,6 +176,9 @@ final class BLEPeripheralController: NSObject, CBPeripheralManagerDelegate, @unc
             nodeInfoCharacteristic = ours.characteristics?
                 .compactMap { $0 as? CBMutableCharacteristic }
                 .first { $0.uuid == MeshProtocol.nodeInfoCharacteristicCBUUID }
+            for central in nodeInfoCharacteristic?.subscribedCentrals ?? [] {
+                subscribedCentrals[central.identifier] = central
+            }
             if let psmCharacteristic = ours.characteristics?.first(where: { $0.uuid == MeshProtocol.psmCharacteristicCBUUID }),
                let value = psmCharacteristic.value,
                let restored = UInt16(littleEndianBytes: value) {
@@ -164,11 +191,15 @@ final class BLEPeripheralController: NSObject, CBPeripheralManagerDelegate, @unc
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, didPublishL2CAPChannel PSM: CBL2CAPPSM, error: Error?) {
+        publishInFlight = false
         guard error == nil, PSM != 0 else {
             handler(.channelFailed(centralID: nil, reason: "publishL2CAPChannel: \(error?.localizedDescription ?? "PSM 0")"))
+            // Senza canale nessuno puo' collegarsi a noi: riproviamo a breve.
+            queue.asyncAfter(deadline: .now() + 2) { [weak self] in self?.setUpIfNeeded() }
             return
         }
         psm = PSM
+        channelPublished = true
         handler(.psmPublished(UInt16(PSM)))
         if serviceAdded {
             // Servizio ripristinato con un vecchio PSM: lo ripubblichiamo con quello nuovo.
@@ -181,6 +212,8 @@ final class BLEPeripheralController: NSObject, CBPeripheralManagerDelegate, @unc
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
         guard error == nil else {
             handler(.channelFailed(centralID: nil, reason: "addService: \(error?.localizedDescription ?? "")"))
+            // Errore transitorio del database GATT: senza nuovo tentativo non saremmo piu' visibili.
+            queue.asyncAfter(deadline: .now() + 2) { [weak self] in self?.setUpIfNeeded() }
             return
         }
         serviceAdded = true
@@ -220,7 +253,13 @@ final class BLEPeripheralController: NSObject, CBPeripheralManagerDelegate, @unc
 
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
         guard characteristic.uuid == MeshProtocol.nodeInfoCharacteristicCBUUID, let nodeInfoCharacteristic else { return }
+        subscribedCentrals[central.identifier] = central
         _ = peripheral.updateValue(localNodeID, for: nodeInfoCharacteristic, onSubscribedCentrals: [central])
+    }
+
+    func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral,
+                           didUnsubscribeFrom characteristic: CBCharacteristic) {
+        subscribedCentrals.removeValue(forKey: central.identifier)
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, didOpen channel: CBL2CAPChannel?, error: Error?) {

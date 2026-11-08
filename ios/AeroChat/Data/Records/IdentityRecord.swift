@@ -24,6 +24,10 @@ struct IdentityRecord: Codable, Hashable, Sendable, FetchableRecord, Persistable
     var proValidUntilMs: Int64?
     var proReceiptJWS: String?
     var createdAtMs: Int64
+    /// Foto profilo WebP 128x128 condivisa con i contatti (nil = solo iniziale su colore).
+    var avatarImage: Data?
+    /// Versione del profilo pubblico (nickname, colore, foto) annunciata con `PROFILE_UPDATE`.
+    var profileUpdatedAtMs: Int64?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -36,11 +40,16 @@ struct IdentityRecord: Codable, Hashable, Sendable, FetchableRecord, Persistable
         case proValidUntilMs = "pro_valid_until_ms"
         case proReceiptJWS = "pro_receipt_jws"
         case createdAtMs = "created_at_ms"
+        case avatarImage = "avatar_image"
+        case profileUpdatedAtMs = "profile_updated_at_ms"
     }
 
     enum Columns {
         static let id = Column(CodingKeys.id)
         static let nickname = Column(CodingKeys.nickname)
+        static let avatarColorHex = Column(CodingKeys.avatarColorHex)
+        static let avatarImage = Column(CodingKeys.avatarImage)
+        static let profileUpdatedAtMs = Column(CodingKeys.profileUpdatedAtMs)
         static let proTier = Column(CodingKeys.proTier)
         static let proValidUntilMs = Column(CodingKeys.proValidUntilMs)
     }
@@ -56,6 +65,8 @@ struct IdentityRecord: Codable, Hashable, Sendable, FetchableRecord, Persistable
         self.proValidUntilMs = nil
         self.proReceiptJWS = nil
         self.createdAtMs = createdAt.unixMilliseconds
+        self.avatarImage = nil
+        self.profileUpdatedAtMs = createdAt.unixMilliseconds
     }
 
     /// `true` se l'utente e' Pro in questo istante (lifetime o pass non scaduto).

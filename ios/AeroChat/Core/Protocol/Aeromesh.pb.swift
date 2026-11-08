@@ -35,6 +35,10 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
   case groupKeyGossip // = 5
   case proPassGrant // = 6
   case gameMove // = 7
+  case readReceipt // = 8
+  case profileUpdate // = 9
+  case callSignal // = 10
+  case callAudio // = 11
   case UNRECOGNIZED(Int)
 
   init() {
@@ -51,6 +55,10 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
     case 5: self = .groupKeyGossip
     case 6: self = .proPassGrant
     case 7: self = .gameMove
+    case 8: self = .readReceipt
+    case 9: self = .profileUpdate
+    case 10: self = .callSignal
+    case 11: self = .callAudio
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -65,6 +73,10 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
     case .groupKeyGossip: return 5
     case .proPassGrant: return 6
     case .gameMove: return 7
+    case .readReceipt: return 8
+    case .profileUpdate: return 9
+    case .callSignal: return 10
+    case .callAudio: return 11
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -79,6 +91,10 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
     .groupKeyGossip,
     .proPassGrant,
     .gameMove,
+    .readReceipt,
+    .profileUpdate,
+    .callSignal,
+    .callAudio,
   ]
 
 }
@@ -158,7 +174,7 @@ nonisolated struct Aeromesh_V1_InnerPayload: Sendable {
 fileprivate nonisolated let _protobuf_package = "aeromesh.v1"
 
 nonisolated extension Aeromesh_V1_PacketType: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CHAT_TEXT\0\u{1}DELIVERY_ACK\0\u{1}MEDIA_HEADER\0\u{1}MEDIA_CHUNK\0\u{1}PUBLIC_LOUNGE\0\u{1}GROUP_KEY_GOSSIP\0\u{1}PRO_PASS_GRANT\0\u{1}GAME_MOVE\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CHAT_TEXT\0\u{1}DELIVERY_ACK\0\u{1}MEDIA_HEADER\0\u{1}MEDIA_CHUNK\0\u{1}PUBLIC_LOUNGE\0\u{1}GROUP_KEY_GOSSIP\0\u{1}PRO_PASS_GRANT\0\u{1}GAME_MOVE\0\u{1}READ_RECEIPT\0\u{1}PROFILE_UPDATE\0\u{1}CALL_SIGNAL\0\u{1}CALL_AUDIO\0")
 }
 
 nonisolated extension Aeromesh_V1_MeshEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import CryptoKit
-@testable import MyApp
+@testable import AeroChat
 
 @Suite("Protocollo – Protobuf, LZ4, framing, envelope end-to-end")
 struct ProtocolCodecTests {
@@ -141,6 +141,35 @@ struct ProtocolCodecTests {
         var parser = FrameCodec.Parser()
         let oversized = UInt32(MeshProtocol.maxFrameBytes + 1).bigEndianBytes
         #expect(throws: FrameCodec.Failure.frameTooLarge(MeshProtocol.maxFrameBytes + 1)) { try parser.append(oversized) }
+        // Dopo l'errore il parser e' vuoto (il link viene chiuso, ma lo stato non deve restare sporco).
+        #expect(parser.pendingByteCount == 0)
+        // Header a zero (frame vuoto) in mezzo allo stream.
+        var other = FrameCodec.Parser()
+        #expect(throws: FrameCodec.Failure.emptyFrame) { try other.append(UInt32(0).bigEndianBytes + Data([1, 2, 3])) }
+        #expect(other.pendingByteCount == 0)
+    }
+
+    @Test("FrameCodec: molti frame in un solo chunk, frame a cavallo dei chunk e input da slice con indici non a zero")
+    func frameCodecManyFramesAndSlices() throws {
+        let payloads = (0..<2_000).map { Data(repeating: UInt8($0 % 251), count: 1 + $0 % 40) }
+        var stream = Data()
+        for payload in payloads { stream.append(try FrameCodec.frame(payload)) }
+        // Header di un frame successivo spezzato a meta'.
+        let tail = try FrameCodec.frame(Data(repeating: 0x55, count: 10))
+        stream.append(tail.prefix(2))
+
+        var parser = FrameCodec.Parser()
+        // Slice di un Data piu' grande: `startIndex` diverso da zero.
+        let padded = Data([0xFF, 0xFF, 0xFF]) + stream
+        let slice = padded[3...]
+        #expect(slice.startIndex == 3)
+        let frames = try parser.append(slice)
+        #expect(frames == payloads)
+        #expect(parser.pendingByteCount == 2)
+
+        let rest = try parser.append(tail.dropFirst(2))
+        #expect(rest == [Data(repeating: 0x55, count: 10)])
+        #expect(parser.pendingByteCount == 0)
     }
 
     // MARK: End-to-end

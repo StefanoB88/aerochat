@@ -2,7 +2,24 @@ import Foundation
 import UserNotifications
 import UIKit
 
-/// Notifiche locali istantanee a schermo spento per i messaggi ricevuti via BLE in background.
+/// Chat attualmente sullo schermo: solo per quella (con iPhone sbloccato e app attiva) il banner e' superfluo.
+@MainActor
+enum NotificationPresence {
+
+    static var visibleConversationID: String?
+
+    /// `true` se l'utente sta gia' guardando la conversazione. A schermo bloccato (anche con l'app in
+    /// primo piano prima del blocco) i dati protetti non sono disponibili e la notifica va sempre mostrata.
+    static func isShowing(conversationID: String) -> Bool {
+        let application = UIApplication.shared
+        return application.applicationState == .active
+            && application.isProtectedDataAvailable
+            && visibleConversationID == conversationID
+    }
+}
+
+/// Notifiche locali istantanee per i messaggi ricevuti via BLE: a schermo spento/bloccato, in
+/// background e, in primo piano, per le chat diverse da quella aperta.
 struct LocalNotificationCenter: MeshNotifier {
 
     /// Richiede l'autorizzazione (da chiamare dopo l'onboarding, non al primo avvio a freddo).
@@ -11,10 +28,19 @@ struct LocalNotificationCenter: MeshNotifier {
         return (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
     }
 
+    /// Chiede il permesso solo se l'utente non ha ancora risposto (es. profili creati prima che
+    /// l'onboarding lo chiedesse): non mostra nulla se il permesso e' gia' stato concesso o negato.
+    func requestAuthorizationIfNeeded() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        guard settings.authorizationStatus == .notDetermined else { return }
+        _ = await requestAuthorization()
+    }
+
     func notify(message: MessageRecord, conversation: ConversationRecord) async {
-        // In foreground la UI mostra gia' il messaggio (con feedback aptico): niente banner doppio.
-        let isActive = await MainActor.run { UIApplication.shared.applicationState == .active }
-        guard !isActive else { return }
+        // Chat aperta e iPhone sbloccato: la UI mostra gia' il messaggio (con feedback aptico).
+        let conversationID = conversation.id
+        let isShowing = await MainActor.run { NotificationPresence.isShowing(conversationID: conversationID) }
+        guard !isShowing else { return }
 
         let content = UNMutableNotificationContent()
         content.title = conversation.type == .direct ? (message.senderNickname ?? conversation.title) : conversation.title
@@ -35,8 +61,29 @@ struct LocalNotificationCenter: MeshNotifier {
         case .text: return message.text ?? ""
         case .image: return String(localized: "📷 Foto")
         case .audio: return String(localized: "🎤 Nota vocale")
-        case .game: return String(localized: "🎮 Mossa di gioco")
+        case .game:
+            // Carte: "🃏 Scopa", "🃏 Scopone", "🃏 Briscola"; gli altri giochi restano generici.
+            if let data = message.gameState, let state = try? GameSessionState.decode(data), state.isCardGame {
+                return GameService.title(for: state.gameKind)
+            }
+            return String(localized: "🎮 Mossa di gioco")
         case .system: return message.text ?? String(localized: "Aggiornamento")
         }
+    }
+}
+
+/// Senza delegate iOS scarta in silenzio le notifiche arrivate mentre considera l'app in primo piano
+/// (incluso il momento del blocco schermo): qui le mostriamo come banner + Centro Notifiche.
+final class NotificationPresentationDelegate: NSObject, UNUserNotificationCenterDelegate, Sendable {
+
+    static let shared = NotificationPresentationDelegate()
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        let conversationID = notification.request.content.userInfo["conversation_id"] as? String
+        let isShowing = await MainActor.run {
+            conversationID.map(NotificationPresence.isShowing(conversationID:)) ?? false
+        }
+        return isShowing ? [] : [.banner, .list, .sound]
     }
 }

@@ -1,0 +1,110 @@
+syntax = "proto3";
+package aeromesh.v1;
+
+option java_package = "com.example.aerochat.proto";
+option java_multiple_files = true;
+option java_outer_classname = "AeromeshExtProto";
+
+// Messaggi trasportati in `InnerPayload.extra_data` (contratto iOS <-> Android).
+// Il file Swift corrispondente (AeromeshExt.pb.swift) e' generato con protoc-gen-swift.
+
+// Membro di un gruppo di viaggio annunciato dal Group Key Gossip.
+message GroupMember {
+  bytes node_id = 1;        // 8 byte
+  bytes x25519_pub = 2;     // 32 byte
+  bytes ed25519_pub = 3;    // 32 byte
+  string nickname = 4;
+}
+
+// Inviato come pacchetto GROUP_KEY_GOSSIP *diretto* (recipient = node_id del membro, cifrato con la
+// chiave ECDH 1-a-1): la group_secret_key viaggia quindi gia' cifrata individualmente per ciascun membro.
+message GroupKeyGossip {
+  bytes group_uuid = 1;             // 16 byte RFC 4122
+  string group_title = 2;
+  bytes group_secret_key = 3;       // 32 byte
+  repeated GroupMember members = 4; // tutti i membri noti al mittente (incluso se stesso)
+  int64 issued_at_ms = 5;
+}
+
+// Flight Group Pass: "1 paga, il gruppo usa". Firma Ed25519 dell'emittente su
+// (group_uuid || valid_until_ms Int64 Big-Endian).
+message ProPassGrant {
+  bytes group_uuid = 1;
+  int64 valid_until_ms = 2;
+  bytes issuer_ed25519_pub = 3;
+  string product_id = 4;            // com.aeromesh.pass72h | com.aeromesh.lifetime
+  bytes signature = 5;              // 64 byte
+}
+
+enum GameKind {
+  GAME_KIND_UNSPECIFIED = 0;
+  TIC_TAC_TOE = 1;
+  BATTLESHIP = 2;
+  SCOPA = 3;        // carte napoletane, 2 giocatori (chat 1-a-1)
+  SCOPONE = 4;      // Scopone scientifico, 4 giocatori in coppia (chat di gruppo)
+  BRISCOLA = 5;     // 2 giocatori (chat 1-a-1)
+}
+
+enum GameAction {
+  GAME_ACTION_UNSPECIFIED = 0;
+  INVITE = 1;
+  ACCEPT = 2;
+  MOVE = 3;
+  REPORT = 4;   // Battaglia navale: esito del colpo avversario
+  RESIGN = 5;
+  DEAL = 6;     // carte: il mazziere distribuisce una nuova mano (deck = ordine delle 40 carte)
+}
+
+enum ShotReport {
+  SHOT_REPORT_UNSPECIFIED = 0;
+  MISS = 1;
+  HIT = 2;
+  SUNK = 3;
+}
+
+// Mossa di un mini-gioco in chat (GAME_MOVE).
+message GameMove {
+  string game_id = 1;        // UUID della partita
+  GameKind kind = 2;
+  GameAction action = 3;
+  uint32 sequence = 4;       // numero progressivo della mossa nella partita
+  uint32 cell = 5;           // Tris: 0..8 (riga*3+col). Battaglia navale: 0..99 (riga*10+col)
+  ShotReport report = 6;     // solo per action == REPORT
+  bytes board_snapshot = 7;  // stato autorevole dopo la mossa (Tris: 9 byte 0/1/2)
+  uint32 result = 8;         // 0 in corso, 1 vince il mittente, 2 vince il destinatario, 3 pareggio
+  bytes deck = 9;              // DEAL: 40 byte, permutazione degli id carta 0..39 (seme * 10 + valore - 1)
+  bytes captured = 10;         // MOVE (Scopa/Scopone): id delle carte prese dal tavolo; vuoto = nessuna presa
+  repeated bytes players = 11; // INVITE Scopone: 4 node_id (8 byte) in ordine di posto 0..3; posto 0 = chi invita
+}
+
+// Profilo pubblico (PROFILE_UPDATE, pacchetto diretto cifrato 1-a-1): inviato a ogni contatto quando
+// cambia e a ogni vicino una volta per sessione radio. Il destinatario applica solo versioni piu' recenti.
+message ProfileUpdate {
+  string nickname = 1;
+  string avatar_color_hex = 2; // 6 cifre esadecimali RGB, es. "00E5FF"
+  bytes avatar_webp = 3;       // foto profilo WebP 128x128 (max 12 KB); vuoto = nessuna foto
+  int64 updated_at_ms = 4;     // versione del profilo (Unix ms)
+}
+
+// Chiamate vocali in tempo reale: solo tra vicini diretti (ttl 1, nessun relay, nessuna coda).
+// Android: nomi prefissati CALL_ (protoc vieta ACCEPT duplicato nel package); numeri invariati = wire identico a iOS.
+enum CallAction {
+  CALL_ACTION_UNSPECIFIED = 0;
+  CALL_OFFER = 1;    // il chiamante propone la chiamata
+  CALL_ACCEPT = 2;   // il chiamato risponde
+  CALL_REJECT = 3;   // il chiamato rifiuta
+  CALL_HANGUP = 4;   // uno dei due chiude (anche prima della risposta)
+  CALL_BUSY = 5;     // il chiamato e' gia' in un'altra chiamata
+}
+
+message CallSignal {
+  string call_id = 1;       // UUID minuscolo scelto dal chiamante
+  CallAction action = 2;
+}
+
+// Audio: Opus 16 kHz mono, 20 ms per frame, 3 frame (60 ms) per pacchetto.
+message CallAudio {
+  string call_id = 1;
+  uint32 sequence = 2;      // progressivo per pacchetto, parte da 1; i pacchetti fuori ordine/vecchi si scartano
+  repeated bytes frames = 3;
+}

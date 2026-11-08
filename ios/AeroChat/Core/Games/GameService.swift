@@ -29,6 +29,21 @@ struct GameSessionState: Codable, Sendable, Equatable {
     var battleship: Battleship?
     /// Battaglia navale: cella del nostro ultimo colpo in attesa di REPORT.
     var pendingShot: Int?
+    /// Carte: node_id dei giocatori per posto (0 = chi invita; Scopone: squadre {0,2} contro {1,3}).
+    var seats: [Data]?
+    /// Carte: nickname per posto (solo per la UI).
+    var seatNames: [String]?
+    /// Carte: il nostro posto; nil = spettatore (membro del gruppo non al tavolo).
+    var mySeat: Int?
+    /// Scopone: posti che hanno accettato l'invito.
+    var acceptedSeats: [Int]?
+    /// Scopa e Scopone scientifico (stesso motore).
+    var scopa: ScopaGame?
+    var briscola: BriscolaGame?
+    /// Carte: DEAL/MOVE arrivati fuori ordine, applicati quando arrivano i precedenti.
+    var pendingMoves: [BufferedCardMove]?
+    /// Carte: posto di chi ha abbandonato (la sua parte perde).
+    var resignedSeat: Int?
     var updatedAtMs: Int64 = Date.nowUnixMilliseconds
 
     var gameKind: GameKind { GameKind(rawValue: kind) ?? .unspecified }
@@ -39,8 +54,12 @@ struct GameSessionState: Codable, Sendable, Equatable {
     static func decode(_ data: Data) throws -> GameSessionState { try JSONDecoder().decode(GameSessionState.self, from: data) }
 }
 
-/// Motore dei mini-giochi in chat (Tris, Battaglia navale) sopra i pacchetti `GAME_MOVE`.
+/// Motore dei mini-giochi in chat (Tris, Battaglia navale, Scopa, Scopone scientifico, Briscola) sopra
+/// i pacchetti `GAME_MOVE`.
 actor GameService {
+
+    /// Salto massimo accettato nel numero di sequenza di una mossa ricevuta.
+    static let maxSequenceGap: UInt32 = 16
 
     enum Failure: Error, Equatable {
         case directConversationOnly
@@ -48,6 +67,12 @@ actor GameService {
         case notYourTurn
         case invalidState
         case unsupportedKind
+        /// Scopone: si gioca solo in una chat di gruppo.
+        case groupConversationOnly
+        /// Scopone: servono esattamente 3 altri membri del gruppo, distinti.
+        case invalidPlayers
+        /// Carta o presa non valida.
+        case invalidMove
     }
 
     enum Event: Sendable, Equatable {
@@ -60,6 +85,12 @@ actor GameService {
     private var nickname: String
     private var inboundTask: Task<Void, Never>?
     private var subscribers: [UUID: AsyncStream<Event>.Continuation] = [:]
+    /// Carte: mosse arrivate prima dell'invito della loro partita (rigiocate quando arriva l'invito).
+    private var orphanCardMoves: [String: [(move: GameMove, packet: InboundPacket)]] = [:]
+    /// Carte: le operazioni (lettura stato → mossa → persistenza → eventuale DEAL) non si intrecciano
+    /// ai punti di sospensione dell'actor.
+    private var cardLockBusy = false
+    private var cardLockWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(router: MeshRouterActor, database: AppDatabase, identity: IdentityKeys, nickname: String) {
         self.router = router
@@ -110,15 +141,35 @@ actor GameService {
 
     // MARK: - Azioni locali
 
-    /// Invita l'interlocutore (solo chat 1-a-1). La bolla appare subito come "invito inviato".
+    /// Invita l'interlocutore (chat 1-a-1) o, per lo Scopone, 3 membri del gruppo (`players` in ordine
+    /// di posto 1..3: il secondo scelto e' il compagno). La bolla appare subito come "invito inviato".
     @discardableResult
-    func invite(kind: GameKind, in conversation: ConversationRecord) async throws -> GameSessionState {
-        guard conversation.type == .direct, let opponent = conversation.peerNodeID else { throw Failure.directConversationOnly }
-        guard kind == .ticTacToe || kind == .battleship else { throw Failure.unsupportedKind }
+    func invite(kind: GameKind, in conversation: ConversationRecord, players: [Data] = []) async throws -> GameSessionState {
+        let opponent: Data
+        var seats: [Data]?
+        if kind == .scopone {
+            guard conversation.type == .group else { throw Failure.groupConversationOnly }
+            let members = Set(try await database.conversations.groupMembers(of: conversation.id).map(\.nodeID))
+            guard players.count == 3, Set(players).count == 3, !players.contains(identity.nodeID),
+                  players.allSatisfy(members.contains) else { throw Failure.invalidPlayers }
+            opponent = players[0]
+            seats = [identity.nodeID] + players
+        } else {
+            guard conversation.type == .direct, let peer = conversation.peerNodeID else { throw Failure.directConversationOnly }
+            guard kind == .ticTacToe || kind == .battleship || kind == .scopa || kind == .briscola else { throw Failure.unsupportedKind }
+            opponent = peer
+            if kind.isCardGame { seats = [identity.nodeID, peer] }
+        }
         let msgID = CryptoEngine.randomMessageID()
         var state = GameSessionState(gameID: msgID.hexString, kind: kind.rawValue, conversationID: conversation.id,
                                      opponentNodeID: opponent, iAmInviter: true)
         if kind == .ticTacToe { state.ticTacToe = TicTacToe() }
+        if let seats {
+            state.seats = seats
+            state.mySeat = 0
+            state.seatNames = await seatNames(for: seats, conversationID: conversation.id)
+            if kind == .scopone { state.acceptedSeats = [] }
+        }
         let message = MessageRecord(msgID: msgID, conversationID: conversation.id, senderNodeID: identity.nodeID,
                                     senderNickname: nickname, contentType: .game, text: Self.title(for: kind),
                                     gameState: try state.encoded(), isOutgoing: true, deliveryStatus: .queued)
@@ -129,6 +180,7 @@ actor GameService {
         move.kind = kind
         move.action = .invite
         move.sequence = 0
+        if kind == .scopone, let seats { move.players = seats }
         let result = try await router.sendPacket(type: .gameMove, payload: payload(for: move), in: conversation, msgID: msgID)
         try await database.messages.updateDeliveryStatus(result.reached ? .sentMesh : .queued, msgID: msgID)
         emit(.updated(gameID: state.gameID, conversationID: conversation.id))
@@ -138,6 +190,9 @@ actor GameService {
     /// Accetta un invito ricevuto: chi invita muove/spara per primo.
     @discardableResult
     func accept(gameID: String) async throws -> GameSessionState {
+        if try await session(gameID: gameID).isCardGame {
+            return try await withCardLock { try await acceptCardGame(gameID: gameID) }
+        }
         var state = try await session(gameID: gameID)
         guard state.status == .invited, !state.iAmInviter else { throw Failure.invalidState }
         state.status = .active
@@ -200,6 +255,9 @@ actor GameService {
 
     @discardableResult
     func resign(gameID: String) async throws -> GameSessionState {
+        if try await session(gameID: gameID).isCardGame {
+            return try await withCardLock { try await resignCardGame(gameID: gameID) }
+        }
         var state = try await session(gameID: gameID)
         guard state.status != .finished else { throw Failure.invalidState }
         state.status = .finished
@@ -218,6 +276,10 @@ actor GameService {
     // MARK: - Ricezione
 
     private func handle(_ packet: InboundPacket) async {
+        if let move = try? MeshWire.parseGameMove(packet.payload.extraData), !move.gameID.isEmpty, move.kind.isCardGame {
+            await withCardLock { await handleCardMove(move, packet: packet) }
+            return
+        }
         guard packet.conversation.type == .direct,
               let move = try? MeshWire.parseGameMove(packet.payload.extraData),
               !move.gameID.isEmpty else { return }
@@ -227,8 +289,12 @@ actor GameService {
             return
         }
         guard var state = try? await session(gameID: move.gameID),
+              !state.isCardGame,
               state.opponentNodeID == packet.sender.nodeID,
-              move.sequence > state.sequence else { return }
+              move.sequence > state.sequence,
+              // Solo piccoli salti in avanti (mosse perse): un valore enorme farebbe andare in overflow
+              // il nostro `sequence += 1` alla mossa successiva.
+              move.sequence - state.sequence <= Self.maxSequenceGap else { return }
         state.sequence = move.sequence
 
         switch move.action {
@@ -262,6 +328,7 @@ actor GameService {
         let msgID = packet.envelope.msgID
         guard msgID.hexString == move.gameID else { return }
         if (try? await database.messages.fetch(msgID: msgID)) != nil { return }
+        guard move.sequence <= Self.maxSequenceGap else { return }
         var state = GameSessionState(gameID: move.gameID, kind: move.kind.rawValue, conversationID: packet.conversation.id,
                                      opponentNodeID: packet.sender.nodeID, iAmInviter: false)
         state.sequence = move.sequence
@@ -365,6 +432,9 @@ actor GameService {
         switch kind {
         case .ticTacToe: return String(localized: "🎮 Tris")
         case .battleship: return String(localized: "🚢 Battaglia navale")
+        case .scopa: return String(localized: "🃏 Scopa")
+        case .scopone: return String(localized: "🃏 Scopone")
+        case .briscola: return String(localized: "🃏 Briscola")
         default: return String(localized: "🎮 Gioco")
         }
     }
@@ -394,5 +464,219 @@ actor GameService {
 
     private func removeSubscriber(_ id: UUID) {
         subscribers.removeValue(forKey: id)
+    }
+}
+
+// MARK: - Carte napoletane (Scopa, Scopone scientifico, Briscola)
+
+extension GameService {
+
+    /// Massimo di mosse tenute in memoria per partite di cui non e' ancora arrivato l'invito.
+    static let maxOrphanCardMoves = 64
+
+    /// Gioca una carta: `captured` = carte prese dal tavolo (Scopa/Scopone; vuoto se non c'e' presa).
+    @discardableResult
+    func playCard(gameID: String, card: Int, captured: [Int] = []) async throws -> GameSessionState {
+        try await withCardLock {
+            var state = try await session(gameID: gameID)
+            guard state.isCardGame, let seat = state.mySeat else { throw Failure.invalidState }
+            guard state.status == .active, state.turnSeat == seat else { throw Failure.notYourTurn }
+            let applied = BufferedCardMove(sequence: state.sequence + 1, action: .move, senderNodeID: identity.nodeID,
+                                           cell: card, captured: captured)
+            do { try state.applyCardMove(applied) } catch { throw Failure.invalidMove }
+            var move = GameMove()
+            move.gameID = gameID
+            move.kind = state.gameKind
+            move.action = .move
+            move.sequence = state.sequence
+            move.cell = UInt32(card)
+            move.captured = Data(captured.sorted().map { UInt8($0) })
+            move.result = state.cardResult(forSenderSeat: seat)
+            try await send(move, state: &state)
+            return await dealIfNeeded(state)
+        }
+    }
+
+    fileprivate func acceptCardGame(gameID: String) async throws -> GameSessionState {
+        var state = try await session(gameID: gameID)
+        guard state.status == .invited, !state.iAmInviter, let seat = state.mySeat else { throw Failure.invalidState }
+        var move = GameMove()
+        move.gameID = gameID
+        move.kind = state.gameKind
+        move.action = .accept
+        if state.gameKind == .scopone {
+            // Scopone: ACCEPT con sequence 0, non fa avanzare il contatore; si aspetta il DEAL di chi invita.
+            var accepted = Set(state.acceptedSeats ?? [])
+            guard accepted.insert(seat).inserted else { throw Failure.invalidState }
+            state.acceptedSeats = accepted.sorted()
+            move.sequence = 0
+        } else {
+            state.status = .active
+            state.sequence = 1
+            move.sequence = 1
+        }
+        state.myTurn = false
+        try await send(move, state: &state)
+        return state
+    }
+
+    fileprivate func resignCardGame(gameID: String) async throws -> GameSessionState {
+        var state = try await session(gameID: gameID)
+        guard state.status != .finished, let seat = state.mySeat else { throw Failure.invalidState }
+        state.applyCardResign(seat: seat)
+        state.sequence += 1
+        var move = GameMove()
+        move.gameID = gameID
+        move.kind = state.gameKind
+        move.action = .resign
+        move.sequence = state.sequence
+        move.result = 2
+        try await send(move, state: &state)
+        return state
+    }
+
+    /// Ricezione di una mossa di carte: Scopa/Briscola solo in chat 1-a-1, Scopone solo nel gruppo.
+    fileprivate func handleCardMove(_ move: GameMove, packet: InboundPacket) async {
+        let sender = packet.sender.nodeID
+        guard sender != identity.nodeID else { return }
+        let expectedType: ConversationType = move.kind == .scopone ? .group : .direct
+        guard packet.conversation.type == expectedType else { return }
+        if move.action == .invite {
+            await handleCardInvite(move, packet: packet)
+            return
+        }
+        guard var state = try? await session(gameID: move.gameID) else {
+            rememberOrphan(move, packet: packet)
+            return
+        }
+        guard state.gameKind == move.kind, state.conversationID == packet.conversation.id,
+              let senderSeat = state.seat(of: sender) else { return }
+
+        switch move.action {
+        case .accept:
+            guard state.status == .invited else { return }
+            if move.kind == .scopone {
+                guard (1...3).contains(senderSeat), move.sequence == 0 else { return }
+                var accepted = Set(state.acceptedSeats ?? [])
+                guard accepted.insert(senderSeat).inserted else { return }
+                state.acceptedSeats = accepted.sorted()
+            } else {
+                guard state.iAmInviter, senderSeat == 1, move.sequence == 1, state.sequence == 0 else { return }
+                state.sequence = 1
+                state.status = .active
+            }
+            await persist(state)
+            _ = await dealIfNeeded(state)
+        case .resign:
+            // L'abbandono vale subito, anche fuori ordine (puo' incrociarsi con una mossa avversaria).
+            guard state.status != .finished,
+                  move.sequence <= state.sequence || move.sequence - state.sequence <= Self.maxSequenceGap else { return }
+            state.applyCardResign(seat: senderSeat)
+            state.sequence = max(state.sequence, move.sequence)
+            await persist(state)
+        case .deal, .move:
+            guard state.receiveCardMove(BufferedCardMove(move, senderNodeID: sender), maxGap: Self.maxSequenceGap) else { return }
+            await persist(state)
+            _ = await dealIfNeeded(state)
+        default:
+            return
+        }
+    }
+
+    private func handleCardInvite(_ move: GameMove, packet: InboundPacket) async {
+        let msgID = packet.envelope.msgID
+        let sender = packet.sender.nodeID
+        guard msgID.hexString == move.gameID, move.sequence == 0 else { return }
+        if (try? await database.messages.fetch(msgID: msgID)) != nil { return }
+        let seats: [Data]
+        if move.kind == .scopone {
+            guard move.players.count == 4, move.players.allSatisfy({ $0.count == identity.nodeID.count }),
+                  Set(move.players).count == 4, move.players[0] == sender else { return }
+            seats = move.players
+        } else {
+            seats = [sender, identity.nodeID]
+        }
+        var state = GameSessionState(gameID: move.gameID, kind: move.kind.rawValue, conversationID: packet.conversation.id,
+                                     opponentNodeID: sender, iAmInviter: false)
+        state.seats = seats
+        state.mySeat = seats.firstIndex(of: identity.nodeID)
+        state.seatNames = await seatNames(for: seats, conversationID: packet.conversation.id,
+                                          known: [sender: packet.sender.nickname])
+        if move.kind == .scopone { state.acceptedSeats = [] }
+        let message = MessageRecord(msgID: msgID, conversationID: packet.conversation.id, senderNodeID: sender,
+                                    senderNickname: packet.sender.nickname, contentType: .game, text: Self.title(for: move.kind),
+                                    gameState: try? state.encoded(), isOutgoing: false, deliveryStatus: .deliveredAck,
+                                    hopCountReceived: packet.hopCount, createdAtMs: packet.envelope.createdAtMs)
+        guard (try? await database.messages.insert(message)) != nil else { return }
+        emit(.updated(gameID: state.gameID, conversationID: packet.conversation.id))
+
+        // Mosse della stessa partita arrivate prima dell'invito.
+        for orphan in orphanCardMoves.removeValue(forKey: move.gameID) ?? [] {
+            await handleCardMove(orphan.move, packet: orphan.packet)
+        }
+    }
+
+    /// Se tocca a noi distribuire, invia il DEAL (mazzo mescolato qui) e lo applica subito.
+    private func dealIfNeeded(_ incoming: GameSessionState) async -> GameSessionState {
+        var state = incoming
+        guard state.shouldDeal, let dealer = state.mySeat else { return state }
+        let deck = NeapolitanCards.shuffledDeck()
+        let applied = BufferedCardMove(sequence: state.sequence + 1, action: .deal, senderNodeID: identity.nodeID,
+                                       cell: dealer, deck: deck)
+        guard (try? state.applyCardMove(applied)) != nil else { return incoming }
+        state.drainPendingMoves()
+        var move = GameMove()
+        move.gameID = state.gameID
+        move.kind = state.gameKind
+        move.action = .deal
+        move.sequence = applied.sequence
+        move.cell = UInt32(dealer)
+        move.deck = Data(deck.map { UInt8($0) })
+        try? await send(move, state: &state)
+        return state
+    }
+
+    private func rememberOrphan(_ move: GameMove, packet: InboundPacket) {
+        guard move.action == .accept || move.action == .deal || move.action == .move || move.action == .resign else { return }
+        let total = orphanCardMoves.values.reduce(0) { $0 + $1.count }
+        guard total < Self.maxOrphanCardMoves else { return }
+        orphanCardMoves[move.gameID, default: []].append((move, packet))
+    }
+
+    /// Nickname per posto: noi, poi i contatti noti, poi i membri del gruppo.
+    private func seatNames(for seats: [Data], conversationID: String, known: [Data: String] = [:]) async -> [String] {
+        let members = (try? await database.conversations.groupMembers(of: conversationID)) ?? []
+        var names: [String] = []
+        for (index, nodeID) in seats.enumerated() {
+            if nodeID == identity.nodeID {
+                names.append(nickname)
+            } else if let name = known[nodeID], !name.isEmpty {
+                names.append(name)
+            } else if let peer = try? await database.peers.fetch(nodeID: nodeID) {
+                names.append(peer.nickname)
+            } else if let member = members.first(where: { $0.nodeID == nodeID }) {
+                names.append(member.nickname)
+            } else {
+                names.append(String(localized: "Giocatore \(index + 1)"))
+            }
+        }
+        return names
+    }
+
+    /// Serializza le operazioni sulle partite a carte (l'actor e' rientrante ai punti `await`).
+    fileprivate func withCardLock<T: Sendable>(_ body: () async throws -> T) async rethrows -> T {
+        if cardLockBusy {
+            await withCheckedContinuation { cardLockWaiters.append($0) }
+        } else {
+            cardLockBusy = true
+        }
+        defer {
+            if cardLockWaiters.isEmpty {
+                cardLockBusy = false
+            } else {
+                cardLockWaiters.removeFirst().resume()
+            }
+        }
+        return try await body()
     }
 }

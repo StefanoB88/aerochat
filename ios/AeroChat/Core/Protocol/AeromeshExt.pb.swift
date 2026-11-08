@@ -30,6 +30,9 @@ nonisolated enum Aeromesh_V1_GameKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   case unspecified // = 0
   case ticTacToe // = 1
   case battleship // = 2
+  case scopa // = 3
+  case scopone // = 4
+  case briscola // = 5
   case UNRECOGNIZED(Int)
 
   init() {
@@ -41,6 +44,9 @@ nonisolated enum Aeromesh_V1_GameKind: SwiftProtobuf.Enum, Swift.CaseIterable {
     case 0: self = .unspecified
     case 1: self = .ticTacToe
     case 2: self = .battleship
+    case 3: self = .scopa
+    case 4: self = .scopone
+    case 5: self = .briscola
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -50,6 +56,9 @@ nonisolated enum Aeromesh_V1_GameKind: SwiftProtobuf.Enum, Swift.CaseIterable {
     case .unspecified: return 0
     case .ticTacToe: return 1
     case .battleship: return 2
+    case .scopa: return 3
+    case .scopone: return 4
+    case .briscola: return 5
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -59,6 +68,9 @@ nonisolated enum Aeromesh_V1_GameKind: SwiftProtobuf.Enum, Swift.CaseIterable {
     .unspecified,
     .ticTacToe,
     .battleship,
+    .scopa,
+    .scopone,
+    .briscola,
   ]
 
 }
@@ -71,6 +83,7 @@ nonisolated enum Aeromesh_V1_GameAction: SwiftProtobuf.Enum, Swift.CaseIterable 
   case move // = 3
   case report // = 4
   case resign // = 5
+  case deal // = 6
   case UNRECOGNIZED(Int)
 
   init() {
@@ -85,6 +98,7 @@ nonisolated enum Aeromesh_V1_GameAction: SwiftProtobuf.Enum, Swift.CaseIterable 
     case 3: self = .move
     case 4: self = .report
     case 5: self = .resign
+    case 6: self = .deal
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -97,6 +111,7 @@ nonisolated enum Aeromesh_V1_GameAction: SwiftProtobuf.Enum, Swift.CaseIterable 
     case .move: return 3
     case .report: return 4
     case .resign: return 5
+    case .deal: return 6
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -109,6 +124,7 @@ nonisolated enum Aeromesh_V1_GameAction: SwiftProtobuf.Enum, Swift.CaseIterable 
     .move,
     .report,
     .resign,
+    .deal,
   ]
 
 }
@@ -151,6 +167,56 @@ nonisolated enum Aeromesh_V1_ShotReport: SwiftProtobuf.Enum, Swift.CaseIterable 
     .miss,
     .hit,
     .sunk,
+  ]
+
+}
+
+nonisolated enum Aeromesh_V1_CallAction: SwiftProtobuf.Enum, Swift.CaseIterable {
+  typealias RawValue = Int
+  case unspecified // = 0
+  case offer // = 1
+  case accept // = 2
+  case reject // = 3
+  case hangup // = 4
+  case busy // = 5
+  case UNRECOGNIZED(Int)
+
+  init() {
+    self = .unspecified
+  }
+
+  init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .offer
+    case 2: self = .accept
+    case 3: self = .reject
+    case 4: self = .hangup
+    case 5: self = .busy
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .offer: return 1
+    case .accept: return 2
+    case .reject: return 3
+    case .hangup: return 4
+    case .busy: return 5
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  static let allCases: [Aeromesh_V1_CallAction] = [
+    .unspecified,
+    .offer,
+    .accept,
+    .reject,
+    .hangup,
+    .busy,
   ]
 
 }
@@ -234,6 +300,60 @@ nonisolated struct Aeromesh_V1_GameMove: Sendable {
 
   var result: UInt32 = 0
 
+  var deck: Data = Data()
+
+  var captured: Data = Data()
+
+  var players: [Data] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct Aeromesh_V1_ProfileUpdate: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var nickname: String = String()
+
+  var avatarColorHex: String = String()
+
+  var avatarWebp: Data = Data()
+
+  var updatedAtMs: Int64 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct Aeromesh_V1_CallSignal: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var callID: String = String()
+
+  var action: Aeromesh_V1_CallAction = .unspecified
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct Aeromesh_V1_CallAudio: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var callID: String = String()
+
+  var sequence: UInt32 = 0
+
+  var frames: [Data] = []
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -244,15 +364,19 @@ nonisolated struct Aeromesh_V1_GameMove: Sendable {
 fileprivate nonisolated let _protobuf_package = "aeromesh.v1"
 
 nonisolated extension Aeromesh_V1_GameKind: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GAME_KIND_UNSPECIFIED\0\u{1}TIC_TAC_TOE\0\u{1}BATTLESHIP\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GAME_KIND_UNSPECIFIED\0\u{1}TIC_TAC_TOE\0\u{1}BATTLESHIP\0\u{1}SCOPA\0\u{1}SCOPONE\0\u{1}BRISCOLA\0")
 }
 
 nonisolated extension Aeromesh_V1_GameAction: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GAME_ACTION_UNSPECIFIED\0\u{1}INVITE\0\u{1}ACCEPT\0\u{1}MOVE\0\u{1}REPORT\0\u{1}RESIGN\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GAME_ACTION_UNSPECIFIED\0\u{1}INVITE\0\u{1}ACCEPT\0\u{1}MOVE\0\u{1}REPORT\0\u{1}RESIGN\0\u{1}DEAL\0")
 }
 
 nonisolated extension Aeromesh_V1_ShotReport: SwiftProtobuf._ProtoNameProviding {
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SHOT_REPORT_UNSPECIFIED\0\u{1}MISS\0\u{1}HIT\0\u{1}SUNK\0")
+}
+
+nonisolated extension Aeromesh_V1_CallAction: SwiftProtobuf._ProtoNameProviding {
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CALL_ACTION_UNSPECIFIED\0\u{1}OFFER\0\u{1}ACCEPT\0\u{1}REJECT\0\u{1}HANGUP\0\u{1}BUSY\0")
 }
 
 nonisolated extension Aeromesh_V1_GroupMember: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -402,7 +526,7 @@ nonisolated extension Aeromesh_V1_ProPassGrant: SwiftProtobuf.Message, SwiftProt
 
 nonisolated extension Aeromesh_V1_GameMove: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".GameMove"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}game_id\0\u{1}kind\0\u{1}action\0\u{1}sequence\0\u{1}cell\0\u{1}report\0\u{3}board_snapshot\0\u{1}result\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}game_id\0\u{1}kind\0\u{1}action\0\u{1}sequence\0\u{1}cell\0\u{1}report\0\u{3}board_snapshot\0\u{1}result\0\u{1}deck\0\u{1}captured\0\u{1}players\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -418,6 +542,9 @@ nonisolated extension Aeromesh_V1_GameMove: SwiftProtobuf.Message, SwiftProtobuf
       case 6: try { try decoder.decodeSingularEnumField(value: &self.report) }()
       case 7: try { try decoder.decodeSingularBytesField(value: &self.boardSnapshot) }()
       case 8: try { try decoder.decodeSingularUInt32Field(value: &self.result) }()
+      case 9: try { try decoder.decodeSingularBytesField(value: &self.deck) }()
+      case 10: try { try decoder.decodeSingularBytesField(value: &self.captured) }()
+      case 11: try { try decoder.decodeRepeatedBytesField(value: &self.players) }()
       default: break
       }
     }
@@ -448,6 +575,15 @@ nonisolated extension Aeromesh_V1_GameMove: SwiftProtobuf.Message, SwiftProtobuf
     if self.result != 0 {
       try visitor.visitSingularUInt32Field(value: self.result, fieldNumber: 8)
     }
+    if !self.deck.isEmpty {
+      try visitor.visitSingularBytesField(value: self.deck, fieldNumber: 9)
+    }
+    if !self.captured.isEmpty {
+      try visitor.visitSingularBytesField(value: self.captured, fieldNumber: 10)
+    }
+    if !self.players.isEmpty {
+      try visitor.visitRepeatedBytesField(value: self.players, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -460,6 +596,129 @@ nonisolated extension Aeromesh_V1_GameMove: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.report != rhs.report {return false}
     if lhs.boardSnapshot != rhs.boardSnapshot {return false}
     if lhs.result != rhs.result {return false}
+    if lhs.deck != rhs.deck {return false}
+    if lhs.captured != rhs.captured {return false}
+    if lhs.players != rhs.players {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_ProfileUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".ProfileUpdate"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}nickname\0\u{3}avatar_color_hex\0\u{3}avatar_webp\0\u{3}updated_at_ms\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.nickname) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.avatarColorHex) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.avatarWebp) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.updatedAtMs) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.nickname.isEmpty {
+      try visitor.visitSingularStringField(value: self.nickname, fieldNumber: 1)
+    }
+    if !self.avatarColorHex.isEmpty {
+      try visitor.visitSingularStringField(value: self.avatarColorHex, fieldNumber: 2)
+    }
+    if !self.avatarWebp.isEmpty {
+      try visitor.visitSingularBytesField(value: self.avatarWebp, fieldNumber: 3)
+    }
+    if self.updatedAtMs != 0 {
+      try visitor.visitSingularInt64Field(value: self.updatedAtMs, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_ProfileUpdate, rhs: Aeromesh_V1_ProfileUpdate) -> Bool {
+    if lhs.nickname != rhs.nickname {return false}
+    if lhs.avatarColorHex != rhs.avatarColorHex {return false}
+    if lhs.avatarWebp != rhs.avatarWebp {return false}
+    if lhs.updatedAtMs != rhs.updatedAtMs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_CallSignal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".CallSignal"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}call_id\0\u{1}action\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.callID) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.action) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.callID.isEmpty {
+      try visitor.visitSingularStringField(value: self.callID, fieldNumber: 1)
+    }
+    if self.action != .unspecified {
+      try visitor.visitSingularEnumField(value: self.action, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_CallSignal, rhs: Aeromesh_V1_CallSignal) -> Bool {
+    if lhs.callID != rhs.callID {return false}
+    if lhs.action != rhs.action {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_CallAudio: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".CallAudio"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}call_id\0\u{1}sequence\0\u{1}frames\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.callID) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.sequence) }()
+      case 3: try { try decoder.decodeRepeatedBytesField(value: &self.frames) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.callID.isEmpty {
+      try visitor.visitSingularStringField(value: self.callID, fieldNumber: 1)
+    }
+    if self.sequence != 0 {
+      try visitor.visitSingularUInt32Field(value: self.sequence, fieldNumber: 2)
+    }
+    if !self.frames.isEmpty {
+      try visitor.visitRepeatedBytesField(value: self.frames, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_CallAudio, rhs: Aeromesh_V1_CallAudio) -> Bool {
+    if lhs.callID != rhs.callID {return false}
+    if lhs.sequence != rhs.sequence {return false}
+    if lhs.frames != rhs.frames {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

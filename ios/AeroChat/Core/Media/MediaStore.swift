@@ -75,6 +75,11 @@ struct MediaStore: Sendable {
         FileManager.default.fileExists(atPath: absoluteURL(relativePath: relativePath).path)
     }
 
+    /// Elimina il file (es. quando si cancella la chat); un file gia' assente non e' un errore.
+    func remove(relativePath: String) {
+        try? FileManager.default.removeItem(at: absoluteURL(relativePath: relativePath))
+    }
+
     private static func sanitize(_ mediaID: String) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
         return String(mediaID.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" })

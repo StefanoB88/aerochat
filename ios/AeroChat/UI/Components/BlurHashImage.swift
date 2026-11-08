@@ -1,4 +1,5 @@
 import SwiftUI
+import ImageIO
 
 /// Anteprima istantanea da BlurHash (decodifica 32x32 in ~20 ms, poi upscaling della GPU).
 struct BlurHashImage: View {
@@ -67,6 +68,15 @@ struct MediaImageView: View {
 
     @State private var image: UIImage?
 
+    init(blurhash: String?, relativePath: String?, store: MediaStore?, transferProgress: Double? = nil) {
+        self.blurhash = blurhash
+        self.relativePath = relativePath
+        self.store = store
+        self.transferProgress = transferProgress
+        // Gia' decodificata (riapparsa scorrendo): niente BlurHash ne' nuova decodifica.
+        _image = State(initialValue: relativePath.flatMap(ChatImageCache.cached(relativePath:)))
+    }
+
     var body: some View {
         ZStack {
             if let blurhash, image == nil {
@@ -77,23 +87,66 @@ struct MediaImageView: View {
                     .resizable()
                     .scaledToFill()
                     .transition(.opacity)
-            } else if let transferProgress {
+            }
+            if let transferProgress {
+                // In ricezione sopra il BlurHash, in invio sopra la foto gia' visibile.
                 TransferProgressRing(progress: transferProgress)
-            } else if relativePath == nil {
+            } else if image == nil, relativePath == nil {
                 ProgressView()
                     .tint(AeroTheme.accentCyan)
             }
         }
         .task(id: relativePath) {
             guard let relativePath, let store else { return }
+            if let cached = ChatImageCache.cached(relativePath: relativePath) {
+                image = cached
+                return
+            }
             let url = store.absoluteURL(relativePath: relativePath)
-            let loaded = await Task.detached(priority: .userInitiated) { () -> UIImage? in
-                guard let data = try? Data(contentsOf: url) else { return nil }
-                if let ui = UIImage(data: data) { return ui }
-                guard let cg = try? WebPEncoder.decode(data) else { return nil }
-                return UIImage(cgImage: cg)
+            let loaded = await Task.detached(priority: .userInitiated) {
+                ChatImageCache.load(url: url, relativePath: relativePath)
             }.value
             withAnimation(.easeOut(duration: 0.25)) { image = loaded }
         }
+    }
+}
+
+/// Foto della chat ridotte alla dimensione della bolla (660 px = 220 pt @3x) e decodificate fuori
+/// dal main thread; restano in cache cosi' lo scroll avanti/indietro non le ridecodifica.
+enum ChatImageCache {
+
+    static let maxPixelSize = 660
+
+    nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.totalCostLimit = 48 * 1_048_576
+        return cache
+    }()
+
+    static func cached(relativePath: String) -> UIImage? {
+        cache.object(forKey: relativePath as NSString)
+    }
+
+    static func load(url: URL, relativePath: String) -> UIImage? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        let cgImage: CGImage?
+        if let source = CGImageSourceCreateWithData(data as CFData, nil),
+           let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) {
+            cgImage = thumbnail
+        } else if let decoded = try? WebPEncoder.decode(data) {
+            cgImage = ImageProcessor.downscale(decoded, maxLongSide: maxPixelSize)
+        } else {
+            cgImage = nil
+        }
+        guard let cgImage else { return nil }
+        let image = UIImage(cgImage: cgImage)
+        cache.setObject(image, forKey: relativePath as NSString, cost: cgImage.bytesPerRow * cgImage.height)
+        return image
     }
 }

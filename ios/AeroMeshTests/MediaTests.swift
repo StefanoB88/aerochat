@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import CoreGraphics
 import ImageIO
-@testable import MyApp
+@testable import AeroChat
 
 @Suite("Media – BlurHash, WebP, Ogg Opus, trasferimento sulla mesh")
 struct MediaTests {
@@ -67,6 +67,23 @@ struct MediaTests {
         let decoded = try WebPEncoder.decode(result.webp)
         #expect(decoded.width == 1_280 && decoded.height == 960)
         #expect(WebPEncoder.dimensions(of: result.webp)?.width == 1_280)
+    }
+
+    @Test("WebP: un header che dichiara 16384x16384 in pochi byte viene rifiutato senza decodificare")
+    func webPDecodeRejectsDecompressionBomb() {
+        // Header VP8L (lossless) minimale: firma 0x2F, poi 14 bit larghezza-1 e 14 bit altezza-1.
+        let chunk = Data([0x2F, 0xFF, 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x00])
+        var riff = Data("WEBP".utf8)
+        riff.append(Data("VP8L".utf8))
+        riff.append(UInt32(chunk.count).littleEndianBytes)
+        riff.append(chunk)
+        var data = Data("RIFF".utf8)
+        data.append(UInt32(riff.count).littleEndianBytes)
+        data.append(riff)
+        #expect(WebPEncoder.isWebP(data))
+        let declared = WebPEncoder.dimensions(of: data)
+        #expect(declared?.width == 16_384 && declared?.height == 16_384)
+        #expect(throws: WebPEncoder.Failure.decodeFailed) { try WebPEncoder.decode(data) }
     }
 
     @Test("ImageProcessor: immagini ad altissimo dettaglio rientrano comunque negli 80 KB riducendo il lato lungo")

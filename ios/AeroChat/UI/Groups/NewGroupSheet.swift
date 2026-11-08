@@ -55,6 +55,7 @@ struct NewGroupSheet: View {
                     }
                 }
                 .scrollContentBackground(.hidden)
+                .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle("Nuovo gruppo")
             .navigationBarTitleDisplayMode(.inline)

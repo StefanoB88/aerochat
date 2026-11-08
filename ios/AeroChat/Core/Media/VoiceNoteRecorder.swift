@@ -34,6 +34,8 @@ final class VoiceNoteRecorder {
     private var sink: SampleSink?
     private var meterTask: Task<Void, Never>?
     private var startedAt: Date?
+    /// Chiamato quando la registrazione si ferma da sola al limite dei 120 s (la nota va inviata, non persa).
+    var onAutoStop: ((Recording) -> Void)?
 
     init() {}
 
@@ -56,11 +58,19 @@ final class VoiceNoteRecorder {
         }
         let sink = SampleSink(converter: converter, targetFormat: target)
         self.sink = sink
-        input.installTap(onBus: 0, bufferSize: 4_096, format: inputFormat) { buffer, _ in
-            sink.append(buffer)
-        }
+        // Un tap rimasto da un avvio fallito farebbe sollevare un'eccezione ObjC (crash) a `installTap`.
+        input.removeTap(onBus: 0)
+        Self.installTap(on: input, format: inputFormat, sink: sink)
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            // Microfono occupato (chiamata, Siri): pulizia completa, il prossimo tentativo deve poter ripartire.
+            input.removeTap(onBus: 0)
+            self.sink = nil
+            try? session.setActive(false, options: .notifyOthersOnDeactivation)
+            throw error
+        }
         isRecording = true
         startedAt = Date()
         elapsed = 0
@@ -71,7 +81,11 @@ final class VoiceNoteRecorder {
                 self.level = sink.currentLevel()
                 self.elapsed = Date().timeIntervalSince(self.startedAt ?? Date())
                 if self.elapsed >= Self.maximumDuration {
-                    _ = try? self.stop()
+                    // `stop` cancella questo stesso task: la codifica deve partire comunque.
+                    let finish = Task { try? await self.stop() }
+                    if let recording = await finish.value {
+                        self.onAutoStop?(recording)
+                    }
                     break
                 }
             }
@@ -79,7 +93,8 @@ final class VoiceNoteRecorder {
     }
 
     /// Ferma la registrazione e restituisce il file Ogg Opus pronto per la mesh.
-    func stop() throws -> Recording {
+    /// La codifica Opus (fino a 120 s di audio, centinaia di ms) gira fuori dal main actor.
+    func stop() async throws -> Recording {
         guard isRecording, let sink else { throw Failure.notRecording }
         meterTask?.cancel()
         meterTask = nil
@@ -92,7 +107,7 @@ final class VoiceNoteRecorder {
 
         let samples = sink.drain()
         guard Double(samples.count) / OpusCodec.sampleRate >= Self.minimumDuration else { throw Failure.tooShort }
-        return try Self.makeRecording(samples: samples)
+        return try await Task.detached(priority: .userInitiated) { try Self.makeRecording(samples: samples) }.value
     }
 
     func cancel() {
@@ -106,6 +121,14 @@ final class VoiceNoteRecorder {
         level = 0
         sink = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    /// Il blocco del tap gira sul thread audio in tempo reale: va creato fuori dal main actor, altrimenti
+    /// Swift 6 lo considera `@MainActor` e il controllo di isolamento a runtime fa crashare l'app.
+    nonisolated private static func installTap(on input: AVAudioInputNode, format: AVAudioFormat, sink: SampleSink) {
+        input.installTap(onBus: 0, bufferSize: 4_096, format: format) { buffer, _ in
+            sink.append(buffer)
+        }
     }
 
     /// Pipeline pura (testabile): PCM 16 kHz -> Opus -> Ogg + forma d'onda.

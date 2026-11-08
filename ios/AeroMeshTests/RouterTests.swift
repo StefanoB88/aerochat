@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import MyApp
+@testable import AeroChat
 
 @Suite("MeshRouterActor – flooding, relay, store-and-forward, ack, gossip")
 struct RouterTests {
@@ -176,6 +176,73 @@ struct RouterTests {
         #expect(await eventually { try await alice.database.relayQueue.stats().count == 0 })
     }
 
+    @Test("Consegna affidabile: con il link 'aperto' ma l'app del destinatario sospesa, il messaggio resta in coda fino all'ACK")
+    func messageIsRetriedUntilAcknowledged() async throws {
+        let alice = try await TestNode.make("Alice")
+        let bob = try await TestNode.make("Bob")
+        try await TestNode.pair(alice, bob)
+
+        // Bob sospeso: il link risulta aperto per Alice, ma nessuno elabora i frame.
+        let suspendedBob = FakeTransport(localNodeID: bob.nodeID)
+        let (staleLink, _) = await FakeMeshNetwork.connect(alice.transport, suspendedBob)
+
+        let conversation = try await alice.directConversation(with: bob)
+        let sent = try await alice.router.sendText("Sei sveglio?", in: conversation)
+        #expect(sent.deliveryStatus == .sentMesh)
+        #expect(try await alice.database.relayQueue.stats().count == 1, "senza ACK il messaggio resta in coda")
+        #expect(try await bob.database.messages.fetch(msgID: sent.msgID) == nil)
+
+        // Bob torna in primo piano e si ricollega: la coda riparte e l'ACK la svuota.
+        await alice.transport.detach(localLink: staleLink)
+        await FakeMeshNetwork.connect(alice.transport, bob.transport)
+        #expect(await eventually { try await bob.database.messages.fetch(msgID: sent.msgID) != nil })
+        #expect(await eventually { try await alice.database.messages.fetch(msgID: sent.msgID)?.deliveryStatus == .deliveredAck })
+        #expect(await eventually { try await alice.database.relayQueue.stats().count == 0 })
+    }
+
+    @Test("Ritrasmissione periodica: solo verso vicini diretti, senza ri-inondare la cabina")
+    func periodicRetryTargetsOnlyNeighbors() async throws {
+        let alice = try await TestNode.make("Alice")
+        let bob = try await TestNode.make("Bob")
+        let carol = try await TestNode.make("Carol")
+        try await TestNode.pair(alice, bob)
+        try await TestNode.pair(alice, carol)
+        let suspendedBob = FakeTransport(localNodeID: bob.nodeID)
+        await FakeMeshNetwork.connect(alice.transport, suspendedBob)
+
+        _ = try await alice.router.sendText("Per Bob", in: try await alice.directConversation(with: bob))
+        _ = try await alice.router.sendText("Per Carol, lontana", in: try await alice.directConversation(with: carol))
+        #expect(try await alice.database.relayQueue.stats().count == 2)
+
+        let before = await alice.transport.framesSent()
+        await alice.router.retryUnacknowledged()
+        #expect(await alice.transport.framesSent() == before + 1, "ritenta solo il messaggio per il vicino Bob")
+        #expect(try await alice.database.relayQueue.stats().count == 2, "senza ACK restano entrambi in coda")
+    }
+
+    @Test("ACK perso: alla ritrasmissione il destinatario riconosce il duplicato e rimanda l'ACK")
+    func duplicateOfDeliveredMessageIsReacknowledged() async throws {
+        let alice = try await TestNode.make("Alice")
+        let bob = try await TestNode.make("Bob")
+        try await TestNode.pair(alice, bob)
+        let conversation = try await alice.directConversation(with: bob)
+        let sent = try await alice.router.sendText("Hai ricevuto?", in: conversation)
+        let queued = try #require(try await alice.database.relayQueue.pending().first)
+
+        // Bob riceve il messaggio ma il suo ACK non arriva mai ad Alice (nessun link verso di lei).
+        await bob.router.receive(queued.rawEnvelopeBytes, from: LinkID(deviceID: UUID(), role: .peripheral))
+        #expect(try await bob.database.messages.fetch(msgID: sent.msgID) != nil)
+        let bobQueue = try await bob.database.relayQueue.pending().map(\.msgID)
+        try await bob.database.relayQueue.remove(msgIDs: bobQueue)
+
+        // Il link si apre e Alice ritrasmette: Bob scarta il duplicato ma, superato il throttle, rimanda l'ACK.
+        await bob.router.runMaintenance(now: Date().addingTimeInterval(60))
+        await FakeMeshNetwork.connect(alice.transport, bob.transport)
+        #expect(await eventually { try await alice.database.messages.fetch(msgID: sent.msgID)?.deliveryStatus == .deliveredAck })
+        #expect(await eventually { try await alice.database.relayQueue.stats().count == 0 })
+        #expect(bob.notifier.notified.count == 1, "il duplicato non genera una seconda notifica")
+    }
+
     @Test("Store-and-Forward sul ponte: il relay senza altri vicini viene accodato e consegnato dopo")
     func bridgeQueuesRelayUntilNextHopAppears() async throws {
         let alice = try await TestNode.make("Alice")
@@ -233,6 +300,7 @@ struct RouterTests {
         // A e C scansionano il QR di gruppo di B.
         let aliceGroup = try await alice.router.pair(with: invite)
         #expect(aliceGroup.type == .group)
+        #expect(aliceGroup.title == "Volo FR1234", "il nome del gruppo arriva gia' dal QR")
         #expect(aliceGroup.groupSecretKey == group.groupSecretKey)
         let carolGroup = try await carol.router.pair(with: invite)
 
@@ -329,5 +397,43 @@ struct RouterTests {
         try await Task.sleep(for: .milliseconds(300))
         #expect(try await alice.database.messages.fetch(msgID: sent.msgID) == nil)
         #expect(try await troll.database.messages.fetch(msgID: sent.msgID)?.deliveryStatus == .sentMesh)
+    }
+
+    // MARK: - Stato radio e Lounge
+
+    @Test("Gruppo: stato radio dal membro migliore (ponte piu' corto, poi diretto) con lettura unica dei peer")
+    func groupReachabilityPicksBestMember() async throws {
+        let alice = try await TestNode.make("Alice")
+        let bob = try await TestNode.make("Bob")
+        let carol = try await TestNode.make("Carol")
+        let dave = try await TestNode.make("Dave")
+        try await TestNode.pair(alice, bob)
+        try await TestNode.pair(alice, carol)
+        try await TestNode.pair(alice, dave)
+        let group = try await alice.router.createGroup(title: "Volo AZ610")
+        for other in [bob, carol, dave] {
+            let peer = try #require(try await alice.database.peers.fetch(nodeID: other.nodeID))
+            try await alice.database.conversations.addGroupMember(peer, to: group.id)
+        }
+        #expect(await alice.router.reachability(of: group) == .outOfRange)
+
+        try await alice.database.peers.markSeen(nodeID: carol.nodeID, hopCount: 4, rssi: nil)
+        try await alice.database.peers.markSeen(nodeID: dave.nodeID, hopCount: 2, rssi: nil)
+        #expect(await alice.router.reachability(of: group) == .viaBridge(hops: 2))
+
+        await FakeMeshNetwork.connect(alice.transport, bob.transport)
+        #expect(await eventually { await alice.router.reachability(of: group) == .direct(rssi: -60) })
+    }
+
+    @Test("Lounge: il fast path in lettura restituisce la stessa Cabina finche' non scade, poi la ricrea")
+    func cabinLoungeFastPathAndRenewal() async throws {
+        let database = try AppDatabase.makeTemporary()
+        let now = Date()
+        let first = try await database.conversations.currentCabinLounge(now: now)
+        let again = try await database.conversations.currentCabinLounge(now: now.addingTimeInterval(60))
+        #expect(again == first)
+        let renewed = try await database.conversations.currentCabinLounge(now: now.addingTimeInterval(MeshProtocol.loungeLifetime + 1))
+        #expect(renewed.id == first.id)
+        #expect(renewed.expiresAtMs != first.expiresAtMs)
     }
 }

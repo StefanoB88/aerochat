@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import MyApp
+@testable import AeroChat
 
 @Suite("Mini-giochi – Tris, Battaglia navale, GameService sulla mesh")
 struct GamesTests {

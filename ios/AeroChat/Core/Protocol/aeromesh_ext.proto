@@ -36,6 +36,9 @@ enum GameKind {
   GAME_KIND_UNSPECIFIED = 0;
   TIC_TAC_TOE = 1;
   BATTLESHIP = 2;
+  SCOPA = 3;      // carte napoletane, 2 giocatori, chat 1-a-1, a 11 punti
+  SCOPONE = 4;    // Scopone scientifico, 4 giocatori in 2 squadre, chat di gruppo, a 11 punti
+  BRISCOLA = 5;   // 2 giocatori, chat 1-a-1, una mano (120 punti carta)
 }
 
 enum GameAction {
@@ -45,6 +48,7 @@ enum GameAction {
   MOVE = 3;
   REPORT = 4;   // Battaglia navale: esito del colpo avversario
   RESIGN = 5;
+  DEAL = 6;     // carte: il mazziere distribuisce una nuova mano (deck = ordine delle 40 carte)
 }
 
 enum ShotReport {
@@ -64,4 +68,41 @@ message GameMove {
   ShotReport report = 6;     // solo per action == REPORT
   bytes board_snapshot = 7;  // stato autorevole dopo la mossa (Tris: 9 byte 0/1/2)
   uint32 result = 8;         // 0 in corso, 1 vince il mittente, 2 vince il destinatario, 3 pareggio
+  // Carte napoletane (Scopa, Scopone, Briscola): id carta 0..39 = seme*10 + (valore-1),
+  // semi 0 denari, 1 coppe, 2 spade, 3 bastoni. Per DEAL `cell` = posto del mazziere,
+  // per MOVE `cell` = id della carta giocata. `sequence` e' un contatore globale della partita.
+  bytes deck = 9;              // DEAL: 40 byte, permutazione degli id carta 0..39
+  bytes captured = 10;         // MOVE (Scopa/Scopone): id delle carte prese dal tavolo; vuoto = nessuna presa
+  repeated bytes players = 11; // INVITE Scopone: 4 node_id (8 byte) in ordine di posto 0..3; posto 0 = chi invita
+}
+
+// Profilo pubblico (PROFILE_UPDATE, pacchetto diretto cifrato 1-a-1): inviato a ogni contatto quando
+// cambia e a ogni vicino una volta per sessione radio. Il destinatario applica solo versioni piu' recenti.
+message ProfileUpdate {
+  string nickname = 1;
+  string avatar_color_hex = 2; // 6 cifre esadecimali RGB, es. "00E5FF"
+  bytes avatar_webp = 3;       // foto profilo WebP 128x128 (max 12 KB); vuoto = nessuna foto
+  int64 updated_at_ms = 4;     // versione del profilo (Unix ms)
+}
+
+// Chiamate vocali in tempo reale: solo tra vicini diretti (ttl 1, nessun relay, nessuna coda).
+enum CallAction {
+  CALL_ACTION_UNSPECIFIED = 0;
+  OFFER = 1;    // il chiamante propone la chiamata
+  ACCEPT = 2;   // il chiamato risponde
+  REJECT = 3;   // il chiamato rifiuta
+  HANGUP = 4;   // uno dei due chiude (anche prima della risposta)
+  BUSY = 5;     // il chiamato e' gia' in un'altra chiamata
+}
+
+message CallSignal {
+  string call_id = 1;       // UUID minuscolo scelto dal chiamante
+  CallAction action = 2;
+}
+
+// Audio: Opus 16 kHz mono, 20 ms per frame, 3 frame (60 ms) per pacchetto.
+message CallAudio {
+  string call_id = 1;
+  uint32 sequence = 2;      // progressivo per pacchetto, parte da 1; i pacchetti fuori ordine/vecchi si scartano
+  repeated bytes frames = 3;
 }

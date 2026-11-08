@@ -12,6 +12,12 @@ import Foundation
 /// - La chiave simmetrica della Lounge Pubblica e' `SHA256("AeroMesh-Public-Cabin-v1")` (32 byte).
 /// - `group_uuid_bytes` sono i 16 byte RFC 4122 del UUID (equivalenti a
 ///   `ByteBuffer.putLong(msb).putLong(lsb)` su Android).
+/// - `READ_RECEIPT` (diretto al mittente, cifrato 1-a-1): `extra_data` = concatenazione di N `msg_id`
+///   da 16 byte (max 64 per pacchetto) dei messaggi letti. Nei gruppi ogni lettore viene registrato
+///   (`message_reads`) e la spunta blu arriva solo quando hanno letto tutti i membri noti (mittente escluso);
+///   la doppia spunta grigia (`DELIVERY_ACK`) resta al primo destinatario che conferma.
+/// - `PROFILE_UPDATE` (diretto, cifrato 1-a-1): `extra_data` = `ProfileUpdate` serializzato; inviato a
+///   tutti i contatti quando il profilo cambia e a ogni vicino quando si apre il link.
 /// - Gli UUID BLE a 128 bit sono scritti nell'advertising cosi' come sono (16 byte): con i 3 byte
 ///   di Flags il pacchetto legacy pesa 21 byte, entro il limite di 31.
 enum MeshProtocol {
@@ -43,12 +49,36 @@ enum MeshProtocol {
 
     /// Oltre questa dimensione il payload **non** viene ritrasmesso multi-hop.
     static let maxRelayPayloadBytes = 16_384
+    /// Limite superiore di `created_at_ms` accettato (1 gennaio 2100).
+    static let maxCreatedAtMs: Int64 = 4_102_444_800_000
+    /// Membri massimi annunciati in un singolo Group Key Gossip.
+    static let maxGossipMembers = 64
     /// Sopra questa soglia (byte di InnerPayload serializzato) si applica LZ4.
     static let lz4CompressionThreshold = 128
     /// Dimensione massima di un singolo frame sullo stream L2CAP (protezione memoria).
     static let maxFrameBytes = 1_048_576
     /// Dimensione massima accettata dopo decompressione LZ4.
     static let maxDecompressedBytes = 4 * 1_048_576
+
+    // MARK: - Profilo
+
+    /// Lato della foto profilo quadrata (WebP) inviata con `PROFILE_UPDATE`.
+    static let avatarPixelSize = 128
+    /// Dimensione massima accettata della foto profilo.
+    static let maxAvatarBytes = 12_288
+    /// Lunghezza massima del nickname (onboarding, profilo e `PROFILE_UPDATE`).
+    static let maxNicknameLength = 32
+
+    // MARK: - Chiamate
+
+    /// Sotto questo RSSI (dBm) il link BLE perde troppi pacchetti per l'audio in tempo reale.
+    static let minimumCallRSSI = -90
+    /// Frame Opus da 20 ms per pacchetto `CALL_AUDIO` (60 ms: ~17 pacchetti/s, ~5 KB/s con l'overhead).
+    static let callFramesPerPacket = 3
+    /// Squilli senza risposta prima di chiudere la chiamata.
+    static let callRingTimeout: TimeInterval = 35
+    /// Senza audio dal compagno per cosi' tanto la chiamata viene chiusa (link perso).
+    static let callMediaTimeout: TimeInterval = 10
 
     // MARK: - Store-and-Forward
 

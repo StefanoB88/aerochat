@@ -109,6 +109,11 @@ enum EnvelopeVerifier {
         guard envelope.hopCount <= MeshProtocol.maxTTL else {
             throw Failure.malformed("hop_count \(envelope.hopCount) > max")
         }
+        // Timestamp arbitrario dalla rete: fuori da [1970, 2100] e' malformato (evita anche overflow
+        // aritmetici nel controllo anti-replay, che in Swift farebbero crashare l'app).
+        guard envelope.createdAtMs > 0, envelope.createdAtMs < MeshProtocol.maxCreatedAtMs else {
+            throw Failure.malformed("created_at_ms \(envelope.createdAtMs)")
+        }
         guard envelope.ed25519Signature.count == MeshProtocol.signatureLength else {
             throw Failure.malformed("signature length \(envelope.ed25519Signature.count)")
         }

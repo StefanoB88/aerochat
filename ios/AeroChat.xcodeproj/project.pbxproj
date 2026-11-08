@@ -18,7 +18,7 @@
 			containerPortal = 000000000000000000000000 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 000000000000000100000000;
-			remoteInfo = MyApp;
+			remoteInfo = AeroChat;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -110,7 +110,7 @@
 				AE4000000000000000000012 /* SwiftProtobuf */,
 				AE4000000000000000000013 /* libwebp */,
 			);
-			productName = MyApp;
+			productName = AeroChat;
 			productReference = 000000000000000000000120 /* AeroChat.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -169,11 +169,6 @@
 				sv,
 				da,
 				nb,
-				fi,
-				cs,
-				el,
-				ro,
-				hu,
 			);
 			mainGroup = 000000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
@@ -363,6 +358,8 @@
 		000000000000000111000000 /* Debug configuration for PBXNativeTarget "AeroChat" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = T2H6F3HDY6;
@@ -370,7 +367,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = MyApp/Info.plist;
+				INFOPLIST_FILE = AeroChat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = AeroChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "AeroChat usa il Bluetooth per scambiare messaggi cifrati con i compagni di volo vicini, anche senza Wi-Fi o rete cellulare.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AeroChat usa la fotocamera per inquadrare il QR Code dei compagni di volo e per scattare le foto da inviare.";
@@ -395,7 +392,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.stefanobrandipersonalteam.AeroChat;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
@@ -414,6 +411,8 @@
 		000000000000000112000000 /* Release configuration for PBXNativeTarget "AeroChat" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = T2H6F3HDY6;
@@ -421,7 +420,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = MyApp/Info.plist;
+				INFOPLIST_FILE = AeroChat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = AeroChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "AeroChat usa il Bluetooth per scambiare messaggi cifrati con i compagni di volo vicini, anche senza Wi-Fi o rete cellulare.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AeroChat usa la fotocamera per inquadrare il QR Code dei compagni di volo e per scattare le foto da inviare.";
@@ -446,7 +445,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.stefanobrandipersonalteam.AeroChat;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
@@ -483,7 +482,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MyApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MyApp";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AeroChat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AeroChat";
 				XROS_DEPLOYMENT_TARGET = 27.0;
 			};
 			name = Debug;
@@ -509,7 +508,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MyApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MyApp";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AeroChat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AeroChat";
 				XROS_DEPLOYMENT_TARGET = 27.0;
 			};
 			name = Release;

@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import MyApp
+@testable import AeroChat
 
 @Suite("GRDB – schema, FTS5, osservazioni, code")
 struct DatabaseTests {
@@ -18,7 +18,7 @@ struct DatabaseTests {
     func migrationsCreateSchema() async throws {
         let db = try AppDatabase.makeTemporary()
         let tables = try await db.tableNames()
-        for expected in ["identity", "peers", "conversations", "group_members", "messages", "messages_fts", "seen_packets", "relay_queue"] {
+        for expected in ["identity", "peers", "conversations", "group_members", "messages", "messages_fts", "seen_packets", "relay_queue", "message_reads"] {
             #expect(tables.contains(expected), "manca la tabella \(expected)")
         }
         #expect(try await db.isWALEnabled())
@@ -236,6 +236,34 @@ struct DatabaseTests {
         #expect(try await db.messages.fetch(conversationID: lounge.id).isEmpty)
     }
 
+    @Test("Chat fissate in cima, poi per ultimo messaggio; eliminazione con messaggi in cascata")
+    func pinnedConversationsComeFirst() async throws {
+        let db = try AppDatabase.makeTemporary()
+        let a = makePeer("A", trusted: true)
+        let b = makePeer("B", trusted: true)
+        try await db.peers.upsert(a)
+        try await db.peers.upsert(b)
+        let chatA = try await db.conversations.ensureDirectConversation(with: a)
+        let chatB = try await db.conversations.ensureDirectConversation(with: b)
+        var older = MessageRecord.outgoingText("vecchio", conversationID: chatA.id, sender: IdentityKeys.generate())
+        older.createdAtMs -= 60_000
+        try await db.messages.insert(older)
+        try await db.messages.insert(MessageRecord.outgoingText("nuovo", conversationID: chatB.id, sender: IdentityKeys.generate()))
+        #expect(try await db.conversations.fetchPermanent().map(\.id) == [chatB.id, chatA.id])
+
+        try await db.conversations.setPinned(true, conversationID: chatA.id)
+        let pinned = try await db.conversations.fetchPermanent()
+        #expect(pinned.map(\.id) == [chatA.id, chatB.id])
+        #expect(pinned.first?.isPinned == true)
+
+        try await db.conversations.setPinned(false, conversationID: chatA.id)
+        #expect(try await db.conversations.fetchPermanent().map(\.id) == [chatB.id, chatA.id])
+
+        try await db.conversations.delete(conversationID: chatA.id)
+        #expect(try await db.conversations.fetchPermanent().map(\.id) == [chatB.id])
+        #expect(try await db.messages.fetch(msgID: older.msgID) == nil, "i messaggi seguono la chat eliminata")
+    }
+
     @Test("Gruppi: chiave segreta, membri e lookup per recipient_id")
     func groupConversation() async throws {
         let db = try AppDatabase.makeTemporary()
@@ -258,5 +286,60 @@ struct DatabaseTests {
         try await db.conversations.setProUnlocked(until: until, conversationID: group.id)
         #expect(try await db.conversations.fetch(id: group.id)?.isProUnlocked() == true)
         #expect(try await db.conversations.fetchPermanent().map(\.id) == [group.id])
+    }
+
+    @Test("Gruppi: la spunta blu arriva solo quando hanno letto tutti i membri (mittente escluso)")
+    func groupReadRequiresAllMembers() async throws {
+        let db = try AppDatabase.makeTemporary()
+        let me = IdentityKeys.generate()
+        let a = makePeer("A", trusted: true)
+        let b = makePeer("B", trusted: true)
+        let outsider = makePeer("Estraneo")
+        for peer in [a, b, outsider] { try await db.peers.upsert(peer) }
+        let group = try await db.conversations.createGroup(title: "Volo FR1234", members: [a, b])
+        let message = MessageRecord.outgoingText("Imbarco al gate 12", conversationID: group.id, sender: me)
+        try await db.messages.insert(message)
+        try await db.messages.markSentMesh(msgIDs: [message.msgID])
+
+        // Primo lettore: registrato, il messaggio diventa solo "consegnato".
+        #expect(try await db.messages.markReadByRecipient(msgIDs: [message.msgID], readerNodeID: a.nodeID) == [message.msgID])
+        #expect(try await db.messages.fetch(msgID: message.msgID)?.deliveryStatus == .deliveredAck)
+        // Conferma duplicata e lettore non membro: nessun avanzamento.
+        #expect(try await db.messages.markReadByRecipient(msgIDs: [message.msgID], readerNodeID: a.nodeID).isEmpty)
+        #expect(try await db.messages.markReadByRecipient(msgIDs: [message.msgID], readerNodeID: outsider.nodeID).isEmpty)
+        #expect(try await db.messages.fetch(msgID: message.msgID)?.deliveryStatus == .deliveredAck)
+        #expect(Set(try await db.messages.readerNodeIDs(msgID: message.msgID)) == [a.nodeID, outsider.nodeID])
+
+        // Ultimo membro: spunta blu.
+        #expect(try await db.messages.markReadByRecipient(msgIDs: [message.msgID], readerNodeID: b.nodeID) == [message.msgID])
+        #expect(try await db.messages.fetch(msgID: message.msgID)?.deliveryStatus == .read)
+
+        // Un membro che entra dopo non riporta indietro un messaggio gia' letto da tutti.
+        try await db.conversations.addGroupMember(makePeer("C"), to: group.id)
+        #expect(try await db.messages.markReadByRecipient(msgIDs: [message.msgID], readerNodeID: a.nodeID).isEmpty)
+        #expect(try await db.messages.fetch(msgID: message.msgID)?.deliveryStatus == .read)
+
+        // I lettori seguono il messaggio eliminato.
+        try await db.messages.delete(msgID: message.msgID)
+        #expect(try await db.messages.readerNodeIDs(msgID: message.msgID).isEmpty)
+    }
+
+    @Test("Gruppi: con un nuovo membro noto la spunta blu attende anche lui")
+    func groupReadWaitsForMembersKnownNow() async throws {
+        let db = try AppDatabase.makeTemporary()
+        let me = IdentityKeys.generate()
+        let a = makePeer("A", trusted: true)
+        let c = makePeer("C", trusted: true)
+        try await db.peers.upsert(a)
+        try await db.peers.upsert(c)
+        let group = try await db.conversations.createGroup(title: "Volo AZ610", members: [a])
+        let message = MessageRecord.outgoingText("Ciao a tutti", conversationID: group.id, sender: me)
+        try await db.messages.insert(message)
+        try await db.conversations.addGroupMember(c, to: group.id)
+
+        _ = try await db.messages.markReadByRecipient(msgIDs: [message.msgID], readerNodeID: a.nodeID)
+        #expect(try await db.messages.fetch(msgID: message.msgID)?.deliveryStatus == .deliveredAck)
+        _ = try await db.messages.markReadByRecipient(msgIDs: [message.msgID], readerNodeID: c.nodeID)
+        #expect(try await db.messages.fetch(msgID: message.msgID)?.deliveryStatus == .read)
     }
 }

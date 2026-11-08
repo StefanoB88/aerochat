@@ -11,12 +11,12 @@ struct ConversationRepository: Sendable {
         }
     }
 
-    /// Tutte le conversazioni permanenti (Tab 1), ordinate per ultimo messaggio.
+    /// Tutte le conversazioni permanenti (Tab 1): prima le fissate, poi per ultimo messaggio.
     func fetchPermanent() async throws -> [ConversationRecord] {
         try await database.pool.read { db in
             try ConversationRecord
                 .filter(ConversationRecord.Columns.type != ConversationType.cabinLounge.rawValue)
-                .order(ConversationRecord.Columns.lastMessageAtMs.desc, ConversationRecord.Columns.title)
+                .order(ConversationRecord.Columns.isPinned.desc, ConversationRecord.Columns.lastMessageAtMs.desc, ConversationRecord.Columns.title)
                 .fetchAll(db)
         }
     }
@@ -83,7 +83,13 @@ struct ConversationRepository: Sendable {
     /// eliminata (con i suoi messaggi) e ricreata per altre 12 ore.
     @discardableResult
     func currentCabinLounge(now: Date = Date()) async throws -> ConversationRecord {
-        try await database.pool.write { db in
+        // Fast path in sola lettura: il router la chiama per ogni pacchetto della Lounge e una transazione
+        // di scrittura a pacchetto si accodava alle scritture vere (messaggi, seen_packets).
+        if let existing = try await database.pool.read({ db in try ConversationRecord.fetchOne(db, key: ConversationRecord.cabinLoungeID) }),
+           !existing.isExpired(now: now) {
+            return existing
+        }
+        return try await database.pool.write { db in
             if let existing = try ConversationRecord.fetchOne(db, key: ConversationRecord.cabinLoungeID) {
                 if !existing.isExpired(now: now) {
                     return existing
@@ -118,6 +124,23 @@ struct ConversationRepository: Sendable {
         }
     }
 
+    /// Fissa / sblocca una chat in cima alla lista.
+    func setPinned(_ pinned: Bool, conversationID: String) async throws {
+        _ = try await database.pool.write { db in
+            try ConversationRecord
+                .filter(key: conversationID)
+                .updateAll(db, ConversationRecord.Columns.isPinned.set(to: pinned))
+        }
+    }
+
+    func updateTitle(_ title: String, conversationID: String) async throws {
+        _ = try await database.pool.write { db in
+            try ConversationRecord
+                .filter(key: conversationID)
+                .updateAll(db, ConversationRecord.Columns.title.set(to: title))
+        }
+    }
+
     func delete(conversationID: String) async throws {
         try await database.pool.write { db in
             _ = try ConversationRecord.deleteOne(db, key: conversationID)
@@ -131,11 +154,18 @@ struct ConversationRepository: Sendable {
         }
     }
 
+    /// Stream dei membri di un gruppo (scheda info gruppo): si aggiorna con QR e gossip.
+    func observeGroupMembers(of conversationID: String) -> AsyncStream<[GroupMemberRecord]> {
+        database.pool.observeStream { db in
+            try GroupMemberRecord.filter(GroupMemberRecord.Columns.conversationID == conversationID).fetchAll(db)
+        }
+    }
+
     func observePermanent() -> AsyncStream<[ConversationRecord]> {
         database.pool.observeStream { db in
             try ConversationRecord
                 .filter(ConversationRecord.Columns.type != ConversationType.cabinLounge.rawValue)
-                .order(ConversationRecord.Columns.lastMessageAtMs.desc, ConversationRecord.Columns.title)
+                .order(ConversationRecord.Columns.isPinned.desc, ConversationRecord.Columns.lastMessageAtMs.desc, ConversationRecord.Columns.title)
                 .fetchAll(db)
         }
     }

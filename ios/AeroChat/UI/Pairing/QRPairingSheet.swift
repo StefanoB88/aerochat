@@ -35,6 +35,7 @@ struct QRPairingSheet: View {
                         ForEach(Mode.allCases) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.segmented)
+                    .controlSize(.large)
                     .padding(.horizontal)
 
                     switch mode {

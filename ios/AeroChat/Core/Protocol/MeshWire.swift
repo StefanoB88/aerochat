@@ -12,6 +12,10 @@ typealias GameMove = Aeromesh_V1_GameMove
 typealias GameKind = Aeromesh_V1_GameKind
 typealias GameAction = Aeromesh_V1_GameAction
 typealias ShotReport = Aeromesh_V1_ShotReport
+typealias ProfileUpdate = Aeromesh_V1_ProfileUpdate
+typealias CallSignal = Aeromesh_V1_CallSignal
+typealias CallAudio = Aeromesh_V1_CallAudio
+typealias CallAction = Aeromesh_V1_CallAction
 
 /// Punto unico di (de)serializzazione Protobuf, cosi' il resto dell'app (e i test)
 /// non dipendono direttamente dalle API di SwiftProtobuf.
@@ -37,6 +41,26 @@ enum MeshWire {
         try move.serializedBytes()
     }
 
+    static func serialize(_ profile: ProfileUpdate) throws -> Data {
+        try profile.serializedBytes()
+    }
+
+    static func serialize(_ signal: CallSignal) throws -> Data {
+        try signal.serializedBytes()
+    }
+
+    static func serialize(_ audio: CallAudio) throws -> Data {
+        try audio.serializedBytes()
+    }
+
+    static func parseCallSignal(_ data: Data) throws -> CallSignal {
+        try CallSignal(serializedBytes: data)
+    }
+
+    static func parseCallAudio(_ data: Data) throws -> CallAudio {
+        try CallAudio(serializedBytes: data)
+    }
+
     static func parseEnvelope(_ data: Data) throws -> MeshEnvelope {
         try MeshEnvelope(serializedBytes: data)
     }
@@ -55,6 +79,10 @@ enum MeshWire {
 
     static func parseGameMove(_ data: Data) throws -> GameMove {
         try GameMove(serializedBytes: data)
+    }
+
+    static func parseProfileUpdate(_ data: Data) throws -> ProfileUpdate {
+        try ProfileUpdate(serializedBytes: data)
     }
 }
 

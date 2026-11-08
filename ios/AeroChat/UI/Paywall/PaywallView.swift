@@ -1,7 +1,7 @@
 import SwiftUI
 import StoreKit
 
-/// Flight Group Pass: Pass Viaggio 72 ore (1,99 €) e Frequent Flyer Lifetime (9,99 €). Zero abbonamenti.
+/// Flight Group Pass: Pass Viaggio 72 ore (0,49 €) e Frequent Flyer Lifetime (2,49 €). Zero abbonamenti.
 struct PaywallView: View {
 
     @Environment(AppEnvironment.self) private var environment
@@ -22,11 +22,11 @@ struct PaywallView: View {
             Offer(id: MeshProtocol.ProductID.pass72h,
                   title: String(localized: "Pass Viaggio 72 Ore"),
                   subtitle: String(localized: "Andata, soggiorno e ritorno. Sblocca il tuo gruppo di viaggio: 1 paga, tutti usano."),
-                  fallbackPrice: "1,99 €"),
+                  fallbackPrice: "0,49 €"),
             Offer(id: MeshProtocol.ProductID.lifetime,
                   title: String(localized: "Frequent Flyer Lifetime"),
                   subtitle: String(localized: "Per sempre, su ogni volo, crociera e festival. Nessun abbonamento."),
-                  fallbackPrice: "9,99 €"),
+                  fallbackPrice: "2,49 €"),
         ]
     }
 
@@ -51,7 +51,7 @@ struct PaywallView: View {
                                     : String(localized: "Nessun acquisto trovato.")
                             }
                         }
-                        .font(.footnote)
+                        .font(.body.weight(.semibold))
                         .foregroundStyle(AeroTheme.accentCyan)
                         .frame(maxWidth: .infinity)
                         Text("Gratis per sempre: chat 1-a-1 di testo, emoji, Cabina Pubblica e consegna differita. Con il Pass: gruppi 3+, note vocali Opus, foto WebP e mini-giochi — anche per i compagni Android con app gratuita.")
@@ -120,18 +120,19 @@ struct PaywallView: View {
                 HStack {
                     if purchasing == offer.id { ProgressView().tint(.black) }
                     if isCurrent {
-                        Text("Attivo").font(.subheadline.weight(.bold))
+                        Text("Attivo").font(.headline)
                     } else {
-                        Text("Acquista").font(.subheadline.weight(.bold))
+                        Text("Acquista").font(.headline)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, minHeight: 28)
+                .padding(.vertical, 12)
             }
             .buttonStyle(.borderedProminent)
             .tint(offer.id == MeshProtocol.ProductID.lifetime ? AeroTheme.accentEmerald : AeroTheme.accentCyan)
             .foregroundStyle(.black)
             .disabled(isCurrent || purchasing != nil || product == nil)
+            .hapticOnTap()
         }
         .padding(16)
         .foregroundStyle(AeroTheme.textPrimary)

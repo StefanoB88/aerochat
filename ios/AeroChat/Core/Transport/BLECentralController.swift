@@ -32,8 +32,28 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
     private var psms: [UUID: CBL2CAPPSM] = [:]
     private var pendingOpen: Set<UUID> = []
     private var openChannels: Set<UUID> = []
+    /// Node Info dei peer (write-without-response): serve ai risvegli di `nudge`.
+    private var nodeInfoCharacteristics: [UUID: CBCharacteristic] = [:]
     private var trustedIdentifiers: Set<UUID> = []
     private var wantsScanning = true
+    /// Link chiusi perche' duplicati (il peer e' gia' collegato a noi come central): niente
+    /// auto-reconnect finche' quel link resta aperto, altrimenti i due iPhone si ricollegano all'infinito.
+    private var suppressedReconnects: Set<UUID> = []
+    /// Timeout di connessione + handshake (GATT, PSM, L2CAP) per dispositivo.
+    private var handshakeTimeouts: [UUID: DispatchWorkItem] = [:]
+    /// Riavvio periodico della scansione: con `AllowDuplicates = false` iOS segnala ogni dispositivo
+    /// una sola volta per sessione di scansione, quindi dopo un tentativo fallito non lo rivedremmo piu'.
+    private var scanRefreshTimer: DispatchSourceTimer?
+    /// Tentativi falliti consecutivi per fidato: backoff esponenziale invece di un loop connect/fail.
+    private var connectFailures: [UUID: Int] = [:]
+    /// Ultimo riavvio della scansione: molti disconnect ravvicinati non devono martellare la radio.
+    private var lastScanRestart = Date.distantPast
+
+    static let connectTimeout: TimeInterval = 12
+    static let handshakeTimeout: TimeInterval = 15
+    static let scanRefreshInterval: TimeInterval = 20
+    static let minimumScanRestartInterval: TimeInterval = 2
+    static let maximumReconnectBackoff: TimeInterval = 60
 
     init(localNodeID: Data,
          queue: DispatchQueue,
@@ -71,6 +91,11 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
             for peripheral in peripherals.values {
                 manager.cancelPeripheralConnection(peripheral)
             }
+            stopScanRefresh()
+            handshakeTimeouts.values.forEach { $0.cancel() }
+            handshakeTimeouts.removeAll()
+            suppressedReconnects.removeAll()
+            connectFailures.removeAll()
             peripherals.removeAll()
             psms.removeAll()
             pendingOpen.removeAll()
@@ -99,11 +124,40 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
         }
     }
 
-    /// Chiude il link verso il dispositivo (es. link duplicato o peer bloccato).
-    func disconnect(deviceID: UUID) {
+    /// Chiude il link verso il dispositivo (es. link duplicato o peer bloccato). Con `suppressReconnect`
+    /// il dispositivo non viene ricollegato (ne' come fidato ne' da scansione) fino a `resumeReconnect`.
+    func disconnect(deviceID: UUID, suppressReconnect: Bool = false) {
         queue.async { [self] in
+            if suppressReconnect { suppressedReconnects.insert(deviceID) }
             guard let manager, let peripheral = peripherals[deviceID] else { return }
             manager.cancelPeripheralConnection(peripheral)
+        }
+    }
+
+    /// Il link alternativo verso quel peer si e' chiuso: torniamo a collegarci noi.
+    func resumeReconnect(deviceID: UUID) {
+        queue.async { [self] in
+            guard suppressedReconnects.remove(deviceID) != nil else { return }
+            // In background (schermo bloccato) la scansione non ririporta un dispositivo gia' visto:
+            // una connessione diretta pendente si completa appena il peer e' a portata.
+            let known = peripherals[deviceID] ?? manager?.retrievePeripherals(withIdentifiers: [deviceID]).first
+            if let peripheral = known, peripheral.state == .disconnected,
+               activeOrPendingLinkCount < maxConcurrentLinks || trustedIdentifiers.contains(deviceID) {
+                connect(peripheral)
+            } else {
+                restartScan()
+            }
+        }
+    }
+
+    /// Risveglia il peer dopo un invio L2CAP: riscrive il nostro `node_id` sul suo Node Info.
+    /// Su un iPhone bloccato la write risveglia l'app sospesa (`bluetooth-peripheral`).
+    func nudge(deviceID: UUID) {
+        queue.async { [self] in
+            guard openChannels.contains(deviceID), let peripheral = peripherals[deviceID],
+                  peripheral.state == .connected,
+                  let characteristic = nodeInfoCharacteristics[deviceID] else { return }
+            peripheral.writeValue(localNodeID, for: characteristic, type: .withoutResponse)
         }
     }
 
@@ -117,10 +171,67 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
         )
     }
 
+    /// Nuova sessione di scansione: i dispositivi gia' visti (ma non collegati) vengono segnalati di nuovo.
+    private func restartScan() {
+        guard let manager, wantsScanning, manager.state == .poweredOn else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastScanRestart) >= Self.minimumScanRestartInterval else {
+            // Raffica di disconnect: basta il prossimo giro del timer di refresh (o questo riavvio rinviato).
+            queue.asyncAfter(deadline: .now() + Self.minimumScanRestartInterval) { [weak self] in
+                guard let self, Date().timeIntervalSince(self.lastScanRestart) >= Self.minimumScanRestartInterval else { return }
+                self.restartScan()
+            }
+            return
+        }
+        lastScanRestart = now
+        if manager.isScanning { manager.stopScan() }
+        startScanIfNeeded()
+    }
+
+    private func startScanRefresh() {
+        guard scanRefreshTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + Self.scanRefreshInterval, repeating: Self.scanRefreshInterval, leeway: .seconds(2))
+        timer.setEventHandler { [weak self] in self?.restartScan() }
+        timer.resume()
+        scanRefreshTimer = timer
+    }
+
+    private func stopScanRefresh() {
+        scanRefreshTimer?.cancel()
+        scanRefreshTimer = nil
+    }
+
+    /// Se entro `interval` il canale L2CAP non e' aperto, il tentativo viene annullato e il
+    /// dispositivo torna rilevabile (una connessione pendente non scade mai da sola).
+    private func armHandshakeTimeout(for peripheral: CBPeripheral, after interval: TimeInterval) {
+        let id = peripheral.identifier
+        handshakeTimeouts[id]?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.handshakeTimeouts.removeValue(forKey: id)
+            guard !self.openChannels.contains(id), let manager = self.manager,
+                  let peripheral = self.peripherals[id] else { return }
+            let wasPending = peripheral.state == .connecting
+            manager.cancelPeripheralConnection(peripheral)
+            if wasPending {
+                // Una connessione mai riuscita non genera sempre `didDisconnect`: liberiamo lo slot noi.
+                self.forget(peripheral)
+                self.restartScan()
+            }
+        }
+        handshakeTimeouts[id] = work
+        queue.asyncAfter(deadline: .now() + interval, execute: work)
+    }
+
+    private func disarmHandshakeTimeout(for id: UUID) {
+        handshakeTimeouts.removeValue(forKey: id)?.cancel()
+    }
+
     private func connectTrustedPeripherals() {
         guard let manager, manager.state == .poweredOn, !trustedIdentifiers.isEmpty else { return }
         let known = manager.retrievePeripherals(withIdentifiers: Array(trustedIdentifiers))
-        for peripheral in known where peripheral.state == .disconnected {
+        for peripheral in known where peripheral.state == .disconnected && !suppressedReconnects.contains(peripheral.identifier) {
             peripherals[peripheral.identifier] = peripheral
             peripheral.delegate = self
             // Nessuna opzione, nessun timeout: la richiesta resta pendente anche in background.
@@ -128,8 +239,12 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
         }
     }
 
+    /// Link attivi o in corso. Le connessioni perenni verso fidati fuori portata non occupano slot,
+    /// altrimenti bastano pochi compagni lontani per non collegarsi piu' a nessuno.
     private var activeOrPendingLinkCount: Int {
-        peripherals.values.filter { $0.state == .connected || $0.state == .connecting }.count
+        peripherals.values.filter {
+            $0.state == .connected || ($0.state == .connecting && !trustedIdentifiers.contains($0.identifier))
+        }.count
     }
 
     private func connect(_ peripheral: CBPeripheral) {
@@ -137,12 +252,17 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
         peripherals[peripheral.identifier] = peripheral
         peripheral.delegate = self
         manager.connect(peripheral, options: nil)
+        if !trustedIdentifiers.contains(peripheral.identifier) {
+            armHandshakeTimeout(for: peripheral, after: Self.connectTimeout + Self.handshakeTimeout)
+        }
     }
 
     private func forget(_ peripheral: CBPeripheral) {
+        disarmHandshakeTimeout(for: peripheral.identifier)
         psms.removeValue(forKey: peripheral.identifier)
         pendingOpen.remove(peripheral.identifier)
         openChannels.remove(peripheral.identifier)
+        nodeInfoCharacteristics.removeValue(forKey: peripheral.identifier)
         if !trustedIdentifiers.contains(peripheral.identifier) {
             peripherals.removeValue(forKey: peripheral.identifier)
         }
@@ -155,8 +275,11 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
         switch central.state {
         case .poweredOn:
             startScanIfNeeded()
+            startScanRefresh()
             connectTrustedPeripherals()
+            resumeRestoredPeripherals()
         default:
+            stopScanRefresh()
             psms.removeAll()
             pendingOpen.removeAll()
             openChannels.removeAll()
@@ -166,13 +289,21 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
         // State Restoration: riprendiamo in carico i peripheral che iOS ha tenuto per noi.
         if let restored = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] {
+            // Solo presa in carico: le API GATT prima di `.poweredOn` vengono ignorate da CoreBluetooth.
             for peripheral in restored {
                 peripherals[peripheral.identifier] = peripheral
                 peripheral.delegate = self
-                if peripheral.state == .connected {
-                    peripheral.discoverServices([MeshProtocol.serviceCBUUID])
-                }
             }
+        }
+    }
+
+    /// Peripheral ripristinati gia' connessi ma senza canale L2CAP: rifacciamo l'handshake (con
+    /// timeout), altrimenti occuperebbero per sempre uno degli slot di connessione.
+    private func resumeRestoredPeripherals() {
+        for peripheral in peripherals.values
+        where peripheral.state == .connected && !openChannels.contains(peripheral.identifier) && !pendingOpen.contains(peripheral.identifier) {
+            armHandshakeTimeout(for: peripheral, after: Self.handshakeTimeout)
+            peripheral.discoverServices([MeshProtocol.serviceCBUUID])
         }
     }
 
@@ -181,6 +312,7 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
                         advertisementData: [String: Any],
                         rssi RSSI: NSNumber) {
         handler(.discovered(deviceID: peripheral.identifier, rssi: RSSI.intValue))
+        guard !suppressedReconnects.contains(peripheral.identifier) else { return }
         let existing = peripherals[peripheral.identifier]
         guard existing == nil || existing?.state == .disconnected else { return }
         guard activeOrPendingLinkCount < maxConcurrentLinks || trustedIdentifiers.contains(peripheral.identifier) else { return }
@@ -189,24 +321,41 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         handler(.connected(deviceID: peripheral.identifier))
+        armHandshakeTimeout(for: peripheral, after: Self.handshakeTimeout)
         peripheral.discoverServices([MeshProtocol.serviceCBUUID])
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         handler(.connectionFailed(deviceID: peripheral.identifier, reason: error?.localizedDescription))
         forget(peripheral)
-        if trustedIdentifiers.contains(peripheral.identifier) {
-            central.connect(peripheral, options: nil)
+        let id = peripheral.identifier
+        if trustedIdentifiers.contains(id), !suppressedReconnects.contains(id) {
+            // Errori ripetibili (chiavi rimosse, limite connessioni): ritenta con backoff 1, 2, 4… 60 s.
+            let failures = (connectFailures[id] ?? 0) + 1
+            connectFailures[id] = failures
+            let delay = min(Self.maximumReconnectBackoff, pow(2, Double(failures - 1)))
+            queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, let manager = self.manager, manager.state == .poweredOn,
+                      self.trustedIdentifiers.contains(id), !self.suppressedReconnects.contains(id),
+                      let target = self.peripherals[id] ?? manager.retrievePeripherals(withIdentifiers: [id]).first,
+                      target.state == .disconnected else { return }
+                self.peripherals[id] = target
+                target.delegate = self
+                manager.connect(target, options: nil)
+            }
         }
+        restartScan()
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         handler(.disconnected(deviceID: peripheral.identifier, reason: error?.localizedDescription))
         forget(peripheral)
-        if trustedIdentifiers.contains(peripheral.identifier) {
+        if trustedIdentifiers.contains(peripheral.identifier), !suppressedReconnects.contains(peripheral.identifier) {
             // Auto-reconnect infinito: iOS risveglia l'app quando il compagno torna a portata.
             central.connect(peripheral, options: nil)
         }
+        // Il dispositivo deve poter essere rilevato di nuovo dalla scansione.
+        restartScan()
     }
 
     // MARK: - CBPeripheralDelegate
@@ -236,6 +385,7 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
             case MeshProtocol.nodeInfoCharacteristicCBUUID:
                 // Handshake fallback: presentiamo il nostro node_id, poi leggiamo il suo.
                 if characteristic.properties.contains(.writeWithoutResponse) {
+                    nodeInfoCharacteristics[peripheral.identifier] = characteristic
                     peripheral.writeValue(localNodeID, for: characteristic, type: .withoutResponse)
                 }
                 peripheral.readValue(for: characteristic)
@@ -284,6 +434,8 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
             return
         }
         openChannels.insert(peripheral.identifier)
+        connectFailures.removeValue(forKey: peripheral.identifier)
+        disarmHandshakeTimeout(for: peripheral.identifier)
         handler(.channelOpened(L2CAPChannelBox(channel: channel), deviceID: peripheral.identifier))
     }
 }

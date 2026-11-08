@@ -80,67 +80,67 @@
         "da" : {
           "stringUnit" : {
             "state" : "machine_translated",
-            "value" : "MyApp"
+            "value" : "AeroChat"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "machine_translated",
-            "value" : "MyApp"
+            "value" : "AeroChat"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "machine_translated",
-            "value" : "MyApp"
+            "value" : "AeroChat"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "machine_translated",
-            "value" : "MyApp"
+            "value" : "AeroChat"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "machine_translated",
-            "value" : "MyApp"
+            "value" : "AeroChat"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "MyApp"
+            "value" : "AeroChat"
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "machine_translated",
-            "value" : "MyApp"
+            "value" : "AeroChat"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "machine_translated",
-            "value" : "MyApp"
+            "value" : "AeroChat"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "machine_translated",
-            "value" : "MyApp"
+            "value" : "AeroChat"
           }
         },
         "pt-PT" : {
           "stringUnit" : {
             "state" : "machine_translated",
-            "value" : "MyApp"
+            "value" : "AeroChat"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "machine_translated",
-            "value" : "MyApp"
+            "value" : "AeroChat"
           }
         }
       }
@@ -357,6 +357,78 @@
           "stringUnit" : {
             "state" : "machine_translated",
             "value" : "AeroChat använder mikrofonen för att spela in röstmeddelanden som du skickar till dina resekompisar."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryAddUsageDescription" : {
+      "comment" : "Privacy - Photo Library Additions Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat gemmer fotos, du har modtaget i chatten, i dit bibliotek, når du beder om det."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat sichert in Chats empfangene Fotos in deiner Mediathek, wenn du es möchtest."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat saves photos you received in chat to your library when you ask it to."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat guarda en tu fototeca las fotos recibidas en el chat cuando tú lo pides."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat enregistre dans ta photothèque les photos reçues dans le chat lorsque tu le demandes."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AeroChat salva nel rullino le foto ricevute in chat quando lo chiedi tu."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat lagrer bilder du har mottatt i chatten, i biblioteket ditt når du ber om det."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat bewaart in de chat ontvangen foto's in je fotobibliotheek wanneer je daarom vraagt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat zapisuje w bibliotece zdjęcia otrzymane na czacie, gdy o to poprosisz."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "O AeroChat guarda na tua fototeca as fotos recebidas no chat quando o pedes."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat sparar foton du tagit emot i chatten i ditt bibliotek när du ber om det."
           }
         }
       }

@@ -130,6 +130,37 @@ extension AppDatabase {
             }
         }
 
+        // Chat fissate in cima alla lista (Tab 1).
+        migrator.registerMigration("v3_conversation_pinned") { db in
+            try db.alter(table: "conversations") { t in
+                t.add(column: "is_pinned", .boolean).notNull().defaults(to: false)
+            }
+        }
+
+        // Profilo modificabile e foto profilo condivisa con i contatti (`PROFILE_UPDATE`).
+        migrator.registerMigration("v4_profiles") { db in
+            try db.alter(table: "identity") { t in
+                t.add(column: "avatar_image", .blob)
+                t.add(column: "profile_updated_at_ms", .integer)
+            }
+            try db.alter(table: "peers") { t in
+                t.add(column: "avatar_color_hex", .text)
+                t.add(column: "avatar_image", .blob)
+                t.add(column: "profile_updated_at_ms", .integer)
+            }
+        }
+
+        // Lettori dei nostri messaggi di gruppo (`READ_RECEIPT`): la spunta blu arriva solo quando
+        // hanno letto tutti i membri. I record seguono il messaggio eliminato (`ON DELETE CASCADE`).
+        migrator.registerMigration("v5_message_reads") { db in
+            try db.create(table: "message_reads") { t in
+                t.column("msg_id", .blob).notNull().references("messages", onDelete: .cascade)
+                t.column("reader_node_id", .blob).notNull()
+                t.column("read_at_ms", .integer).notNull()
+                t.primaryKey(["msg_id", "reader_node_id"])
+            }
+        }
+
         return migrator
     }
 }

@@ -20,11 +20,21 @@ final class L2CAPConnection: NSObject, StreamDelegate, @unchecked Sendable {
 
     // Stato confinato al thread della runloop.
     private var parser = FrameCodec.Parser()
-    private var outgoing = Data()
+    /// Frame in uscita in ordine FIFO: si scrive dal primo a partire da `headOffset`, senza ricopiare
+    /// il buffer a ogni scrittura parziale (prima era O(n^2) con code lunghe).
+    private var outgoing: [Data] = []
+    private var headOffset = 0
     private var readBuffer = [UInt8](repeating: 0, count: 16_384)
     private var isClosed = false
     private var bytesSent = 0
     private var bytesReceived = 0
+
+    /// Byte accodati e non ancora scritti (letti anche da `send`, quindi protetti dal lock).
+    private let pendingLock = NSLock()
+    private var pendingBytes = 0
+    /// Oltre questa coda il link e' di fatto bloccato (peer fuori portata): rifiutiamo nuovi frame
+    /// invece di accumulare memoria; il router li mette in store-and-forward.
+    static let maxPendingBytes = 4 * 1_048_576
 
     init(id: LinkID,
          inputStream: InputStream,
@@ -60,6 +70,12 @@ final class L2CAPConnection: NSObject, StreamDelegate, @unchecked Sendable {
     /// Lancia solo per payload vuoti o oltre il limite; l'I/O e' asincrono.
     func send(_ payload: Data) throws {
         let framed = try FrameCodec.frame(payload)
+        try pendingLock.withLock {
+            guard pendingBytes + framed.count <= Self.maxPendingBytes else {
+                throw TransportError.writeFailed("backpressure")
+            }
+            pendingBytes += framed.count
+        }
         thread.perform { [self] in
             guard !isClosed else { return }
             outgoing.append(framed)
@@ -93,14 +109,20 @@ final class L2CAPConnection: NSObject, StreamDelegate, @unchecked Sendable {
     // MARK: - I/O (solo sul thread della runloop)
 
     private func drainOutgoing() {
-        while !isClosed, !outgoing.isEmpty, output.hasSpaceAvailable {
-            let written = outgoing.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> Int in
+        while !isClosed, let head = outgoing.first, output.hasSpaceAvailable {
+            let offset = headOffset
+            let written = head.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> Int in
                 guard let base = buffer.bindMemory(to: UInt8.self).baseAddress else { return 0 }
-                return output.write(base, maxLength: buffer.count)
+                return output.write(base + offset, maxLength: buffer.count - offset)
             }
             if written > 0 {
                 bytesSent += written
-                outgoing.removeSubrange(outgoing.startIndex..<outgoing.startIndex + written)
+                pendingLock.withLock { pendingBytes -= written }
+                headOffset += written
+                if headOffset >= head.count {
+                    outgoing.removeFirst()
+                    headOffset = 0
+                }
             } else if written < 0 {
                 finish(error: output.streamError ?? TransportError.writeFailed("write returned -1"))
                 return
@@ -144,6 +166,8 @@ final class L2CAPConnection: NSObject, StreamDelegate, @unchecked Sendable {
         input.remove(from: .current, forMode: .default)
         output.remove(from: .current, forMode: .default)
         outgoing.removeAll()
+        headOffset = 0
+        pendingLock.withLock { pendingBytes = 0 }
         onClose(error)
     }
 }

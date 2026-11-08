@@ -4,15 +4,28 @@ enum GameBubbleAction: Equatable {
     case accept
     case play(cell: Int)
     case resign
+    /// Carte: gioca `card` prendendo `captured` dal tavolo (vuoto = nessuna presa).
+    case playCard(card: Int, captured: [Int])
+    /// Carte: apre il tavolo a schermo intero.
+    case openTable
 }
 
-/// Bolla interattiva di gioco: Tris o Battaglia navale giocabili dentro la chat.
+/// Bolla interattiva di gioco: Tris o Battaglia navale giocabili dentro la chat; per le carte
+/// (Scopa, Scopone, Briscola) una bolla compatta che apre il tavolo a schermo intero.
 struct GameBubble: View {
 
     let state: GameSessionState
     let onAction: (GameBubbleAction) -> Void
 
     var body: some View {
+        if state.isCardGame {
+            CardGameBubbleContent(state: state, onAction: onAction)
+        } else {
+            classicBody
+        }
+    }
+
+    private var classicBody: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(GameService.title(for: state.gameKind))
@@ -20,7 +33,7 @@ struct GameBubble: View {
                 Spacer()
                 if state.status == .active {
                     Button("Abbandona", role: .destructive) { onAction(.resign) }
-                        .font(.caption2)
+                        .font(.footnote.weight(.semibold))
                 }
             }
             statusLine
@@ -37,12 +50,14 @@ struct GameBubble: View {
                     onAction(.accept)
                 } label: {
                     Text("Accetta la sfida")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        .font(.body.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 28)
+                        .padding(.vertical, 10)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(AeroTheme.accentEmerald)
+                .hapticOnTap()
             }
         }
         .foregroundStyle(AeroTheme.textPrimary)
@@ -96,7 +111,7 @@ struct GameBubble: View {
                         .frame(width: 52, height: 52)
                         .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hapticCompact)
                 .disabled(!canPlay || mark != .empty)
                 .accessibilityLabel(mark == .empty ? Text("Cella \(cell + 1), vuota") : Text("Cella \(cell + 1), \(mark == .x ? "X" : "O")"))
             }
@@ -119,9 +134,9 @@ struct GameBubble: View {
                 } label: {
                     Rectangle()
                         .fill(colorForShot(outcome))
-                        .frame(width: 15, height: 15)
+                        .frame(width: 22, height: 22)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hapticCompact)
                 .disabled(!canShoot || outcome != nil)
             }
             if let board {
@@ -158,6 +173,92 @@ struct GameBubble: View {
         case .miss: return Color.white.opacity(0.3)
         case .hit: return .orange
         case .sunk: return .red
+        }
+    }
+}
+
+/// Bolla compatta delle partite a carte: titolo, giocatori, punteggio, stato, "Accetta" e "Apri tavolo".
+private struct CardGameBubbleContent: View {
+
+    let state: GameSessionState
+    let onAction: (GameBubbleAction) -> Void
+
+    private var canAccept: Bool {
+        guard state.status == .invited, !state.iAmInviter, let seat = state.mySeat else { return false }
+        return state.acceptedSeats?.contains(seat) != true
+    }
+
+    private var hasTable: Bool { state.scopa != nil || state.briscola != nil }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(GameService.title(for: state.gameKind))
+                    .font(AeroTheme.title(15, weight: .semibold))
+                Spacer(minLength: 4)
+                if state.isSpectator {
+                    Label("Spettatore", systemImage: "eye")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(AeroTheme.textSecondary)
+                }
+            }
+            Text(state.playersLine)
+                .font(.caption)
+                .foregroundStyle(AeroTheme.textSecondary)
+                .lineLimit(2)
+            if let scores = state.cardScores, scores.count == 2 {
+                HStack(spacing: 6) {
+                    Text(state.gameKind == .briscola ? LocalizedStringKey("Punti") : LocalizedStringKey("Punteggio"))
+                        .foregroundStyle(AeroTheme.textSecondary)
+                    Text("\(scores[0]) – \(scores[1])")
+                        .font(.body.monospacedDigit().weight(.semibold))
+                }
+                .font(.caption)
+            }
+            Text(state.cardStatusText)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(statusColor)
+            if let resign = state.resignText {
+                Text(resign)
+                    .font(.caption2)
+                    .foregroundStyle(AeroTheme.textSecondary)
+            }
+            if canAccept {
+                Button {
+                    onAction(.accept)
+                } label: {
+                    Text("Accetta")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 28)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AeroTheme.accentEmerald)
+                .hapticOnTap()
+            }
+            if hasTable {
+                Button {
+                    onAction(.openTable)
+                } label: {
+                    Label("Apri tavolo", systemImage: "suit.spade.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 28)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.bordered)
+                .tint(AeroTheme.accentCyan)
+                .hapticOnTap()
+            }
+        }
+        .frame(minWidth: 220, alignment: .leading)
+        .foregroundStyle(AeroTheme.textPrimary)
+    }
+
+    private var statusColor: Color {
+        switch state.outcome {
+        case .iWon: return AeroTheme.accentEmerald
+        case .iLost: return .red
+        default: return state.myTurn ? AeroTheme.accentCyan : AeroTheme.textSecondary
         }
     }
 }

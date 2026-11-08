@@ -6,16 +6,23 @@ struct PeerRepository: Sendable {
     let database: AppDatabase
 
     /// Inserisce o aggiorna un peer. Se gia' noto conserva `is_trusted`/`is_blocked` esistenti
-    /// (un gossip non deve mai declassare un compagno fidato).
+    /// (un gossip non deve mai declassare un compagno fidato) e il profilo ricevuto.
+    /// - Parameter authoritativeNickname: `true` se il nickname arriva firmato dal peer stesso;
+    ///   un nickname riferito da terzi (gossip, QR) non sovrascrive quello di un `PROFILE_UPDATE`.
     @discardableResult
-    func upsert(_ peer: PeerRecord) async throws -> PeerRecord {
+    func upsert(_ peer: PeerRecord, authoritativeNickname: Bool = false) async throws -> PeerRecord {
         try await database.pool.write { db in
             if var existing = try PeerRecord.fetchOne(db, key: peer.nodeID) {
-                existing.nickname = peer.nickname
+                let original = existing
+                if authoritativeNickname || existing.profileUpdatedAtMs == nil, existing.nickname != peer.nickname {
+                    existing.nickname = peer.nickname
+                    try Self.syncDirectTitle(db, nodeID: peer.nodeID, nickname: peer.nickname)
+                }
                 existing.x25519Pub = peer.x25519Pub
                 existing.ed25519Pub = peer.ed25519Pub
                 existing.isTrusted = existing.isTrusted || peer.isTrusted
-                try existing.update(db)
+                // Solo le colonne cambiate (spesso nessuna): niente scrittura ne' refresh delle osservazioni.
+                try existing.updateChanges(db, from: original)
                 return existing
             }
             try peer.insert(db)
@@ -23,9 +30,43 @@ struct PeerRepository: Sendable {
         }
     }
 
+    /// Applica un `PROFILE_UPDATE` se piu' recente di quello noto. Ritorna `true` se applicato.
+    @discardableResult
+    func applyProfile(nodeID: Data, nickname: String, avatarColorHex: String?, avatarImage: Data?,
+                      updatedAtMs: Int64) async throws -> Bool {
+        try await database.pool.write { db in
+            guard var peer = try PeerRecord.fetchOne(db, key: nodeID),
+                  updatedAtMs > (peer.profileUpdatedAtMs ?? 0) else { return false }
+            if !nickname.isEmpty, nickname != peer.nickname {
+                peer.nickname = nickname
+                try Self.syncDirectTitle(db, nodeID: nodeID, nickname: nickname)
+            }
+            peer.avatarColorHex = avatarColorHex
+            peer.avatarImage = avatarImage
+            peer.profileUpdatedAtMs = updatedAtMs
+            try peer.update(db)
+            return true
+        }
+    }
+
+    /// Il titolo della chat 1-a-1 segue il nickname del compagno.
+    private static func syncDirectTitle(_ db: Database, nodeID: Data, nickname: String) throws {
+        try ConversationRecord
+            .filter(ConversationRecord.Columns.peerNodeID == nodeID && ConversationRecord.Columns.type == ConversationType.direct.rawValue)
+            .updateAll(db, ConversationRecord.Columns.title.set(to: nickname))
+    }
+
     func fetch(nodeID: Data) async throws -> PeerRecord? {
         try await database.pool.read { db in
             try PeerRecord.fetchOne(db, key: nodeID)
+        }
+    }
+
+    /// Piu' peer in una sola lettura (stato radio dei gruppi: niente query per membro).
+    func fetch(nodeIDs: [Data]) async throws -> [PeerRecord] {
+        guard !nodeIDs.isEmpty else { return [] }
+        return try await database.pool.read { db in
+            try PeerRecord.fetchAll(db, keys: nodeIDs)
         }
     }
 
@@ -85,9 +126,23 @@ struct PeerRepository: Sendable {
         }
     }
 
+    /// Contatti non bloccati a cui annunciare il nostro profilo.
+    func unblockedPeers() async throws -> [PeerRecord] {
+        try await database.pool.read { db in
+            try PeerRecord.filter(PeerRecord.Columns.isBlocked == false).fetchAll(db)
+        }
+    }
+
     func blockedNodeIDs() async throws -> Set<Data> {
         try await database.pool.read { db in
             Set(try Data.fetchAll(db, PeerRecord.select(PeerRecord.Columns.nodeID).filter(PeerRecord.Columns.isBlocked == true)))
+        }
+    }
+
+    /// Stream di un singolo peer (header della chat 1-a-1).
+    func observe(nodeID: Data) -> AsyncStream<PeerRecord?> {
+        database.pool.observeStream { db in
+            try PeerRecord.fetchOne(db, key: nodeID)
         }
     }
 

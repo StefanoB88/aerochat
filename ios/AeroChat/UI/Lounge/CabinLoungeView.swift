@@ -69,12 +69,15 @@ final class CabinLoungeViewModel {
     func block(_ nodeID: Data, environment: AppEnvironment) {
         guard let database = environment.database else { return }
         blocked.insert(nodeID)
+        // Va letto prima di rimuovere i messaggi, altrimenti il blocco non verrebbe mai salvato.
+        let sample = messages.first { $0.senderNodeID == nodeID }
         messages.removeAll { $0.senderNodeID == nodeID }
         Task {
             // Il mittente potrebbe non essere ancora tra i peer (Lounge anonima): lo registriamo come bloccato.
-            if (try? await database.peers.fetch(nodeID: nodeID)) == nil,
-               let sample = messages.first(where: { $0.senderNodeID == nodeID }) {
-                _ = try? await database.peers.upsert(PeerRecord(nodeID: nodeID, x25519Pub: Data(repeating: 0, count: 32),
+            // Chiave segnaposto unica per nodo (la colonna x25519_pub e' UNIQUE).
+            if (try? await database.peers.fetch(nodeID: nodeID)) == nil, let sample {
+                let placeholderKey = nodeID + Data(repeating: 0, count: MeshProtocol.publicKeyLength - nodeID.count)
+                _ = try? await database.peers.upsert(PeerRecord(nodeID: nodeID, x25519Pub: placeholderKey,
                                                                 ed25519Pub: Data(repeating: 0, count: 32),
                                                                 nickname: sample.senderNickname ?? String(localized: "Passeggero")))
             }
@@ -85,11 +88,42 @@ final class CabinLoungeViewModel {
     }
 }
 
+/// Ultima posizione di lettura della Cabina (come WhatsApp): il primo messaggio visibile in alto, oppure
+/// "in fondo". Legata alla Lounge corrente (ogni 12 ore ne nasce una nuova), sopravvive al riavvio dell'app.
+enum CabinScrollMemory {
+
+    struct Position: Codable {
+        var loungeID: String
+        /// `msg_id` del messaggio in cima allo schermo; nil = l'utente era in fondo alla chat.
+        var topMessageID: Data?
+    }
+
+    private static let key = "cabin.scrollPosition"
+
+    static func load(loungeID: String) -> Position? {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let position = try? JSONDecoder().decode(Position.self, from: data),
+              position.loungeID == loungeID else { return nil }
+        return position
+    }
+
+    static func save(_ position: Position) {
+        guard let data = try? JSONEncoder().encode(position) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+}
+
 /// Tab 2 – Cabina Pubblica: bacheca anonima di 12 ore, solo testo, blocco rapido degli utenti.
 struct CabinLoungeView: View {
 
     @Environment(AppEnvironment.self) private var environment
     @State private var viewModel = CabinLoungeViewModel()
+    /// Messaggio in cima allo schermo (`scrollPosition`), salvato come posizione di lettura.
+    @State private var topVisibleID: Data?
+    /// L'utente sta guardando la fine della chat: solo allora i nuovi messaggi fanno scorrere la lista.
+    @State private var isNearBottom = true
+    /// La posizione salvata (o il fondo) e' gia' stata applicata a questo caricamento.
+    @State private var didRestorePosition = false
 
     var body: some View {
         NavigationStack {
@@ -99,16 +133,18 @@ struct CabinLoungeView: View {
                     header
                     ScrollViewReader { proxy in
                         ScrollView {
+                          VStack(spacing: 0) {
                             LazyVStack(spacing: 10) {
                                 if viewModel.messages.isEmpty {
                                     emptyHint
                                 }
                                 ForEach(viewModel.messages, id: \.msgID) { message in
-                                    MessageBubble(message: message, showSender: true, store: nil, playbackProgress: nil, isPlaying: false, transferProgress: nil)
+                                    MessageBubble(message: message, showSender: true, store: nil, player: nil, isPlaying: false, transferProgress: nil)
                                         .id(message.msgID)
                                         .contextMenu {
                                             if !message.isOutgoing {
                                                 Button(role: .destructive) {
+                                                    Haptics.tap()
                                                     viewModel.block(message.senderNodeID, environment: environment)
                                                 } label: {
                                                     Label("Blocca / Silenzia \(message.senderNickname ?? "utente")", systemImage: "hand.raised.fill")
@@ -117,18 +153,40 @@ struct CabinLoungeView: View {
                                         }
                                 }
                             }
+                            .scrollTargetLayout()
                             .padding(12)
+                            // Sentinella di fine chat (iOS 17: niente onScrollGeometryChange): visibile =
+                            // l'utente e' in fondo e i nuovi messaggi possono far scorrere la lista.
+                            Color.clear
+                                .frame(height: 1)
+                                .onAppear { isNearBottom = true; saveScrollPosition() }
+                                // Niente salvataggio qui: sparisce anche cambiando tab, e non per questo
+                                // l'utente ha lasciato il fondo (lo salva lo scorrimento, `topVisibleID`).
+                                .onDisappear { isNearBottom = false }
+                          }
                         }
+                        // Prima apertura: la chat parte dal fondo, senza animazione (come WhatsApp).
+                        .defaultScrollAnchor(.bottom)
+                        .scrollPosition(id: $topVisibleID, anchor: .top)
+                        .onChange(of: topVisibleID) { _, _ in saveScrollPosition() }
+                        .scrollDismissesKeyboard(.interactively)
+                        .dismissesKeyboardOnTap()
                         .onChange(of: viewModel.messages.last?.msgID) { _, last in
                             guard let last else { return }
-                            withAnimation { proxy.scrollTo(last, anchor: .bottom) }
+                            guard didRestorePosition else {
+                                restoreScrollPosition(proxy: proxy, last: last)
+                                return
+                            }
+                            // Nuovo messaggio: si scende solo se l'utente era gia' in fondo o se l'ha
+                            // scritto lui; chi sta rileggendo i vecchi messaggi resta dov'e'.
+                            if isNearBottom || viewModel.messages.last?.isOutgoing == true {
+                                withAnimation { proxy.scrollTo(last, anchor: .bottom) }
+                            }
                         }
                     }
                     ComposerBar(text: Binding(get: { viewModel.draft }, set: { viewModel.draft = $0 }),
                                 photoItem: .constant(nil),
-                                isRecording: false,
-                                recordingLevel: 0,
-                                recordingElapsed: 0,
+                                recorder: nil,
                                 showsAttachments: false,
                                 onSend: { viewModel.send(environment: environment) },
                                 onToggleRecording: {},
@@ -153,6 +211,24 @@ struct CabinLoungeView: View {
         }
         .onAppear { viewModel.start(environment: environment) }
         .onDisappear { viewModel.stop() }
+    }
+
+    /// Primo caricamento dei messaggi: torna all'ultima posizione di lettura nota, altrimenti in fondo.
+    private func restoreScrollPosition(proxy: ScrollViewProxy, last: Data) {
+        didRestorePosition = true
+        if let loungeID = viewModel.lounge?.id,
+           let anchor = CabinScrollMemory.load(loungeID: loungeID)?.topMessageID,
+           viewModel.messages.contains(where: { $0.msgID == anchor }) {
+            proxy.scrollTo(anchor, anchor: .top)
+        } else {
+            proxy.scrollTo(last, anchor: .bottom)
+        }
+    }
+
+    private func saveScrollPosition() {
+        // Prima del ripristino la posizione e' quella provvisoria del caricamento: non va salvata.
+        guard didRestorePosition, let loungeID = viewModel.lounge?.id else { return }
+        CabinScrollMemory.save(.init(loungeID: loungeID, topMessageID: isNearBottom ? nil : topVisibleID))
     }
 
     private var header: some View {

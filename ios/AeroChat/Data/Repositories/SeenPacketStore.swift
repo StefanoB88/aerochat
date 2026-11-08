@@ -26,13 +26,15 @@ struct SeenPacketStore: Sendable {
         }
     }
 
-    /// Tutti gli id non scaduti (per pre-caricare la cache LRU all'avvio).
-    func activeMessageIDs(now: Date = Date()) async throws -> [Data] {
+    /// Gli id non scaduti piu' recenti (per pre-caricare la cache LRU all'avvio).
+    func activeMessageIDs(now: Date = Date(), limit: Int = .max) async throws -> [Data] {
         let nowMs = now.unixMilliseconds
         return try await database.pool.read { db in
             try Data.fetchAll(db, SeenPacketRecord
                 .select(SeenPacketRecord.Columns.msgID)
-                .filter(SeenPacketRecord.Columns.expiresAtMs > nowMs))
+                .filter(SeenPacketRecord.Columns.expiresAtMs > nowMs)
+                .order(SeenPacketRecord.Columns.expiresAtMs.desc)
+                .limit(limit))
         }
     }
 

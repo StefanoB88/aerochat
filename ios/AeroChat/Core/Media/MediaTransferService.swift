@@ -14,7 +14,16 @@ actor MediaTransferService {
         /// Avanzamento in chunk (in ricezione o in invio) del media legato al messaggio `msgID`.
         case progress(msgID: Data, received: Int, total: Int)
         case completed(msgID: Data)
-        case failed(mediaID: String)
+        /// Trasferimento fallito o scaduto: `msgID` permette alla UI di togliere l'anello di avanzamento.
+        case failed(mediaID: String, msgID: Data?)
+    }
+
+    /// Chunk arrivati prima dell'header, con il mittente (solo lui puo' completare quel media).
+    private struct OrphanChunks {
+        let senderNodeID: Data
+        let receivedAt: Date
+        var chunks: [Int: Data] = [:]
+        var bytes = 0
     }
 
     private struct Assembly {
@@ -32,6 +41,11 @@ actor MediaTransferService {
     static let chunkSize = 8_192
     static let maxMediaBytes = 1_048_576
     static let assemblyTimeout: TimeInterval = 300
+    /// Trasferimenti in ricezione contemporanei (limite di memoria contro header a raffica).
+    static let maxConcurrentAssemblies = 16
+    static let maxChunks = maxMediaBytes / chunkSize
+    static let maxOrphanBytes = 2 * 1_048_576
+    static let orphanTimeout: TimeInterval = 60
 
     let router: MeshRouterActor
     let database: AppDatabase
@@ -41,7 +55,7 @@ actor MediaTransferService {
 
     private var assemblies: [String: Assembly] = [:]
     /// Chunk arrivati prima del loro header (riordino sulla mesh).
-    private var orphanChunks: [String: [Int: Data]] = [:]
+    private var orphanChunks: [String: OrphanChunks] = [:]
     private var inboundTask: Task<Void, Never>?
     private var subscribers: [UUID: AsyncStream<Event>.Continuation] = [:]
 
@@ -122,6 +136,8 @@ actor MediaTransferService {
                                     isOutgoing: true,
                                     deliveryStatus: .queued)
         try await database.messages.insert(message)
+        // La bolla mostra subito l'anello di invio, prima ancora che parta l'header.
+        emit(.progress(msgID: headerMsgID, received: 0, total: chunks.count))
 
         var header = InnerPayload.signed(by: identity, nickname: nickname)
         header.mediaID = mediaID
@@ -131,6 +147,17 @@ actor MediaTransferService {
         if let blurhash { header.blurhash = blurhash }
         if let waveform { header.audioWaveform = waveform }
         if let durationMs { header.durationMs = UInt32(durationMs) }
+        do {
+            return try await sendChunks(chunks, header: header, message: message, mediaID: mediaID, kind: kind, in: conversation)
+        } catch {
+            emit(.failed(mediaID: mediaID, msgID: headerMsgID))
+            throw error
+        }
+    }
+
+    private func sendChunks(_ chunks: [Data], header: InnerPayload, message: MessageRecord, mediaID: String,
+                            kind: MediaStore.Kind, in conversation: ConversationRecord) async throws -> MessageRecord {
+        let headerMsgID = message.msgID
         let headerResult = try await router.sendPacket(type: .mediaHeader, payload: header, in: conversation,
                                                        msgID: headerMsgID, storeIfUnreachable: false)
 
@@ -168,10 +195,15 @@ actor MediaTransferService {
 
     private func handleHeader(_ packet: InboundPacket) async {
         let payload = packet.payload
+        let totalBytes = Int(payload.totalSizeBytes)
         guard let kind = MediaStore.Kind(mimeType: payload.mimeType),
               !payload.mediaID.isEmpty,
-              payload.totalChunks > 0,
-              payload.totalSizeBytes <= Self.maxMediaBytes else { return }
+              totalBytes > 0, totalBytes <= Self.maxMediaBytes,
+              // Numero di chunk coerente con la dimensione: altrimenti il media non si completerebbe mai.
+              Int(payload.totalChunks) == (totalBytes + Self.chunkSize - 1) / Self.chunkSize,
+              // Header ripetuto (flooding): non buttiamo i chunk gia' ricevuti.
+              assemblies[payload.mediaID] == nil,
+              assemblies.count < Self.maxConcurrentAssemblies else { return }
 
         let placeholder = MessageRecord(msgID: packet.envelope.msgID,
                                         conversationID: packet.conversation.id,
@@ -195,8 +227,8 @@ actor MediaTransferService {
                                 totalChunks: Int(payload.totalChunks),
                                 totalBytes: Int(payload.totalSizeBytes),
                                 startedAt: Date())
-        if let orphans = orphanChunks.removeValue(forKey: payload.mediaID) {
-            assembly.chunks = orphans
+        if let orphans = orphanChunks.removeValue(forKey: payload.mediaID), orphans.senderNodeID == packet.sender.nodeID {
+            assembly.chunks = orphans.chunks.filter { $0.key < assembly.totalChunks }
         }
         assemblies[payload.mediaID] = assembly
         await completeIfReady(mediaID: payload.mediaID)
@@ -204,8 +236,9 @@ actor MediaTransferService {
 
     private func handleChunk(_ packet: InboundPacket) async {
         let payload = packet.payload
-        guard !payload.mediaID.isEmpty, !payload.chunkData.isEmpty else { return }
+        guard !payload.mediaID.isEmpty, !payload.chunkData.isEmpty, payload.chunkData.count <= Self.chunkSize else { return }
         let index = Int(payload.chunkIndex)
+        guard index < Self.maxChunks else { return }
         if var assembly = assemblies[payload.mediaID] {
             guard assembly.sender.nodeID == packet.sender.nodeID, index < assembly.totalChunks else { return }
             assembly.chunks[index] = payload.chunkData
@@ -213,8 +246,12 @@ actor MediaTransferService {
             emit(.progress(msgID: assembly.headerMsgID, received: assembly.chunks.count, total: assembly.totalChunks))
             await completeIfReady(mediaID: payload.mediaID)
         } else {
-            var orphans = orphanChunks[payload.mediaID] ?? [:]
-            if orphans.count < 256 { orphans[index] = payload.chunkData }
+            var orphans = orphanChunks[payload.mediaID]
+                ?? OrphanChunks(senderNodeID: packet.sender.nodeID, receivedAt: Date())
+            guard orphans.senderNodeID == packet.sender.nodeID, orphans.chunks[index] == nil,
+                  orphanBytes + payload.chunkData.count <= Self.maxOrphanBytes else { return }
+            orphans.chunks[index] = payload.chunkData
+            orphans.bytes += payload.chunkData.count
             orphanChunks[payload.mediaID] = orphans
         }
     }
@@ -226,17 +263,17 @@ actor MediaTransferService {
         var data = Data(capacity: assembly.totalBytes)
         for index in 0..<assembly.totalChunks {
             guard let chunk = assembly.chunks[index] else {
-                emit(.failed(mediaID: mediaID))
+                emit(.failed(mediaID: mediaID, msgID: assembly.headerMsgID))
                 return
             }
             data.append(chunk)
         }
         guard data.count == assembly.totalBytes else {
-            emit(.failed(mediaID: mediaID))
+            emit(.failed(mediaID: mediaID, msgID: assembly.headerMsgID))
             return
         }
         if assembly.kind == .image, !WebPEncoder.isWebP(data) {
-            emit(.failed(mediaID: mediaID))
+            emit(.failed(mediaID: mediaID, msgID: assembly.headerMsgID))
             return
         }
         do {
@@ -247,19 +284,22 @@ actor MediaTransferService {
             _ = try? await router.sendDirectPacket(type: .deliveryAck, payload: ack, to: assembly.sender, ttl: MeshProtocol.ackTTL)
             emit(.completed(msgID: assembly.headerMsgID))
         } catch {
-            emit(.failed(mediaID: mediaID))
+            emit(.failed(mediaID: mediaID, msgID: assembly.headerMsgID))
         }
     }
 
     private func purgeStaleAssemblies(now: Date = Date()) {
         let stale = assemblies.filter { now.timeIntervalSince($0.value.startedAt) > Self.assemblyTimeout }
-        for (mediaID, _) in stale {
+        for (mediaID, assembly) in stale {
             assemblies.removeValue(forKey: mediaID)
-            emit(.failed(mediaID: mediaID))
+            emit(.failed(mediaID: mediaID, msgID: assembly.headerMsgID))
         }
-        if orphanChunks.count > 64 {
-            orphanChunks.removeAll()
-        }
+        // Chunk orfani (header perso o media gia' completato): scadono dopo un minuto.
+        orphanChunks = orphanChunks.filter { now.timeIntervalSince($0.value.receivedAt) < Self.orphanTimeout }
+    }
+
+    private var orphanBytes: Int {
+        orphanChunks.values.reduce(0) { $0 + $1.bytes }
     }
 
     private func emit(_ event: Event) {

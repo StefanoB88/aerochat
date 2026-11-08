@@ -153,6 +153,7 @@ enum ProFeature: Sendable, Equatable {
     case voiceNote
     case photo
     case game
+    case call
 }
 
 enum FeatureDecision: Sendable, Equatable {
@@ -161,6 +162,10 @@ enum FeatureDecision: Sendable, Equatable {
     case photosNeedDirectLink
     case peerOutOfRange
     case loungeTextOnly
+    /// Chiamata possibile solo con link diretto (niente ponti) verso un compagno 1-a-1.
+    case callNeedsDirectLink
+    /// Link diretto presente ma segnale troppo debole per l'audio in tempo reale.
+    case callSignalTooWeak
 
     var isAllowed: Bool { self == .allowed }
 }
@@ -187,6 +192,15 @@ enum FeatureGate {
         case .photo:
             if !reachability.allowsRealtimeDelivery { return .peerOutOfRange }
             return reachability.allowsPhotos ? .allowed : .photosNeedDirectLink
+        case .call:
+            guard conversation.type == .direct else { return .callNeedsDirectLink }
+            switch reachability {
+            case .outOfRange: return .peerOutOfRange
+            case .viaBridge: return .callNeedsDirectLink
+            case .direct(let rssi):
+                if let rssi, rssi < MeshProtocol.minimumCallRSSI { return .callSignalTooWeak }
+                return .allowed
+            }
         }
     }
 }

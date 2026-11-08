@@ -25,6 +25,8 @@ final class AppEnvironment {
     private(set) var media: MediaTransferService?
     private(set) var games: GameService?
     private(set) var mediaStore: MediaStore?
+    /// Chiamate vocali in tempo reale (osservato dalla schermata di chiamata).
+    private(set) var calls: CallService?
 
     // Stato osservabile dalla UI.
     private(set) var radioState: RadioState = .unknown
@@ -41,6 +43,9 @@ final class AppEnvironment {
     private let mediaStoreFactory: @Sendable () throws -> MediaStore
     private let notifier: any MeshNotifier
     private var backgroundTasks: [Task<Void, Never>] = []
+    /// `bootstrap()` puo' partire sia dall'AppDelegate (rilancio in background via State Restoration)
+    /// sia dal `.task` della UI: senza questo flag due chiamate sovrapposte avvierebbero due mesh.
+    private var isBootstrapping = false
 
     init(identityStore: IdentityStore = IdentityStore(),
          databaseFactory: @escaping @Sendable () throws -> AppDatabase = { try AppDatabase.makeShared() },
@@ -58,14 +63,35 @@ final class AppEnvironment {
     var hasCompletedOnboarding: Bool { identityRecord != nil }
 
     var nickname: String { identityRecord?.nickname ?? String(localized: "Passeggero") }
+    var avatarColorHex: String { identityRecord?.avatarColorHex ?? OnboardingView.palette[0] }
+    var avatarImage: Data? { identityRecord?.avatarImage }
 
-    var isPro: Bool { entitlementState.isPro() }
+    /// Profilo pubblico annunciato ai contatti con `PROFILE_UPDATE`.
+    private var localProfile: LocalProfile? {
+        guard let identityRecord else { return nil }
+        return LocalProfile(nickname: identityRecord.nickname,
+                            avatarColorHex: identityRecord.avatarColorHex,
+                            avatarImage: identityRecord.avatarImage,
+                            updatedAtMs: identityRecord.profileUpdatedAtMs ?? identityRecord.createdAtMs)
+    }
+
+    /// In DEBUG tutte le funzioni Pro sono sbloccate per lo sviluppo; il Flight Group Pass verso gli
+    /// altri membri resta legato all'acquisto reale (`ProPassService` usa `entitlementState`).
+    var isPro: Bool {
+        #if DEBUG
+        return true
+        #else
+        return entitlementState.isPro()
+        #endif
+    }
 
     var isMeshRunning: Bool { router != nil }
 
     /// Avvio: DB (I/O fuori dal main thread) + chiavi nel Keychain + record identita' + mesh se gia' onboardato.
     func bootstrap() async {
-        guard phase == .booting, database == nil else { return }
+        guard phase == .booting, database == nil, !isBootstrapping else { return }
+        isBootstrapping = true
+        defer { isBootstrapping = false }
         do {
             let factory = databaseFactory
             let db = try await Task.detached(priority: .userInitiated) { try factory() }.value
@@ -104,6 +130,32 @@ final class AppEnvironment {
         await proPass?.setNickname(trimmed)
     }
 
+    /// Modifica il profilo (nickname, colore, foto) e lo annuncia a tutti i contatti.
+    func updateProfile(nickname: String, avatarColorHex: String, avatarImage: Data?) async throws {
+        guard let database else { return }
+        let trimmed = String(nickname.trimmingCharacters(in: .whitespacesAndNewlines).prefix(MeshProtocol.maxNicknameLength))
+        guard !trimmed.isEmpty else { return }
+        guard let record = try await database.identities.updateProfile(nickname: trimmed, avatarColorHex: avatarColorHex,
+                                                                        avatarImage: avatarImage) else { return }
+        identityRecord = record
+        await media?.setNickname(trimmed)
+        await games?.setNickname(trimmed)
+        await proPass?.setNickname(trimmed)
+        calls?.setNickname(trimmed)
+        if let router, let localProfile {
+            await router.setProfile(localProfile, announce: true)
+        }
+    }
+
+    /// La chat e' visibile: messaggi letti + conferme di lettura (doppia spunta colorata) ai mittenti.
+    func markConversationRead(_ conversation: ConversationRecord) async {
+        if let router {
+            await router.markConversationRead(conversation)
+        } else {
+            _ = try? await database?.messages.markIncomingRead(conversationID: conversation.id)
+        }
+    }
+
     /// Avvia trasporto BLE, router e servizi (idempotente).
     func startMesh() async {
         guard router == nil, let database, let identityKeys else { return }
@@ -111,6 +163,9 @@ final class AppEnvironment {
         let router = MeshRouterActor(identity: identityKeys, database: database, transport: transport,
                                      nickname: nickname, notifier: notifier)
         self.router = router
+        if let localProfile {
+            await router.setProfile(localProfile, announce: false)
+        }
 
         let routerEvents = await router.events()
         backgroundTasks.append(Task { [weak self] in
@@ -150,11 +205,14 @@ final class AppEnvironment {
                     guard let self else { break }
                     switch event {
                     case .progress(let msgID, let received, let total):
-                        self.mediaProgress[msgID] = total > 0 ? Double(received) / Double(total) : 0
+                        let value = total > 0 ? Double(received) / Double(total) : 0
+                        // Ogni scrittura invalida la chat aperta: aggiorniamo solo a passi del 5%.
+                        if let current = self.mediaProgress[msgID], value < 1, value - current < 0.05 { continue }
+                        self.mediaProgress[msgID] = value
                     case .completed(let msgID):
                         self.mediaProgress.removeValue(forKey: msgID)
-                    case .failed:
-                        break
+                    case .failed(_, let msgID):
+                        if let msgID { self.mediaProgress.removeValue(forKey: msgID) }
                     }
                 }
             })
@@ -164,11 +222,28 @@ final class AppEnvironment {
         let games = GameService(router: router, database: database, identity: identityKeys, nickname: nickname)
         self.games = games
         await games.start()
+
+        let calls = CallService(router: router, database: database, identity: identityKeys, nickname: nickname)
+        self.calls = calls
+        await calls.start()
+
+        // Notifiche gratuite per tutti: anche chi ha completato l'onboarding senza rispondere al
+        // prompt deve poter ricevere i banner dei messaggi arrivati a schermo spento.
+        if let localNotifier = notifier as? LocalNotificationCenter {
+            await localNotifier.requestAuthorizationIfNeeded()
+        }
+    }
+
+    /// Ritorno in primo piano: riprova subito i messaggi in attesa di conferma di consegna.
+    func sceneDidBecomeActive() async {
+        await router?.flushRelayQueue()
     }
 
     func stopMesh() async {
         backgroundTasks.forEach { $0.cancel() }
         backgroundTasks.removeAll()
+        calls?.stop()
+        calls = nil
         await games?.stop()
         await media?.stop()
         await proPass?.stop()
@@ -219,16 +294,32 @@ final class AppEnvironment {
         return group
     }
 
+    func setPinned(_ pinned: Bool, conversation: ConversationRecord) async throws {
+        try await database?.conversations.setPinned(pinned, conversationID: conversation.id)
+    }
+
+    /// Elimina la chat (solo su questo iPhone): messaggi in cascata e file media su disco.
+    func deleteConversation(_ conversation: ConversationRecord) async throws {
+        guard let database else { return }
+        let paths = (try? await database.messages.mediaPaths(conversationID: conversation.id)) ?? []
+        try await database.conversations.delete(conversationID: conversation.id)
+        if let mediaStore {
+            paths.forEach(mediaStore.remove(relativePath:))
+        }
+    }
+
     private func apply(_ event: RouterEvent) async {
         switch event {
+        // Assegnare solo se cambia: `@Observable` invalida chi legge la proprieta' anche con lo stesso
+        // valore (banner modalita' aereo, contatore della Cabina) e i due manager BLE ripetono lo stato.
         case .radioStateChanged(let state):
-            radioState = state
+            if state != radioState { radioState = state }
         case .neighborsChanged(let list):
-            neighbors = list
+            if list != neighbors { neighbors = list }
         case .messageReceived(_, let msgID):
             lastReceivedMessageID = msgID
         case .relayQueueChanged(let count):
-            relayQueueCount = count
+            if count != relayQueueCount { relayQueueCount = count }
         case .groupMembersChanged(let conversationID):
             // Nuovi membri nel gruppo: se siamo Pro, il pass li raggiunge subito.
             guard isPro, let database, let proPass,

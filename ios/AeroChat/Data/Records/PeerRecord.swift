@@ -19,6 +19,10 @@ struct PeerRecord: Codable, Hashable, Sendable, FetchableRecord, PersistableReco
     var createdAtMs: Int64
     /// UUID CoreBluetooth del peripheral (valido solo su questo iPhone) per la riconnessione in background.
     var bleIdentifier: String?
+    /// Profilo pubblico ricevuto con `PROFILE_UPDATE` (colore avatar e foto WebP).
+    var avatarColorHex: String?
+    var avatarImage: Data?
+    var profileUpdatedAtMs: Int64?
 
     enum CodingKeys: String, CodingKey {
         case nodeID = "node_id"
@@ -32,6 +36,9 @@ struct PeerRecord: Codable, Hashable, Sendable, FetchableRecord, PersistableReco
         case lastRSSI = "last_rssi"
         case createdAtMs = "created_at_ms"
         case bleIdentifier = "ble_identifier"
+        case avatarColorHex = "avatar_color_hex"
+        case avatarImage = "avatar_image"
+        case profileUpdatedAtMs = "profile_updated_at_ms"
     }
 
     enum Columns {
@@ -44,6 +51,9 @@ struct PeerRecord: Codable, Hashable, Sendable, FetchableRecord, PersistableReco
         static let lastSeenAtMs = Column(CodingKeys.lastSeenAtMs)
         static let lastHopCount = Column(CodingKeys.lastHopCount)
         static let lastRSSI = Column(CodingKeys.lastRSSI)
+        static let avatarColorHex = Column(CodingKeys.avatarColorHex)
+        static let avatarImage = Column(CodingKeys.avatarImage)
+        static let profileUpdatedAtMs = Column(CodingKeys.profileUpdatedAtMs)
     }
 
     init(nodeID: Data, x25519Pub: Data, ed25519Pub: Data, nickname: String,

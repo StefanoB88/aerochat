@@ -149,7 +149,8 @@ enum OggOpus {
                     // Pacchetto completo.
                     if headerPacketsSeen == 0 {
                         header = try parseOpusHead(pending)
-                    } else if headerPacketsSeen >= 2 {
+                    } else if headerPacketsSeen >= 2, !pending.isEmpty {
+                        // Un segmento di lunghezza 0 non e' un pacchetto audio: il decoder non lo accetta.
                         packets.append(pending)
                     }
                     headerPacketsSeen += 1

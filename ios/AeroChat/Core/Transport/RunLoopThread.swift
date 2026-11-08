@@ -24,6 +24,8 @@ final class RunLoopThread: Thread, @unchecked Sendable {
         while !isCancelled {
             _ = current.run(mode: .default, before: .distantFuture)
         }
+        // Dopo l'arresto i `perform` diventano no-op espliciti invece di accodarsi a una runloop morta.
+        lock.withLock { loop = nil }
     }
 
     /// Avvia il thread e attende che la runloop sia pronta a ricevere blocchi.
@@ -45,10 +47,17 @@ final class RunLoopThread: Thread, @unchecked Sendable {
         CFRunLoopWakeUp(runLoop.getCFRunLoop())
     }
 
-    /// Ferma la runloop (il thread termina al prossimo giro).
+    /// Ferma la runloop dopo aver eseguito i blocchi gia' accodati (es. le `close()` dei link),
+    /// cosi' nessuno stream resta aperto. Il thread non e' riavviabile: serve una nuova istanza.
     func shutdown() {
-        cancel()
-        guard let runLoop else { return }
-        CFRunLoopStop(runLoop.getCFRunLoop())
+        guard let runLoop else {
+            cancel()
+            return
+        }
+        runLoop.perform { [weak self] in
+            self?.cancel()
+            CFRunLoopStop(CFRunLoopGetCurrent())
+        }
+        CFRunLoopWakeUp(runLoop.getCFRunLoop())
     }
 }

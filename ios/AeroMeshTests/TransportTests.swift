@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import CoreBluetooth
-@testable import MyApp
+@testable import AeroChat
 
 @Suite("Trasporto BLE – framing su stream, registro link, politiche")
 struct TransportTests {

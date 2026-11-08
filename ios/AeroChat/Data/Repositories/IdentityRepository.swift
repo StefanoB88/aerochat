@@ -27,6 +27,22 @@ struct IdentityRepository: Sendable {
         }
     }
 
+    /// Salva nickname, colore e foto profilo e incrementa la versione annunciata ai contatti.
+    @discardableResult
+    func updateProfile(nickname: String, avatarColorHex: String, avatarImage: Data?,
+                       at date: Date = Date()) async throws -> IdentityRecord? {
+        try await database.pool.write { db in
+            guard var record = try IdentityRecord.fetchOne(db, key: IdentityRecord.singletonID) else { return nil }
+            record.nickname = nickname
+            record.avatarColorHex = avatarColorHex
+            record.avatarImage = avatarImage
+            // Sempre crescente, anche con l'orologio spostato indietro: i contatti scartano le versioni vecchie.
+            record.profileUpdatedAtMs = max(date.unixMilliseconds, (record.profileUpdatedAtMs ?? 0) + 1)
+            try record.update(db)
+            return record
+        }
+    }
+
     /// Aggiorna lo stato Pro cache-ato (chiamato da `EntitlementManager`).
     func updateProStatus(tier: ProTier, validUntilMs: Int64?, receiptJWS: String?) async throws {
         try await database.pool.write { db in

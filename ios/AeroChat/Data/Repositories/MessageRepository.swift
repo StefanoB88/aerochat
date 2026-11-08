@@ -75,6 +75,104 @@ struct MessageRepository: Sendable {
         }
     }
 
+    /// Segna come letti i messaggi ricevuti della conversazione (azzera anche il badge) e li
+    /// restituisce, nella stessa transazione, per inviare le conferme di lettura ai mittenti.
+    func markIncomingRead(conversationID: String) async throws -> [MessageRecord] {
+        try await database.pool.write { db in
+            let unread = try MessageRecord
+                .filter(MessageRecord.Columns.conversationID == conversationID
+                        && MessageRecord.Columns.isOutgoing == false
+                        && MessageRecord.Columns.deliveryStatus != DeliveryStatus.read.rawValue)
+                .fetchAll(db)
+            if !unread.isEmpty {
+                try MessageRecord
+                    .filter(keys: unread.map(\.msgID))
+                    .updateAll(db, MessageRecord.Columns.deliveryStatus.set(to: DeliveryStatus.read.rawValue))
+            }
+            try ConversationRecord
+                .filter(key: conversationID)
+                .filter(ConversationRecord.Columns.unreadCount != 0)
+                .updateAll(db, ConversationRecord.Columns.unreadCount.set(to: 0))
+            return unread
+        }
+    }
+
+    /// `READ_RECEIPT`: registra che `readerNodeID` ha letto i nostri messaggi e ne fa avanzare lo stato.
+    /// - Chat 1-a-1: solo il compagno della chat puo' confermare; il messaggio passa a `read`.
+    /// - Gruppo: il lettore viene salvato in `message_reads`; il messaggio passa a `read` solo quando i
+    ///   lettori coprono tutti i membri del gruppo noti in quel momento (mittente escluso), altrimenti
+    ///   almeno a `delivered_ack` (chi ha letto l'ha ricevuto).
+    /// Ritorna i `msg_id` il cui stato e' avanzato. Lo stato non torna mai indietro.
+    func markReadByRecipient(msgIDs: [Data], readerNodeID: Data, now: Date = Date()) async throws -> [Data] {
+        try await database.pool.write { db in
+            var updated: [Data] = []
+            for msgID in msgIDs {
+                guard var message = try MessageRecord.fetchOne(db, key: msgID),
+                      message.isOutgoing,
+                      let conversation = try ConversationRecord.fetchOne(db, key: message.conversationID) else { continue }
+                let target: DeliveryStatus
+                switch conversation.type {
+                case .direct:
+                    guard conversation.peerNodeID == readerNodeID else { continue }
+                    target = .read
+                case .group:
+                    guard readerNodeID != message.senderNodeID else { continue }
+                    try db.execute(sql: "INSERT OR IGNORE INTO message_reads (msg_id, reader_node_id, read_at_ms) VALUES (?, ?, ?)",
+                                   arguments: [msgID, readerNodeID, now.unixMilliseconds])
+                    target = try Self.allGroupMembersRead(db, message: message) ? .read : .deliveredAck
+                case .cabinLounge:
+                    continue
+                }
+                guard target.rank > message.deliveryStatus.rank else { continue }
+                message.deliveryStatus = target
+                try message.update(db)
+                updated.append(msgID)
+            }
+            return updated
+        }
+    }
+
+    /// `true` se tutti i membri del gruppo noti ora (escluso il mittente) compaiono tra i lettori del messaggio.
+    private static func allGroupMembersRead(_ db: Database, message: MessageRecord) throws -> Bool {
+        let unread = try Int.fetchOne(db, sql: """
+            SELECT COUNT(*) FROM group_members
+            WHERE conversation_id = ? AND node_id != ?
+              AND node_id NOT IN (SELECT reader_node_id FROM message_reads WHERE msg_id = ?)
+            """, arguments: [message.conversationID, message.senderNodeID, message.msgID]) ?? 0
+        return unread == 0
+    }
+
+    /// `node_id` dei membri che hanno confermato la lettura di un nostro messaggio di gruppo.
+    func readerNodeIDs(msgID: Data) async throws -> [Data] {
+        try await database.pool.read { db in
+            try Data.fetchAll(db, sql: "SELECT reader_node_id FROM message_reads WHERE msg_id = ? ORDER BY read_at_ms",
+                              arguments: [msgID])
+        }
+    }
+
+    /// Tra `msgIDs`, i nostri messaggi in uscita non ancora confermati dal destinatario (una sola query).
+    func awaitingAckIDs(among msgIDs: [Data]) async throws -> Set<Data> {
+        guard !msgIDs.isEmpty else { return [] }
+        return try await database.pool.read { db in
+            Set(try Data.fetchAll(db, MessageRecord
+                .select(MessageRecord.Columns.msgID)
+                .filter(keys: msgIDs)
+                .filter(MessageRecord.Columns.isOutgoing == true)
+                .filter([DeliveryStatus.queued.rawValue, DeliveryStatus.sentMesh.rawValue].contains(MessageRecord.Columns.deliveryStatus))))
+        }
+    }
+
+    /// `queued -> sent_mesh` per piu' messaggi in una transazione (gli stati successivi restano invariati).
+    func markSentMesh(msgIDs: [Data]) async throws {
+        guard !msgIDs.isEmpty else { return }
+        _ = try await database.pool.write { db in
+            try MessageRecord
+                .filter(keys: msgIDs)
+                .filter(MessageRecord.Columns.deliveryStatus == DeliveryStatus.queued.rawValue)
+                .updateAll(db, MessageRecord.Columns.deliveryStatus.set(to: DeliveryStatus.sentMesh.rawValue))
+        }
+    }
+
     /// Messaggi in uscita ancora in coda (da ritrasmettere quando un peer torna a portata).
     func queuedOutgoing() async throws -> [MessageRecord] {
         try await database.pool.read { db in
@@ -101,6 +199,15 @@ struct MessageRepository: Sendable {
                     """,
                 arguments: [pattern, limit]
             )
+        }
+    }
+
+    /// Path dei media su disco di una conversazione (da rimuovere quando la chat viene eliminata).
+    func mediaPaths(conversationID: String) async throws -> [String] {
+        try await database.pool.read { db in
+            try String.fetchAll(db, MessageRecord
+                .select(Column("media_local_path"))
+                .filter(MessageRecord.Columns.conversationID == conversationID && Column("media_local_path") != nil))
         }
     }
 

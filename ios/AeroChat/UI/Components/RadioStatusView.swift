@@ -35,6 +35,7 @@ struct RadioStatusView: View {
                 .font(.caption)
                 .foregroundStyle(AeroTheme.textSecondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text("Stato radio: \(label)"))

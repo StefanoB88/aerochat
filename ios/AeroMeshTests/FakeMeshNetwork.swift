@@ -1,5 +1,5 @@
 import Foundation
-@testable import MyApp
+@testable import AeroChat
 
 /// Trasporto finto in memoria: piu' `FakeTransport` collegati tra loro simulano link L2CAP
 /// bidirezionali gia' identificati (come dopo lo scambio del node_id via GATT).
@@ -17,6 +17,9 @@ actor FakeTransport: TransportProvider {
     private(set) var sent: [Sent] = []
     private(set) var trustedIdentifiers: Set<UUID> = []
     var state: RadioState = .poweredOn
+    /// Frame in arrivo trattenuti (consegna fuori ordine simulata con `releaseHeldFrames`).
+    private var holdsIncoming = false
+    private var heldFrames: [(frame: Data, link: LinkID)] = []
 
     init(localNodeID: Data) {
         self.localNodeID = localNodeID
@@ -71,7 +74,28 @@ actor FakeTransport: TransportProvider {
     // MARK: - Simulazione
 
     func inject(_ frame: Data, from link: LinkID) {
+        if holdsIncoming {
+            heldFrames.append((frame, link))
+            return
+        }
         emit(.frameReceived(frame, from: link, nodeID: peers[link]?.nodeID))
+    }
+
+    /// Da ora i frame in arrivo restano in attesa (link "lento").
+    func holdIncoming() {
+        holdsIncoming = true
+    }
+
+    func heldFrameCount() -> Int { heldFrames.count }
+
+    /// Consegna i frame trattenuti, in ordine inverso se `reversed` (arrivo fuori ordine).
+    func releaseHeldFrames(reversed: Bool) {
+        holdsIncoming = false
+        let frames = reversed ? Array(heldFrames.reversed()) : heldFrames
+        heldFrames.removeAll()
+        for held in frames {
+            emit(.frameReceived(held.frame, from: held.link, nodeID: peers[held.link]?.nodeID))
+        }
     }
 
     func attach(_ remote: FakeTransport, localLink: LinkID, remoteLink: LinkID, rssi: Int = -60) {

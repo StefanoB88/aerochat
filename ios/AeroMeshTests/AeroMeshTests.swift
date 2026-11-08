@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import CryptoKit
-@testable import MyApp
+@testable import AeroChat
 
 /// Vettori di test ufficiali (RFC 8439, 5869, 7748, 8032) + regole AeroMesh.
 /// Gli stessi vettori vanno fatti passare dalla suite Android (BouncyCastle) per certificare

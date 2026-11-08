@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import MyApp
+@testable import AeroChat
 
 @Suite("Identita' Keychain e QR Code di pairing")
 struct IdentityPairingTests {
@@ -66,6 +66,24 @@ struct IdentityPairingTests {
         #expect(parsed.nodeID == identity.nodeID)
         #expect(parsed.isGroupInvite)
         #expect(parsed.url != nil)
+    }
+
+    @Test("QR URI: il nome del gruppo viaggia nel parametro opzionale 'gt' ed e' retrocompatibile")
+    func pairingURICarriesGroupTitle() throws {
+        let identity = IdentityKeys.generate()
+        let payload = PairingPayload(identity: identity, nickname: "Bob", groupID: UUID(),
+                                     groupSecretKey: CryptoEngine.randomGroupSecretKey(), groupTitle: "  Volo FR 1234 & co ✈ ")
+        #expect(payload.groupTitle == "Volo FR 1234 & co ✈")
+        let uri = payload.uriString
+        #expect(uri.contains("&gt=Volo%20FR%201234%20%26%20co%20"))
+        #expect(try PairingPayload(uriString: uri) == payload)
+
+        // Android con `URLEncoder` ("+" per lo spazio) e QR legacy senza 'gt'.
+        let android = try PairingPayload(uriString: uri.replacingOccurrences(of: "Volo%20FR%201234", with: "Volo+FR+1234"))
+        #expect(android.groupTitle == "Volo FR 1234 & co ✈")
+        let legacy = try PairingPayload(uriString: String(uri[..<uri.range(of: "&gt=")!.lowerBound]))
+        #expect(legacy.groupTitle == nil)
+        #expect(legacy.isGroupInvite)
     }
 
     @Test("QR URI: payload personale senza gruppo e decodifica dello spazio codificato come '+' da Android")

@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import CryptoKit
-@testable import MyApp
+@testable import AeroChat
 
 @Suite("Monetizzazione – JWS offline, stato Pro, Flight Group Pass, feature gate")
 struct EntitlementTests {

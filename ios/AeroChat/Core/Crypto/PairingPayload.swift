@@ -3,7 +3,9 @@ import Foundation
 /// Contenuto del QR Code di pairing / catena gruppi.
 ///
 /// Formato URI:
-/// `aeromesh://v1?x=<base64url_x25519_32B>&e=<base64url_ed25519_32B>&n=<url_encoded_nick>&g=<optional_group_uuid>&gk=<optional_base64url_group_key>`
+/// `aeromesh://v1?x=<base64url_x25519_32B>&e=<base64url_ed25519_32B>&n=<url_encoded_nick>&g=<optional_group_uuid>&gk=<optional_base64url_group_key>&gt=<optional_url_encoded_group_title>`
+///
+/// `gt` e' opzionale e retrocompatibile: chi non lo conosce lo ignora e riceve il titolo dal Group Key Gossip.
 struct PairingPayload: Sendable, Equatable {
 
     enum Failure: Error, Equatable {
@@ -18,22 +20,31 @@ struct PairingPayload: Sendable, Equatable {
     let nickname: String
     let groupID: UUID?
     let groupSecretKey: Data?
+    /// Nome del gruppo di viaggio, cosi' chi scansiona lo vede subito (senza attendere il gossip).
+    let groupTitle: String?
 
-    init(x25519PublicKeyRaw: Data, ed25519PublicKeyRaw: Data, nickname: String, groupID: UUID? = nil, groupSecretKey: Data? = nil) {
+    /// Lunghezza massima del titolo nel QR (resta leggibile dalla fotocamera).
+    static let maxGroupTitleLength = 64
+
+    init(x25519PublicKeyRaw: Data, ed25519PublicKeyRaw: Data, nickname: String, groupID: UUID? = nil, groupSecretKey: Data? = nil,
+         groupTitle: String? = nil) {
         self.x25519PublicKeyRaw = x25519PublicKeyRaw
         self.ed25519PublicKeyRaw = ed25519PublicKeyRaw
         self.nickname = nickname
         self.groupID = groupID
         self.groupSecretKey = groupSecretKey
+        let trimmedTitle = groupTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.groupTitle = trimmedTitle.flatMap { $0.isEmpty ? nil : String($0.prefix(Self.maxGroupTitleLength)) }
     }
 
     /// Payload personale a partire dall'identita' locale.
-    init(identity: IdentityKeys, nickname: String, groupID: UUID? = nil, groupSecretKey: Data? = nil) {
+    init(identity: IdentityKeys, nickname: String, groupID: UUID? = nil, groupSecretKey: Data? = nil, groupTitle: String? = nil) {
         self.init(x25519PublicKeyRaw: identity.x25519PublicKeyRaw,
                   ed25519PublicKeyRaw: identity.ed25519PublicKeyRaw,
                   nickname: nickname,
                   groupID: groupID,
-                  groupSecretKey: groupSecretKey)
+                  groupSecretKey: groupSecretKey,
+                  groupTitle: groupTitle)
     }
 
     /// `node_id` derivato dalla chiave X25519 contenuta nel QR.
@@ -63,6 +74,9 @@ struct PairingPayload: Sendable, Equatable {
         }
         if let groupSecretKey {
             items.append(("gk", groupSecretKey.base64URLEncodedString()))
+        }
+        if let groupTitle {
+            items.append(("gt", groupTitle.addingPercentEncoding(withAllowedCharacters: Self.nicknameAllowed) ?? ""))
         }
         let query = items.map { "\($0.0)=\($0.1)" }.joined(separator: "&")
         return "\(MeshProtocol.qrScheme)://\(MeshProtocol.qrVersion)?\(query)"
@@ -111,7 +125,10 @@ struct PairingPayload: Sendable, Equatable {
             }
             groupSecretKey = key
         }
+        // Titolo facoltativo: se non decodificabile si ignora (il gossip lo correggera').
+        let groupTitle = fields["gt"].flatMap { $0.replacingOccurrences(of: "+", with: " ").removingPercentEncoding }
 
-        self.init(x25519PublicKeyRaw: x, ed25519PublicKeyRaw: e, nickname: nickname, groupID: groupID, groupSecretKey: groupSecretKey)
+        self.init(x25519PublicKeyRaw: x, ed25519PublicKeyRaw: e, nickname: nickname, groupID: groupID, groupSecretKey: groupSecretKey,
+                  groupTitle: groupTitle)
     }
 }

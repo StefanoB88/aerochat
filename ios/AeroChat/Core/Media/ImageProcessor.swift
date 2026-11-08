@@ -55,6 +55,25 @@ enum ImageProcessor {
         return Result(webp: webp, blurhash: blurhash, width: working.width, height: working.height, quality: quality)
     }
 
+    /// Foto profilo: ritaglio quadrato centrale 128x128 in WebP entro `MeshProtocol.maxAvatarBytes`.
+    static func prepareAvatar(imageData: Data) throws -> Data {
+        let side = MeshProtocol.avatarPixelSize
+        // Il lato corto deve arrivare almeno a `side` dopo il ritaglio: prima un downscale generoso.
+        let image = try downscale(imageData: imageData, maxLongSide: side * 4)
+        let crop = min(image.width, image.height)
+        let rect = CGRect(x: (image.width - crop) / 2, y: (image.height - crop) / 2, width: crop, height: crop)
+        guard let square = image.cropping(to: rect) else { throw Failure.unreadableImage }
+        let avatar = downscale(square, maxLongSide: side)
+        var quality: Float = 75
+        var webp = try WebPEncoder.encode(avatar, quality: quality)
+        while webp.count > MeshProtocol.maxAvatarBytes, quality > 20 {
+            quality -= 15
+            webp = try WebPEncoder.encode(avatar, quality: quality)
+        }
+        guard webp.count <= MeshProtocol.maxAvatarBytes else { throw Failure.unreadableImage }
+        return webp
+    }
+
     /// Decodifica + thumbnail in un colpo solo (ImageIO non carica l'immagine piena in memoria).
     static func downscale(imageData: Data, maxLongSide: Int) throws -> CGImage {
         guard let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { throw Failure.unreadableImage }

@@ -102,6 +102,7 @@ enum OpusCodec {
     static func decode(packets: [Data]) throws -> [Float] {
         guard let pcm = pcmFormat, let opus = opusFormat else { throw Failure.formatUnavailable }
         guard let converter = AVAudioConverter(from: opus, to: pcm) else { throw Failure.converterUnavailable }
+        let packets = packets.filter { !$0.isEmpty }
         guard !packets.isEmpty else { return [] }
 
         let maximumPacketSize = packets.map(\.count).max() ?? 0
@@ -123,7 +124,8 @@ enum OpusCodec {
                 nextPacket += 1
                 let buffer = AVAudioCompressedBuffer(format: opus, packetCapacity: 1, maximumPacketSize: maximumPacketSize)
                 packet.withUnsafeBytes { bytes in
-                    buffer.data.copyMemory(from: bytes.baseAddress!, byteCount: packet.count)
+                    guard let base = bytes.baseAddress else { return }
+                    buffer.data.copyMemory(from: base, byteCount: packet.count)
                 }
                 buffer.byteLength = UInt32(packet.count)
                 buffer.packetCount = 1

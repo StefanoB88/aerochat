@@ -28,6 +28,14 @@ enum Reachability: Sendable, Equatable {
     }
 }
 
+/// Profilo pubblico locale annunciato ai contatti con `PROFILE_UPDATE`.
+struct LocalProfile: Sendable, Equatable {
+    var nickname: String
+    var avatarColorHex: String
+    var avatarImage: Data?
+    var updatedAtMs: Int64
+}
+
 /// Eventi del router verso la UI.
 enum RouterEvent: Sendable, Equatable {
     case radioStateChanged(RadioState)
@@ -46,6 +54,12 @@ struct InboundPacket: Sendable {
     let sender: PeerRecord
     /// 1 = ricevuto direttamente dal mittente, N = attraversati N-1 ponti.
     let hopCount: Int
+}
+
+/// Pacchetto audio di una chiamata, gia' verificato e decifrato (fast path del router).
+struct CallAudioPacket: Sendable {
+    let senderNodeID: Data
+    let audio: CallAudio
 }
 
 /// Statistiche del router (diagnostica e test).
@@ -86,8 +100,10 @@ extension PacketType {
     /// Pacchetti testuali/di controllo che possono attendere in `relay_queue` (Delay-Tolerant Networking).
     var isStoreAndForwardEligible: Bool {
         switch self {
-        case .chatText, .deliveryAck, .groupKeyGossip, .proPassGrant, .gameMove: return true
-        case .publicLounge, .mediaHeader, .mediaChunk, .UNRECOGNIZED: return false
+        case .chatText, .deliveryAck, .readReceipt, .groupKeyGossip, .proPassGrant, .gameMove: return true
+        // Il profilo viene ripetuto a ogni nuovo link: non serve tenerlo in coda.
+        // Le chiamate hanno senso solo in tempo reale: niente coda.
+        case .publicLounge, .mediaHeader, .mediaChunk, .profileUpdate, .callSignal, .callAudio, .UNRECOGNIZED: return false
         }
     }
 

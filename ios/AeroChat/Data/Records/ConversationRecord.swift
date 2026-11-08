@@ -25,6 +25,8 @@ struct ConversationRecord: Codable, Hashable, Sendable, FetchableRecord, Persist
     var expiresAtMs: Int64?
     var lastMessageAtMs: Int64?
     var unreadCount: Int
+    /// Chat fissata in cima alla lista.
+    var isPinned: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -38,6 +40,7 @@ struct ConversationRecord: Codable, Hashable, Sendable, FetchableRecord, Persist
         case expiresAtMs = "expires_at_ms"
         case lastMessageAtMs = "last_message_at_ms"
         case unreadCount = "unread_count"
+        case isPinned = "is_pinned"
     }
 
     enum Columns {
@@ -50,6 +53,7 @@ struct ConversationRecord: Codable, Hashable, Sendable, FetchableRecord, Persist
         static let expiresAtMs = Column(CodingKeys.expiresAtMs)
         static let lastMessageAtMs = Column(CodingKeys.lastMessageAtMs)
         static let unreadCount = Column(CodingKeys.unreadCount)
+        static let isPinned = Column(CodingKeys.isPinned)
     }
 
     // MARK: - Factory

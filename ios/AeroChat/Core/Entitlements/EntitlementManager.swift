@@ -149,7 +149,8 @@ actor EntitlementManager {
         guard updatesTask == nil else { return }
         updatesTask = Task { [weak self] in
             for await result in Transaction.updates {
-                guard let self, case .verified(let transaction) = result else { continue }
+                guard let self else { break }
+                guard case .verified(let transaction) = result else { continue }
                 await self.apply(transaction, jws: result.jwsRepresentation)
                 await transaction.finish()
             }

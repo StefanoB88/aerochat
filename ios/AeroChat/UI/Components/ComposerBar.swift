@@ -6,15 +6,21 @@ struct ComposerBar: View {
 
     @Binding var text: String
     @Binding var photoItem: PhotosPickerItem?
-    let isRecording: Bool
-    let recordingLevel: Float
-    let recordingElapsed: TimeInterval
+    /// nil dove le note vocali non sono disponibili (Cabina Pubblica).
+    let recorder: VoiceNoteRecorder?
     let showsAttachments: Bool
     let onSend: () -> Void
     let onToggleRecording: () -> Void
     let onStartGame: (GameKind) -> Void
+    /// Giochi proposti nel menu (dipendono dal tipo di chat).
+    var availableGames: [GameKind] = [.ticTacToe, .battleship]
+    /// Apre la fotocamera per scattare e inviare una foto; nil dove le foto non sono previste.
+    var onTakePhoto: (() -> Void)? = nil
 
     @FocusState private var focused: Bool
+    @State private var showsLibrary = false
+
+    private var isRecording: Bool { recorder?.isRecording ?? false }
 
     private var canSend: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
@@ -22,37 +28,48 @@ struct ComposerBar: View {
         HStack(spacing: 10) {
             if showsAttachments && !isRecording {
                 Menu {
-                    Button { onStartGame(.ticTacToe) } label: { Label("Sfida a Tris", systemImage: "number") }
-                    Button { onStartGame(.battleship) } label: { Label("Battaglia navale", systemImage: "ferry") }
+                    ForEach(availableGames, id: \.rawValue) { kind in
+                        Button { Haptics.tap(); onStartGame(kind) } label: { gameLabel(kind) }
+                    }
                 } label: {
                     Image(systemName: "gamecontroller")
-                        .font(.title3)
+                        .font(.title2)
+                        .frame(width: 44, height: 44)
                         .foregroundStyle(AeroTheme.accentCyan)
                 }
                 .accessibilityLabel("Mini-giochi")
 
-                PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
-                    Image(systemName: "photo")
-                        .font(.title3)
-                        .foregroundStyle(AeroTheme.accentCyan)
+                if let onTakePhoto, CameraPicker.isAvailable {
+                    // Con la fotocamera disponibile il pulsante offre scatto o libreria.
+                    Menu {
+                        Button { Haptics.tap(); onTakePhoto() } label: { Label("Scatta foto", systemImage: "camera") }
+                        Button { Haptics.tap(); showsLibrary = true } label: {
+                            Label("Scegli dalla libreria", systemImage: "photo.on.rectangle")
+                        }
+                    } label: {
+                        photoIcon
+                    }
+                    .accessibilityLabel("Invia foto")
+                } else {
+                    PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+                        photoIcon
+                    }
+                    .accessibilityLabel("Invia foto")
                 }
-                .accessibilityLabel("Invia foto")
             }
 
             if isRecording {
                 HStack(spacing: 8) {
-                    Circle().fill(Color.red).frame(width: 10, height: 10)
-                        .opacity(0.5 + Double(recordingLevel) * 0.5)
-                    Text(MessageBubble.durationLabel(Int(recordingElapsed * 1_000)))
-                        .font(.body.monospacedDigit())
-                        .foregroundStyle(AeroTheme.textPrimary)
+                    if let recorder { RecordingMeter(recorder: recorder) }
                     Text("Registrazione… tocca per inviare")
                         .font(.footnote)
                         .foregroundStyle(AeroTheme.textSecondary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
                     Spacer()
                 }
                 .padding(.horizontal, 14)
-                .frame(height: 40)
+                .frame(minHeight: 44)
                 .background(AeroTheme.surface, in: Capsule())
             } else {
                 TextField("Messaggio", text: $text, axis: .vertical)
@@ -69,14 +86,14 @@ struct ComposerBar: View {
             if canSend && !isRecording {
                 Button(action: onSend) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 32))
+                        .font(.system(size: 38))
                         .foregroundStyle(AeroTheme.accentCyan)
                 }
                 .accessibilityLabel("Invia")
             } else if showsAttachments {
                 Button(action: onToggleRecording) {
                     Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
-                        .font(.system(size: 32))
+                        .font(.system(size: 38))
                         .foregroundStyle(isRecording ? .red : AeroTheme.accentCyan)
                 }
                 .accessibilityLabel(isRecording ? "Ferma e invia nota vocale" : "Registra nota vocale")
@@ -85,5 +102,51 @@ struct ComposerBar: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(AeroTheme.background)
+        .photosPicker(isPresented: $showsLibrary, selection: $photoItem, matching: .images, photoLibrary: .shared())
+    }
+
+    @ViewBuilder
+    private func gameLabel(_ kind: GameKind) -> some View {
+        switch kind {
+        case .ticTacToe: Label("Sfida a Tris", systemImage: "number")
+        case .battleship: Label("Battaglia navale", systemImage: "ferry")
+        case .scopa: Label("Scopa", systemImage: "suit.diamond.fill")
+        case .briscola: Label("Briscola", systemImage: "suit.club.fill")
+        case .scopone: Label("Scopone", systemImage: "suit.spade.fill")
+        default: EmptyView()
+        }
+    }
+
+    private var photoIcon: some View {
+        Image(systemName: "photo")
+            .font(.title2)
+            .frame(width: 44, height: 44)
+            .foregroundStyle(AeroTheme.accentCyan)
+    }
+}
+
+/// Livello e durata della registrazione (aggiornati ogni 100 ms): letti solo qui, cosi' il resto
+/// della barra e la chat non vengono ridisegnati a ogni tick.
+private struct RecordingMeter: View {
+
+    let recorder: VoiceNoteRecorder
+
+    var body: some View {
+        Circle().fill(Color.red).frame(width: 10, height: 10)
+            .opacity(0.5 + Double(recorder.level) * 0.5)
+        Text(MessageBubble.durationLabel(Int(recorder.elapsed * 1_000)))
+            .font(.body.monospacedDigit())
+            .foregroundStyle(AeroTheme.textPrimary)
+    }
+}
+
+extension View {
+    /// Chiude la tastiera toccando fuori dal campo di testo (come WhatsApp). Il gesto e' simultaneo,
+    /// quindi pulsanti, menu contestuali e scroll dei contenuti continuano a funzionare.
+    func dismissesKeyboardOnTap() -> some View {
+        contentShape(Rectangle())
+            .simultaneousGesture(TapGesture().onEnded {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            })
     }
 }

@@ -17,6 +17,7 @@ struct OnboardingView: View {
     var body: some View {
         ZStack {
             AeroTheme.background.ignoresSafeArea()
+                .onTapGesture { focused = false }
             VStack(alignment: .leading, spacing: 28) {
                 Spacer(minLength: 24)
                 VStack(alignment: .leading, spacing: 8) {
@@ -75,6 +76,7 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(AeroTheme.accentCyan)
+                .hapticOnTap()
                 .foregroundStyle(.black)
                 .disabled(trimmed.count < 2 || isSaving)
 

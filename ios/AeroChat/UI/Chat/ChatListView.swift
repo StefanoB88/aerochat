@@ -21,13 +21,16 @@ final class ChatListViewModel {
         tasks.append(Task { [weak self] in
             for await list in database.peers.observeAll() {
                 guard let self else { break }
-                self.peers = Dictionary(list.map { ($0.nodeID, $0) }, uniquingKeysWith: { first, _ in first })
+                let map = Dictionary(list.map { ($0.nodeID, $0) }, uniquingKeysWith: { first, _ in first })
+                if map != self.peers { self.peers = map }
             }
         })
         tasks.append(Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(4))
                 guard let self else { break }
+                // In background (BLE tiene viva l'app) la lista non e' visibile: niente polling della radio/DB.
+                guard UIApplication.shared.applicationState == .active else { continue }
                 await self.refreshReachability(environment)
             }
         })
@@ -44,7 +47,8 @@ final class ChatListViewModel {
         for conversation in conversations {
             map[conversation.id] = await router.reachability(of: conversation)
         }
-        reachability = map
+        // Solo se cambia: ogni assegnazione ridisegna l'intera lista.
+        if map != reachability { reachability = map }
     }
 }
 
@@ -57,6 +61,9 @@ struct ChatListView: View {
     @State private var showStoreQR = false
     @State private var showNewGroup = false
     @State private var showPaywall = false
+    @State private var showProfile = false
+    @State private var conversationToDelete: ConversationRecord?
+    @State private var actionError: String?
 
     var body: some View {
         NavigationStack {
@@ -72,6 +79,15 @@ struct ChatListView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
+                        Haptics.tap()
+                        showProfile = true
+                    } label: {
+                        AvatarView(imageData: environment.avatarImage, colorHex: environment.avatarColorHex, size: 34)
+                    }
+                    .accessibilityLabel("Modifica profilo")
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
                         showPaywall = true
                     } label: {
                         Label(environment.isPro ? String(localized: "Pro") : String(localized: "Pass"), systemImage: environment.isPro ? "ticket.fill" : "ticket")
@@ -79,10 +95,19 @@ struct ChatListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Haptics.tap()
+                        showPairing = true
+                    } label: {
+                        Image(systemName: "qrcode.viewfinder")
+                            .foregroundStyle(AeroTheme.accentCyan)
+                    }
+                    .accessibilityLabel("Aggiungi compagno (QR)")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button { showPairing = true } label: { Label("Aggiungi compagno (QR)", systemImage: "qrcode.viewfinder") }
-                        Button { showNewGroup = true } label: { Label("Nuovo gruppo di viaggio", systemImage: "person.3") }
-                        Button { showStoreQR = true } label: { Label("Fai scaricare l'app al gate", systemImage: "arrow.down.app") }
+                        Button { Haptics.tap(); showNewGroup = true } label: { Label("Nuovo gruppo di viaggio", systemImage: "person.3") }
+                        Button { Haptics.tap(); showStoreQR = true } label: { Label("Fai scaricare l'app al gate", systemImage: "arrow.down.app") }
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .foregroundStyle(AeroTheme.accentCyan)
@@ -97,6 +122,21 @@ struct ChatListView: View {
         .sheet(isPresented: $showStoreQR) { StoreQRSheet() }
         .sheet(isPresented: $showNewGroup) { NewGroupSheet() }
         .sheet(isPresented: $showPaywall) { PaywallView() }
+        .sheet(isPresented: $showProfile) { ProfileEditSheet() }
+        .confirmationDialog("Eliminare la chat?",
+                            isPresented: Binding(get: { conversationToDelete != nil }, set: { if !$0 { conversationToDelete = nil } }),
+                            titleVisibility: .visible,
+                            presenting: conversationToDelete) { conversation in
+            Button("Elimina chat", role: .destructive) { delete(conversation) }
+            Button("Annulla", role: .cancel) {}
+        } message: { _ in
+            Text("Messaggi e media verranno cancellati da questo iPhone.")
+        }
+        .alert("Ops", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(actionError ?? "")
+        }
         .onAppear { viewModel.start(environment: environment) }
         .onDisappear { viewModel.stop() }
     }
@@ -109,21 +149,76 @@ struct ChatListView: View {
                 }
                 .listRowBackground(AeroTheme.background)
                 .listRowSeparatorTint(AeroTheme.surface)
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    pinButton(conversation)
+                }
+                // Come Mail: scorrimento completo verso sinistra = elimina (con conferma).
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    deleteButton(conversation)
+                }
+                .contextMenu {
+                    pinButton(conversation)
+                    deleteButton(conversation)
+                }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        // Lo stile `.haptic` impostato su tutta l'app (MyApp) trasformava ogni NavigationLink in un
+        // pulsante personalizzato che si prendeva il tocco: la List non riconosceva piu' lo swipe delle
+        // celle. Qui torna lo stile di sistema (celle native, swipe come Mail, evidenziazione al tocco).
+        .buttonStyle(.automatic)
+    }
+
+    private func pinButton(_ conversation: ConversationRecord) -> some View {
+        Button {
+            togglePin(conversation)
+        } label: {
+            if conversation.isPinned {
+                Label("Rimuovi fissata", systemImage: "pin.slash.fill")
+            } else {
+                Label("Fissa in alto", systemImage: "pin.fill")
+            }
+        }
+        .tint(AeroTheme.accentCyan)
+    }
+
+    private func deleteButton(_ conversation: ConversationRecord) -> some View {
+        Button(role: .destructive) {
+            Haptics.tap()
+            conversationToDelete = conversation
+        } label: {
+            Label("Elimina", systemImage: "trash.fill")
+        }
+        // Il tint ciano globale (ContentView) coloriva anche l'azione di swipe: rosso come Mail.
+        .tint(.red)
+    }
+
+    private func togglePin(_ conversation: ConversationRecord) {
+        Task {
+            do {
+                try await environment.setPinned(!conversation.isPinned, conversation: conversation)
+                Haptics.impact(.light)
+            } catch {
+                actionError = String(localized: "Operazione non riuscita: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func delete(_ conversation: ConversationRecord) {
+        Task {
+            do {
+                try await environment.deleteConversation(conversation)
+                Haptics.impact(.medium)
+            } catch {
+                actionError = String(localized: "Operazione non riuscita: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func row(_ conversation: ConversationRecord) -> some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(avatarColor(conversation))
-                    .frame(width: 46, height: 46)
-                Image(systemName: conversation.type == .group ? "person.3.fill" : "person.fill")
-                    .foregroundStyle(.black.opacity(0.8))
-            }
+            avatar(conversation)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(conversation.title)
@@ -142,6 +237,12 @@ struct ChatListView: View {
                 HStack {
                     RadioStatusView(reachability: viewModel.reachability[conversation.id] ?? .outOfRange, compact: true)
                     Spacer()
+                    if conversation.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.caption2)
+                            .foregroundStyle(AeroTheme.textSecondary)
+                            .accessibilityLabel("Fissata")
+                    }
                     if conversation.unreadCount > 0 {
                         Text("\(conversation.unreadCount)")
                             .font(.caption2.weight(.bold))
@@ -156,10 +257,20 @@ struct ChatListView: View {
         .padding(.vertical, 4)
     }
 
-    private func avatarColor(_ conversation: ConversationRecord) -> Color {
-        if conversation.type == .group { return AeroTheme.accentEmerald }
+    @ViewBuilder
+    private func avatar(_ conversation: ConversationRecord) -> some View {
+        if conversation.type == .group {
+            AvatarView(imageData: nil, colorHex: "10B981", systemImage: "person.3.fill")
+        } else {
+            let peer = conversation.peerNodeID.flatMap { viewModel.peers[$0] }
+            AvatarView(imageData: peer?.avatarImage, colorHex: peer?.avatarColorHex ?? fallbackColorHex(conversation))
+        }
+    }
+
+    /// Colore deterministico per i contatti che non hanno ancora annunciato il loro profilo.
+    private func fallbackColorHex(_ conversation: ConversationRecord) -> String {
         let seed = conversation.recipientID.first ?? 0
-        return Color(hex: UInt32(OnboardingView.palette[Int(seed) % OnboardingView.palette.count], radix: 16) ?? 0)
+        return OnboardingView.palette[Int(seed) % OnboardingView.palette.count]
     }
 
     private var emptyState: some View {
@@ -188,11 +299,14 @@ struct ChatListView: View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
                 .font(AeroTheme.title(18, weight: .bold))
-                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 28)
                 .padding(.vertical, 20)
         }
         .buttonStyle(.borderedProminent)
         .tint(tint)
+        .hapticOnTap()
         .foregroundStyle(.black)
     }
 }

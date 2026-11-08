@@ -23,6 +23,17 @@ struct MainTabView: View {
             }
         }
         .animation(.spring(duration: 0.4), value: environment.radioState)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await environment.sceneDidBecomeActive() }
+            }
+        }
+        // Chiamata in entrata o in corso: sopra a tutto, da qualsiasi schermata.
+        .fullScreenCover(isPresented: Binding(get: { environment.calls?.current != nil },
+                                              set: { if !$0 { environment.calls?.hangUp() } })) {
+            CallView()
+                .environment(environment)
+        }
         .onChange(of: environment.lastReceivedMessageID) { _, newValue in
             if newValue != nil, scenePhase == .active {
                 Haptics.impact(.light)

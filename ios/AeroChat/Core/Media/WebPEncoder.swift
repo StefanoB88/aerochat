@@ -26,12 +26,21 @@ enum WebPEncoder {
         return Data(bytes: output, count: size)
     }
 
+    /// Pixel massimi decodificati a piena risoluzione (4096x4096, 64 MB RGBA).
+    static let maxDecodedPixels = 4_096 * 4_096
+
     /// Decodifica con ImageIO (nativo) e, in mancanza, con libwebp.
     static func decode(_ data: Data) throws -> CGImage {
+        // Un WebP ricevuto dalla mesh puo' dichiarare dimensioni enormi in pochi KB (16383x16383 = 1 GB
+        // RGBA): oltre il limite rifiutiamo invece di farci terminare da jetsam al primo disegno.
+        let declared = dimensions(of: data)
+        if let declared, declared.width * declared.height > maxDecodedPixels { throw Failure.decodeFailed }
         if let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceTypeIdentifierHint: UTType.webP.identifier] as CFDictionary),
            let image = CGImageSourceCreateImageAtIndex(source, 0, nil) {
             return image
         }
+        // Fallback libwebp (sempre a piena risoluzione): solo con dimensioni note e gia' verificate.
+        guard declared != nil else { throw Failure.decodeFailed }
         var width: Int32 = 0
         var height: Int32 = 0
         let decoded: UnsafeMutablePointer<UInt8>? = data.withUnsafeBytes { bytes in

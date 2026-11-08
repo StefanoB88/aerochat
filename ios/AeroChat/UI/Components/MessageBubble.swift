@@ -6,12 +6,16 @@ struct MessageBubble: View {
     let message: MessageRecord
     let showSender: Bool
     let store: MediaStore?
-    let playbackProgress: Double?
+    /// Player della nota vocale, solo per la bolla attualmente in riproduzione.
+    let player: VoiceNotePlayer?
     let isPlaying: Bool
     /// Avanzamento del trasferimento media (0...1) finche' il file non e' completo.
     var transferProgress: Double?
     var onTogglePlayback: () -> Void = {}
     var onGameAction: (GameBubbleAction) -> Void = { _ in }
+    var onSaveImage: () -> Void = {}
+    /// Tocco sulla foto (solo con il file completo in locale): visore a schermo intero.
+    var onOpenImage: () -> Void = {}
 
     private var isOutgoing: Bool { message.isOutgoing }
 
@@ -62,6 +66,20 @@ struct MessageBubble: View {
                            transferProgress: message.mediaLocalPath == nil || transferProgress != nil ? transferProgress : nil)
                 .frame(width: 220, height: 165)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(.interaction, RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .onTapGesture {
+                    // BlurHash / ricezione in corso: niente visore finche' il file non e' completo.
+                    guard message.mediaLocalPath != nil else { return }
+                    onOpenImage()
+                }
+                .accessibilityAddTraits(message.mediaLocalPath != nil ? .isButton : [])
+                .accessibilityHint(message.mediaLocalPath != nil ? Text("Apri la foto a schermo intero") : Text(""))
+                .contextMenu {
+                    if message.mediaLocalPath != nil {
+                        Button { onSaveImage() } label: { Label("Salva nelle Foto", systemImage: "square.and.arrow.down") }
+                    }
+                }
         case .audio:
             HStack(spacing: 10) {
                 if message.mediaLocalPath == nil, let transferProgress {
@@ -69,14 +87,14 @@ struct MessageBubble: View {
                 } else {
                     Button(action: onTogglePlayback) {
                         Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 32))
+                            .font(.system(size: 36))
                             .foregroundStyle(message.mediaLocalPath == nil ? AeroTheme.textSecondary : AeroTheme.accentCyan)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.haptic)
                     .disabled(message.mediaLocalPath == nil)
                     .accessibilityLabel(isPlaying ? "Pausa nota vocale" : "Riproduci nota vocale")
                 }
-                WaveformView(samples: message.audioWaveform ?? Data(), progress: playbackProgress ?? 0)
+                PlaybackWaveform(samples: message.audioWaveform ?? Data(), player: player)
                     .frame(width: 150, height: 28)
                     .opacity(message.mediaLocalPath == nil ? 0.5 : 1)
                 Text(Self.durationLabel(message.durationMs))
@@ -84,7 +102,7 @@ struct MessageBubble: View {
                     .foregroundStyle(AeroTheme.textSecondary)
             }
         case .game:
-            if let data = message.gameState, let state = try? GameSessionState.decode(data) {
+            if let data = message.gameState, let state = GameStateCache.state(for: data) {
                 GameBubble(state: state, onAction: onGameAction)
             } else {
                 Text(message.text ?? "🎮")
@@ -104,6 +122,8 @@ struct MessageBubble: View {
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
+    /// Spunte stile WhatsApp: orologio = non inviato, 1 spunta = inviato, 2 spunte grigie = consegnato,
+    /// 2 spunte ciano = letto.
     @ViewBuilder
     private var statusIcon: some View {
         switch message.deliveryStatus {
@@ -111,21 +131,15 @@ struct MessageBubble: View {
             Image(systemName: "clock")
                 .font(.caption2)
                 .foregroundStyle(AeroTheme.textSecondary)
-                .accessibilityLabel("In coda")
+                .accessibilityLabel("Non ancora inviato")
         case .sentMesh:
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.caption2)
-                .foregroundStyle(AeroTheme.textSecondary)
-                .accessibilityLabel("Inviato nella mesh")
+            DeliveryTicks(count: 1, color: AeroTheme.textSecondary)
+                .accessibilityLabel("Inviato")
         case .deliveredAck:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.caption2)
-                .foregroundStyle(AeroTheme.textSecondary)
+            DeliveryTicks(count: 2, color: AeroTheme.textSecondary)
                 .accessibilityLabel("Consegnato")
         case .read:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.caption2)
-                .foregroundStyle(AeroTheme.accentCyan)
+            DeliveryTicks(count: 2, color: AeroTheme.accentCyan)
                 .accessibilityLabel("Letto")
         }
     }
@@ -133,5 +147,84 @@ struct MessageBubble: View {
     static func durationLabel(_ ms: Int?) -> String {
         let seconds = (ms ?? 0) / 1_000
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+/// Una o due spunte sovrapposte (SF Symbols non ha una doppia spunta).
+private struct DeliveryTicks: View {
+
+    let count: Int
+    let color: Color
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            ForEach(0..<count, id: \.self) { index in
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .offset(x: CGFloat(index) * 4)
+            }
+        }
+        .foregroundStyle(color)
+        .frame(width: count == 2 ? 16 : 12, alignment: .leading)
+    }
+}
+
+/// Foto in preparazione (lettura dalla libreria + compressione WebP): segnaposto con spinner.
+struct PendingPhotoBubble: View {
+
+    var body: some View {
+        HStack {
+            Spacer(minLength: 56)
+            VStack(spacing: 10) {
+                ProgressView()
+                    .tint(AeroTheme.accentCyan)
+                    .controlSize(.large)
+                Text("Preparazione foto…")
+                    .font(.caption)
+                    .foregroundStyle(AeroTheme.textSecondary)
+            }
+            .frame(width: 220, height: 165)
+            .background(AeroTheme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(AeroTheme.accentCyan.opacity(0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Forma d'onda con l'avanzamento letto dentro la vista: solo la bolla in riproduzione si aggiorna
+/// ai tick del player, non l'intera lista.
+private struct PlaybackWaveform: View {
+
+    let samples: Data
+    let player: VoiceNotePlayer?
+
+    var body: some View {
+        WaveformView(samples: samples, progress: player?.progress ?? 0)
+    }
+}
+
+/// Stato delle partite decodificato una volta per contenuto (prima: decodifica JSON a ogni ridisegno).
+private enum GameStateCache {
+
+    nonisolated(unsafe) private static let cache: NSCache<NSData, Box> = {
+        let cache = NSCache<NSData, Box>()
+        cache.countLimit = 128
+        return cache
+    }()
+
+    private final class Box {
+        let state: GameSessionState
+        init(_ state: GameSessionState) { self.state = state }
+    }
+
+    static func state(for data: Data) -> GameSessionState? {
+        let key = data as NSData
+        if let box = cache.object(forKey: key) { return box.state }
+        guard let state = try? GameSessionState.decode(data) else { return nil }
+        cache.setObject(Box(state), forKey: key)
+        return state
     }
 }
