@@ -1,0 +1,50 @@
+syntax = "proto3";
+package aeromesh.v1;
+
+// Contratto binario AeroMesh v1 (iOS <-> Android).
+// Il file Swift corrispondente (Aeromesh.pb.swift) e' mantenuto a mano
+// con lo stesso layout generato da protoc-gen-swift.
+
+enum PacketType {
+  CHAT_TEXT = 0;
+  DELIVERY_ACK = 1;
+  MEDIA_HEADER = 2;
+  MEDIA_CHUNK = 3;
+  PUBLIC_LOUNGE = 4;
+  GROUP_KEY_GOSSIP = 5;
+  PRO_PASS_GRANT = 6;
+  GAME_MOVE = 7;
+}
+
+message MeshEnvelope {
+  bytes msg_id = 1;           // 16 byte UUID v4 raw
+  bytes sender_node_id = 2;   // 8 byte (0x00.. per relay anonimo se opzionale, altrimenti hash sender)
+  bytes recipient_id = 3;     // 8 byte (peer node_id, group_id hash, o 8 zeri per Lounge)
+  uint32 ttl = 4;             // Default 5, max 7, decrementato di 1 a ogni hop
+  uint32 hop_count = 5;       // Parte da 0, incrementato di 1 a ogni hop (usato per la UI stato radio!)
+  int64 created_at_ms = 6;    // Unix timestamp ms
+  PacketType packet_type = 7;
+  bool is_lz4_compressed = 8;
+  bytes encrypted_payload = 9; // [12B Nonce][Ciphertext][16B Tag]
+  bytes ed25519_signature = 10; // 64 byte firma su (msg_id + recipient_id + created_at_ms + encrypted_payload)
+}
+
+message InnerPayload {
+  string text = 1;
+  string sender_nickname = 2;
+  bytes sender_x25519_pub = 3;
+  bytes sender_ed25519_pub = 4;
+  string reply_to_msg_id = 5;
+  // Campi Media (usati in MEDIA_HEADER e MEDIA_CHUNK)
+  string media_id = 6;
+  string mime_type = 7;         // "image/webp" o "audio/opus"
+  uint32 total_size_bytes = 8;
+  uint32 total_chunks = 9;
+  uint32 chunk_index = 10;
+  bytes chunk_data = 11;
+  string blurhash = 12;         // Anteprima istantanea foto
+  bytes audio_waveform = 13;    // 32 byte campioni ampiezza vocale
+  uint32 duration_ms = 14;
+  // Gossip & Pro Pass & Giochi
+  bytes extra_data = 15;        // Serializzazione di GroupKeyGossip, ProPassGrant o stato Tris/Battaglia Navale
+}
