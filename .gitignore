@@ -1,0 +1,38 @@
+# --- macOS ---
+.DS_Store
+
+# --- iOS / Xcode ---
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+.swiftpm/
+# Le dipendenze SPM restano bloccate da Package.resolved (committato).
+
+# --- Android / Gradle ---
+.gradle/
+.kotlin/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.iml
+*.apk
+*.aab
+android/.idea/*
+!android/.idea/codeStyles/
+!android/.idea/runConfigurations/
+
+# --- Firme e segreti (mai nel repository) ---
+*.jks
+*.keystore
+keystore.properties
+*.p8
+*.p12
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+.env
