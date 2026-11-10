@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
@@ -49,16 +50,29 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
+/** BlurHash gia' decodificati: le bolle che tornano visibili scorrendo non ridecodificano e non lampeggiano. */
+private object BlurHashCache {
+    private val cache = android.util.LruCache<String, ImageBitmap>(96)
+    fun get(key: String): ImageBitmap? = cache.get(key)
+    fun put(key: String, bitmap: ImageBitmap) { cache.put(key, bitmap) }
+}
+
 /** Anteprima istantanea da BlurHash (decodifica 32x32 fuori dal main thread, poi upscaling bilineare). */
 @Composable
 fun BlurHashImage(hash: String, modifier: Modifier = Modifier, punch: Double = 1.0) {
-    val image by produceState<Bitmap?>(initialValue = null, hash, punch) {
-        value = withContext(Dispatchers.Default) { BlurHash.image(hash, width = 32, height = 32, punch = punch) }
+    val cacheKey = "$hash|$punch"
+    val image by produceState(initialValue = BlurHashCache.get(cacheKey), hash, punch) {
+        if (value != null) return@produceState
+        val decoded = withContext(Dispatchers.Default) {
+            BlurHash.image(hash, width = 32, height = 32, punch = punch)?.asImageBitmap()
+        }
+        if (decoded != null) BlurHashCache.put(cacheKey, decoded)
+        value = decoded
     }
     val bitmap = image
     if (bitmap != null) {
         Image(
-            bitmap = bitmap.asImageBitmap(),
+            bitmap = bitmap,
             contentDescription = null,
             modifier = modifier.fillMaxSize(),
             contentScale = ContentScale.FillBounds,

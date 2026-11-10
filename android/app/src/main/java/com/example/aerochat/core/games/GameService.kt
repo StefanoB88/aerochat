@@ -1,5 +1,8 @@
 package com.example.aerochat.core.games
 
+import android.util.Log
+import kotlin.coroutines.cancellation.CancellationException
+
 import com.example.aerochat.core.crypto.CryptoEngine
 import com.example.aerochat.core.crypto.IdentityKeys
 import com.example.aerochat.core.mesh.InboundPacket
@@ -313,8 +316,9 @@ class GameService(
 
     suspend fun start(): Unit = withContext(actorContext) {
         if (inboundTask != null) return@withContext
-        // Iscrizione registrata subito: nessun pacchetto perso prima della raccolta.
-        val packets = router.inboundPackets()
+        // Iscrizione registrata subito: nessun pacchetto perso prima della raccolta. Solo GAME_MOVE:
+        // i chunk media non occupano (ne' fanno scartare) il buffer delle mosse.
+        val packets = router.inboundPackets(PacketType.GAME_MOVE)
         inboundTask = scope.launch {
             packets.collect { packet ->
                 if (packet.envelope.packetType == PacketType.GAME_MOVE) handle(packet)
@@ -405,7 +409,10 @@ class GameService(
             .setSequence(0)
             .apply { if (kind == GameKind.SCOPONE) seats?.forEach { addPlayers(it.toByteString()) } }
             .build()
-        val result = router.sendPacket(type = PacketType.GAME_MOVE, payload = payload(move), conversation = conversation, msgID = msgID)
+        val result = router.sendPacket(
+            type = PacketType.GAME_MOVE, payload = payload(move), conversation = conversation, msgID = msgID,
+            retainUntilAck = true,
+        )
         database.messages.updateDeliveryStatus(if (result.reached) DeliveryStatus.sentMesh else DeliveryStatus.queued, msgID = msgID)
         emit(Event.Updated(gameID = state.gameID, conversationID = conversation.id))
         state
@@ -640,20 +647,47 @@ class GameService(
 
     // MARK: - Utility
 
-    /** Swift `send(_:state: inout)`: aggiorna `state` sul posto, lo salva e invia la mossa. */
-    private suspend fun send(move: GameMove, state: GameSessionState) {
+    /**
+     * Swift `send(_:state: inout)`: aggiorna `state` sul posto, lo salva e invia la mossa (in coda fino al
+     * DELIVERY_ACK dell'avversario). Se l'invio fallisce prima di partire (mesh ferma, conversazione
+     * sparita) lo stato salvato torna a quello precedente: altrimenti la partita avanzava solo qui e
+     * restava bloccata per entrambi.
+     */
+    private suspend fun send(move: GameMove, state: GameSessionState, previous: GameSessionState? = null) {
         val conversation = database.conversations.fetch(id = state.conversationID) ?: throw Failure.gameNotFound
         state.updatedAtMs = nowUnixMilliseconds
         persist(state)
-        router.sendPacket(type = PacketType.GAME_MOVE, payload = payload(move), conversation = conversation)
+        try {
+            router.sendPacket(
+                type = PacketType.GAME_MOVE, payload = payload(move), conversation = conversation,
+                retainUntilAck = true,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (previous != null) persist(previous)
+            throw e
+        }
     }
 
     private suspend fun persist(state: GameSessionState) {
         val updated = state.copy(updatedAtMs = nowUnixMilliseconds)
         val msgID = updated.messageID ?: return
         val data = runCatching { updated.encoded() }.getOrNull() ?: return
-        runCatching { database.messages.updateGameState(data, msgID = msgID) }
+        val saved = runCatching { database.messages.updateGameState(data, msgID = msgID) }
+        if (saved.isFailure) Log.w("GameService", "stato partita ${updated.gameID} non salvato: ${saved.exceptionOrNull()}")
         emit(Event.Updated(gameID = updated.gameID, conversationID = updated.conversationID))
+    }
+
+    /**
+     * Il tavolo e' stato aperto: se tocca a noi distribuire e il DEAL non e' mai partito (es. errore
+     * transitorio all'arrivo dell'ultimo ACCEPT), lo facciamo adesso.
+     */
+    suspend fun resume(gameID: String): Unit = withContext(actorContext) {
+        cardLock.withLock {
+            val state = runCatching { session(gameID) }.getOrNull() ?: return@withLock
+            if (state.isCardGame && state.status != GameStatus.finished) dealIfNeeded(state)
+        }
     }
 
     private fun payload(move: GameMove): InnerPayload =
@@ -673,6 +707,7 @@ class GameService(
                 val seat = state.mySeat
                 if (!state.isCardGame || seat == null) throw Failure.invalidState
                 if (state.status != GameStatus.active || state.turnSeat != seat) throw Failure.notYourTurn
+                val previous = state.deepCopy()
                 val applied = BufferedCardMove(
                     sequence = nextSequence(state.sequence), action = GameAction.MOVE, senderNodeID = identity.nodeID,
                     cell = card, captured = captured,
@@ -691,7 +726,7 @@ class GameService(
                     .setCaptured(NeapolitanCards.bytes(captured.sorted()).toByteString())
                     .setResult(state.cardResult(forSenderSeat = seat))
                     .build()
-                send(move, state)
+                send(move, state, previous = previous)
                 dealIfNeeded(state)
             }
         }
@@ -700,6 +735,7 @@ class GameService(
         val state = session(gameID)
         val seat = state.mySeat
         if (state.status != GameStatus.invited || state.iAmInviter || seat == null) throw Failure.invalidState
+        val previous = state.deepCopy()
         val move = GameMove.newBuilder()
             .setGameId(gameID)
             .setKind(state.gameKind)
@@ -716,7 +752,7 @@ class GameService(
             move.sequence = 1
         }
         state.myTurn = false
-        send(move.build(), state)
+        send(move.build(), state, previous = previous)
         return state
     }
 
@@ -849,7 +885,14 @@ class GameService(
             .setCell(dealer)
             .setDeck(NeapolitanCards.bytes(deck).toByteString())
             .build()
-        runCatching { send(move, state) }
+        try {
+            send(move, state)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Il DEAL e' gia' applicato localmente; se l'invio non parte, `resume` lo ritenta all'apertura del tavolo.
+            Log.w("GameService", "DEAL non inviato per ${state.gameID}: $e")
+        }
         return state
     }
 

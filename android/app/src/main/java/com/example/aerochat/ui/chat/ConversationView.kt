@@ -224,7 +224,9 @@ class ConversationViewModel(
         tasks += scope.launch {
             database.messages.observe(conversationID = id).collect { list ->
                 _messages.value = list
-                markReadIfVisible()
+                // Fuori dal collector: la conferma di lettura scrive sul DB e manda READ_RECEIPT via BLE,
+                // e teneva fermo il flusso dei messaggi (e l'apertura della chat) finche' non finiva.
+                scheduleMarkRead()
             }
         }
         _conversation.value.peerNodeID?.let { peerID ->
@@ -283,6 +285,17 @@ class ConversationViewModel(
     fun dispose() {
         stop()
         scope.cancel()
+    }
+
+    private var markReadJob: Job? = null
+
+    /** Una sola conferma di lettura in volo, con un breve ritardo che accorpa le emissioni a raffica. */
+    fun scheduleMarkRead() {
+        if (markReadJob?.isActive == true) return
+        markReadJob = scope.launch {
+            delay(250)
+            markReadIfVisible()
+        }
     }
 
     /** Conferma di lettura solo se l'utente vede davvero la chat: non a schermo bloccato o in background. */
@@ -541,9 +554,15 @@ class ConversationViewModel(
         if (action == GameBubbleAction.OpenTable) {
             Haptics.tap()
             openedCardTable.value = gameID
+            // Se il DEAL che toccava a noi non e' mai partito, l'apertura del tavolo lo ritenta.
+            environment.games.value?.let { games -> scope.launch { runCatching { games.resume(gameID) } } }
             return
         }
-        val games = environment.games.value ?: return
+        val games = environment.games.value
+        if (games == null) {
+            infoMessage.value = context.getString(R.string.chat_invalid_move, "mesh")
+            return
+        }
         scope.launch {
             try {
                 when (action) {
@@ -679,7 +698,7 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
     val scope = rememberCoroutineScope()
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) scope.launch { currentViewModel.markReadIfVisible() }
+            if (event == Lifecycle.Event.ON_RESUME) currentViewModel.scheduleMarkRead()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -837,6 +856,8 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
                 state = tableState,
                 onAction = { viewModel.handleGame(it, gameID = gameID) },
                 onDismiss = { viewModel.openedCardTable.value = null },
+                statusMessage = infoMessage,
+                onStatusExpire = { viewModel.infoMessage.value = null },
             )
         }
     }

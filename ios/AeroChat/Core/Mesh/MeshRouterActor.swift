@@ -380,10 +380,13 @@ actor MeshRouterActor {
                     in conversation: ConversationRecord,
                     msgID: Data = CryptoEngine.randomMessageID(),
                     ttl: UInt32 = MeshProtocol.defaultTTL,
-                    storeIfUnreachable: Bool = true) async throws -> (msgID: Data, reached: Bool) {
+                    storeIfUnreachable: Bool = true,
+                    retainUntilAck: Bool = false) async throws -> (msgID: Data, reached: Bool) {
         guard isRunning else { throw RouterError.notRunning }
         let envelope = try await makeEnvelope(type: type, payload: payload, conversation: conversation, msgID: msgID, ttl: ttl)
-        let reached = await dispatch(envelope, storeIfUnreachable: storeIfUnreachable)
+        // Mosse di gioco: come i testi, restano in coda finche' il destinatario non conferma (una mossa
+        // persa bloccava la partita per sempre).
+        let reached = await dispatch(envelope, storeIfUnreachable: storeIfUnreachable, retainUntilAck: retainUntilAck)
         return (msgID, reached)
     }
 
@@ -874,17 +877,20 @@ actor MeshRouterActor {
     /// Rimanda l'ACK per un testo gia' consegnato e salvato (mai per pacchetti non verificati),
     /// al massimo una volta ogni `reackThrottle` per non rispondere a ogni copia del flooding.
     private func reacknowledgeDuplicate(_ envelope: MeshEnvelope) async {
-        // Basta il messaggio salvato: esiste solo se era per noi (diretto o gruppo) e gia' verificato.
-        guard envelope.packetType == .chatText,
+        guard envelope.packetType == .chatText || envelope.packetType == .gameMove,
               envelope.recipientID == identity.nodeID || isGroupRecipient(envelope.recipientID) else { return }
         let now = Date()
         if let last = lastAckSentAt[envelope.msgID], now.timeIntervalSince(last) < configuration.reackThrottle { return }
         // Anche un esito negativo viene ricordato: le copie successive non rileggono il DB.
         lastAckSentAt[envelope.msgID] = now
-        guard let stored = try? await database.messages.fetch(msgID: envelope.msgID),
-              !stored.isOutgoing,
-              stored.senderNodeID == envelope.senderNodeID,
-              let peer = try? await database.peers.fetch(nodeID: envelope.senderNodeID) else { return }
+        guard let peer = try? await database.peers.fetch(nodeID: envelope.senderNodeID) else { return }
+        if envelope.packetType == .chatText {
+            // Basta il messaggio salvato: esiste solo se era per noi (diretto o gruppo) e gia' verificato.
+            guard let stored = try? await database.messages.fetch(msgID: envelope.msgID),
+                  !stored.isOutgoing, stored.senderNodeID == envelope.senderNodeID else { return }
+        }
+        // Mosse di gioco: non hanno un messaggio proprio (lo stato vive nella bolla dell'invito); il
+        // duplicato di un msg_id gia' visto da un peer noto viene riconfermato cosi' smette di ritrasmettere.
         try? await sendAck(for: envelope, to: peer)
     }
 
@@ -985,6 +991,13 @@ actor MeshRouterActor {
         await markSeenThrottled(nodeID: packet.sender.nodeID, hopCount: hops, rssi: nil)
         for continuation in inboundSubscribers.values {
             continuation.yield(packet)
+        }
+        // Le mosse di gioco vengono confermate come i testi: il mittente le ritrasmette finche' non arriva l'ACK.
+        if envelope.packetType == .gameMove {
+            switch target {
+            case .me, .group: try? await sendAck(for: envelope, to: packet.sender)
+            case .lounge, .other: break
+            }
         }
     }
 

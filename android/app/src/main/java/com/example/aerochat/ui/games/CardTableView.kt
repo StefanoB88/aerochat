@@ -95,6 +95,7 @@ import com.example.aerochat.ui.components.gameTitle
 import com.example.aerochat.ui.components.hapticOnTap
 import com.example.aerochat.ui.hex
 import kotlinx.coroutines.delay
+import com.example.aerochat.ui.chat.InfoBanner
 
 /**
  * Tavolo a schermo intero delle partite a carte (Dialog a tutto schermo): panno verde, avversari in alto
@@ -102,14 +103,20 @@ import kotlinx.coroutines.delay
  * `onAction` come nella bolla. Stesso layout di iOS (`CardTableView.swift`).
  */
 @Composable
-fun CardTableDialog(state: GameSessionState, onAction: (GameBubbleAction) -> Unit, onDismiss: () -> Unit) {
+fun CardTableDialog(
+    state: GameSessionState,
+    onAction: (GameBubbleAction) -> Unit,
+    onDismiss: () -> Unit,
+    statusMessage: String? = null,
+    onStatusExpire: () -> Unit = {},
+) {
     Dialog(
         onDismissRequest = onDismiss,
         // Edge-to-edge (target 35): il Dialog disegna sotto le barre di sistema; gli inset li applica
         // CardTableView (systemBarsPadding), altrimenti la mano e "Gioca" finivano sotto la barra di navigazione.
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        CardTableView(state, onAction, onDismiss)
+        CardTableView(state, onAction, onDismiss, statusMessage = statusMessage, onStatusExpire = onStatusExpire)
     }
 }
 
@@ -121,7 +128,13 @@ private val cardLift = 16.dp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun CardTableView(state: GameSessionState, onAction: (GameBubbleAction) -> Unit, onDismiss: () -> Unit) {
+fun CardTableView(
+    state: GameSessionState,
+    onAction: (GameBubbleAction) -> Unit,
+    onDismiss: () -> Unit,
+    statusMessage: String? = null,
+    onStatusExpire: () -> Unit = {},
+) {
     var selectedCard by remember { mutableStateOf<Int?>(null) }
     var selectedOption by remember { mutableIntStateOf(0) }
     var confirmResign by remember { mutableStateOf(false) }
@@ -179,6 +192,17 @@ fun CardTableView(state: GameSessionState, onAction: (GameBubbleAction) -> Unit,
     // avrebbero spedito una seconda carta, rifiutata come "Mossa non valida". Si sblocca al nuovo stato.
     var playInFlight by remember { mutableStateOf(false) }
     LaunchedEffect(state.sequence, state.myTurn, state.status) { playInFlight = false }
+    // Rete di sicurezza: se la mossa fallisce (errore, servizio non pronto) lo stato non cambia e il
+    // tavolo restava sordo ai tocchi finche' non veniva chiuso e riaperto.
+    LaunchedEffect(playInFlight) {
+        if (playInFlight) {
+            delay(2_000)
+            playInFlight = false
+        }
+    }
+    // Esito della mossa (non e' il tuo turno, mossa non valida...): il banner della chat sta sotto il
+    // Dialog a schermo intero, quindi va ripetuto qui.
+    LaunchedEffect(statusMessage) { if (statusMessage != null) playInFlight = false }
     LaunchedEffect(scopaFlash) {
         if (scopaFlash) {
             delay(1_400)
@@ -224,6 +248,7 @@ fun CardTableView(state: GameSessionState, onAction: (GameBubbleAction) -> Unit,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Header(state, onDismiss, onShowScore = { showScoreSheet = true }, onResign = { confirmResign = true })
+            InfoBanner(message = statusMessage, onExpire = onStatusExpire)
             SeatBadge(state, seat = (bottomSeat + (if (playerCount == 4) 2 else 1)) % playerCount)
             Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 if (playerCount == 4) SeatBadge(state, seat = (bottomSeat + 3) % 4, compact = true)

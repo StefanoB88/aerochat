@@ -279,6 +279,12 @@ class AppEnvironment(
             media.start()
         }
 
+        // Anche i giochi si iscrivono PRIMA di accendere la radio: le mosse ritrasmesse da un compagno
+        // appena il link si apre venivano segnate come viste senza che nessuno le raccogliesse.
+        val games = GameService(router = router, database = database, identity = identityKeys, nickname = nickname)
+        _games.value = games
+        games.start()
+
         router.start()
         _radioState.value = router.radioState
         _neighbors.value = router.neighbors()
@@ -301,10 +307,6 @@ class AppEnvironment(
         )
         _proPass.value = proPass
         proPass.start()
-
-        val games = GameService(router = router, database = database, identity = identityKeys, nickname = nickname)
-        _games.value = games
-        games.start()
 
         val calls = CallService(
             context = context, router = router, database = database,

@@ -16,7 +16,9 @@ import com.example.aerochat.data.records.MessageReadRecord
 import com.example.aerochat.data.records.MessageRecord
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.runningFold
 
 class MessageRepository(val database: AppDatabase) {
 
@@ -163,10 +165,28 @@ class MessageRepository(val database: AppDatabase) {
         dao.deleteById(msgID)
     }
 
-    /** Stream live dei messaggi di una conversazione (ordine cronologico). */
-    fun observe(conversationID: String, limit: Int = 500): Flow<List<MessageRecord>> =
-        // Confronto di fino a 500 record (con ByteArray) fuori dal main thread: i collector sono in UI.
-        dao.observeLatest(conversationID, limit).map { it.asReversed() }.distinctUntilChanged().flowOn(Dispatchers.Default)
+    /**
+     * Stream live dei messaggi di una conversazione (ordine cronologico).
+     *
+     * Le righe invariate conservano l'istanza dell'emissione precedente: Room ricrea tutti gli oggetti a
+     * ogni scrittura sulla tabella e Compose (strong skipping) confronta i parametri per riferimento, quindi
+     * ogni bolla visibile veniva ricomposta per un solo ACK arrivato. Confronto e riuso fuori dal main thread.
+     */
+    fun observe(conversationID: String, limit: Int = 200): Flow<List<MessageRecord>> =
+        dao.observeLatest(conversationID, limit)
+            .map { it.asReversed() }
+            .distinctUntilChanged()
+            .runningFold(emptyList<MessageRecord>()) { previous, next ->
+                if (previous.isEmpty()) {
+                    next
+                } else {
+                    val known = HashMap<String, MessageRecord>(previous.size * 2)
+                    for (record in previous) known[record.msgID.toHex()] = record
+                    next.map { record -> known[record.msgID.toHex()]?.takeIf { it == record } ?: record }
+                }
+            }
+            .drop(1)
+            .flowOn(Dispatchers.Default)
 
     companion object {
         /** Sotto il limite storico di 999 variabili SQLite. */

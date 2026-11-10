@@ -73,12 +73,44 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         }
     }
 
+    /// Fotocamera posteriore "virtuale" (tripla o doppia grandangolare) quando c'e': passa da sola
+    /// all'ultra-grandangolare in modalita' macro quando il codice e' a pochi centimetri, dove la
+    /// grandangolare non mette piu' a fuoco. Altrimenti la grandangolare semplice.
+    private static func bestBackCamera() -> AVCaptureDevice? {
+        let session = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInTripleCamera, .builtInDualWideCamera, .builtInWideAngleCamera],
+            mediaType: .video,
+            position: .back
+        )
+        return session.devices.first
+    }
+
+    /// Messa a fuoco continua, limitata alle distanze ravvicinate, e cambio automatico di obiettivo
+    /// (macro) sui dispositivi virtuali.
+    private static func configureFocus(_ device: AVCaptureDevice) {
+        guard (try? device.lockForConfiguration()) != nil else { return }
+        defer { device.unlockForConfiguration() }
+        if device.isFocusModeSupported(.continuousAutoFocus) {
+            device.focusMode = .continuousAutoFocus
+        }
+        if device.isAutoFocusRangeRestrictionSupported {
+            device.autoFocusRangeRestriction = .near
+        }
+        if device.isSmoothAutoFocusSupported {
+            device.isSmoothAutoFocusEnabled = false
+        }
+        if !device.constituentDevices.isEmpty {
+            device.setPrimaryConstituentDeviceSwitchingBehavior(.auto, restrictedSwitchingBehaviorConditions: [])
+        }
+    }
+
     private func configureSession() {
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+        guard let device = Self.bestBackCamera(),
               let input = try? AVCaptureDeviceInput(device: device) else {
             onError?(.cameraUnavailable)
             return
         }
+        Self.configureFocus(device)
         let output = AVCaptureMetadataOutput()
         session.beginConfiguration()
         guard session.canAddInput(input), session.canAddOutput(output) else {

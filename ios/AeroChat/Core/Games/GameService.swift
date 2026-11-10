@@ -181,7 +181,8 @@ actor GameService {
         move.action = .invite
         move.sequence = 0
         if kind == .scopone, let seats { move.players = seats }
-        let result = try await router.sendPacket(type: .gameMove, payload: payload(for: move), in: conversation, msgID: msgID)
+        let result = try await router.sendPacket(type: .gameMove, payload: payload(for: move), in: conversation, msgID: msgID,
+                                                 retainUntilAck: true)
         try await database.messages.updateDeliveryStatus(result.reached ? .sentMesh : .queued, msgID: msgID)
         emit(.updated(gameID: state.gameID, conversationID: conversation.id))
         return state
@@ -413,7 +414,8 @@ actor GameService {
         guard let conversation = try await database.conversations.fetch(id: state.conversationID) else { throw Failure.gameNotFound }
         state.updatedAtMs = Date.nowUnixMilliseconds
         await persist(state)
-        _ = try await router.sendPacket(type: .gameMove, payload: payload(for: move), in: conversation)
+        // In coda fino al DELIVERY_ACK dell'avversario: una mossa persa non blocca piu' la partita.
+        _ = try await router.sendPacket(type: .gameMove, payload: payload(for: move), in: conversation, retainUntilAck: true)
     }
 
     private func persist(_ state: GameSessionState) async {

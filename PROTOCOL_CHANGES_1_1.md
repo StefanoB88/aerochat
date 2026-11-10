@@ -76,7 +76,18 @@ group_uuid       = UUID(uuid_bytes) ; recipient_id = SHA256(uuid_bytes)[0..8] (c
 - Blocco: niente consegna e **niente relay** dei pacchetti del nodo bloccato.
 - Foto da mittenti non `is_trusted` (mai scansionati via QR) mostrate sfocate finche' toccate.
 
-## 6. RSSI
+## 6. GAME_MOVE affidabile (implementato su iOS e Android il 2026-11-10)
+
+- Il ricevente di un `GAME_MOVE` (diretto o di gruppo) risponde con `DELIVERY_ACK` come per `CHAT_TEXT`
+  (`reply_to_msg_id` = msg_id della mossa). I duplicati di un msg_id gia' visto da un peer noto vengono
+  ri-confermati (throttle 15 s), anche senza messaggio salvato (le mosse non hanno una riga propria).
+- Il mittente tiene la mossa in `relay_queue` finche' non arriva l'ACK (ritrasmissione ogni 30 s ai vicini
+  diretti / all'apertura di un link, per 6 h), come i testi. Prima una mossa persa bloccava la partita.
+- Android: `inboundPackets(GAME_MOVE)` dedicato (i chunk media non svuotano piu' la coda delle mosse), il
+  servizio giochi si iscrive prima dell'avvio della radio, rollback dello stato se l'invio non parte,
+  `resume(gameID)` all'apertura del tavolo ritenta il DEAL mancante.
+
+## 7. RSSI
 
 - iOS ora legge l'RSSI dei link aperti ogni 4 s (`readRSSI`) per il radar di prossimita'. Nessun wire.
   Android: `BluetoothGatt.readRemoteRssi()` con la stessa cadenza, opzionale.

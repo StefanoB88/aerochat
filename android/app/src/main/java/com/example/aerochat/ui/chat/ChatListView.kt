@@ -138,10 +138,17 @@ class ChatListViewModel {
         if (tasks.isNotEmpty()) return
         val database = environment.database.value ?: return
         tasks += scope.launch {
+            var knownIDs: Set<String>? = null
             database.conversations.observePermanent().collect { list ->
                 _conversations.value = list
                 lastConversations = list
-                refreshReachability(environment)
+                // Stato radio ricalcolato solo quando cambia l'elenco delle chat: ogni unread/ultimo messaggio
+                // (anche l'apertura di una chat, durante la sua animazione) rifaceva il giro di tutti i gruppi.
+                val ids = list.mapTo(HashSet()) { it.id }
+                if (ids != knownIDs) {
+                    knownIDs = ids
+                    refreshReachability(environment)
+                }
             }
         }
         tasks += scope.launch {

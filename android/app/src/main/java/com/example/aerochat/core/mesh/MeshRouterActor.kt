@@ -272,8 +272,24 @@ class MeshRouterActor(
     /** Eventi verso la UI (ultimi 128 bufferizzati). L'iscrizione e' registrata alla chiamata. */
     fun events(): Flow<RouterEvent> = subscribe(subscribers, capacity = 128)
 
-    /** Pacchetti media / giochi / Pro Pass gia' decifrati e verificati (ultimi 256 bufferizzati). */
-    fun inboundPackets(): Flow<InboundPacket> = subscribe(inboundSubscribers, capacity = 256)
+    /**
+     * Pacchetti media / giochi / Pro Pass gia' decifrati e verificati (ultimi 256 bufferizzati).
+     * Con [types] la coda riceve solo quei tipi: un servizio che vuole le mosse di gioco non si fa
+     * svuotare il buffer dai chunk di una foto.
+     */
+    fun inboundPackets(vararg types: PacketType): Flow<InboundPacket> {
+        val id = subscriberIDs.incrementAndGet()
+        val channel = Channel<InboundPacket>(256, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+        if (types.isNotEmpty()) inboundFilters[id] = types.toSet()
+        inboundSubscribers[id] = channel
+        return channel.consumeAsFlow().onCompletion {
+            inboundSubscribers.remove(id)
+            inboundFilters.remove(id)
+        }
+    }
+
+    /** Tipi accettati per iscritto a `inboundPackets` (assente = tutti). */
+    private val inboundFilters = ConcurrentHashMap<Long, Set<PacketType>>()
 
     /** Audio delle chiamate in arrivo (solo vicini diretti, gia' verificato; ultimi 64 bufferizzati). */
     fun callAudioPackets(): Flow<CallAudioPacket> = subscribe(callAudioSubscribers, capacity = 64)
@@ -472,10 +488,13 @@ class MeshRouterActor(
         msgID: ByteArray = CryptoEngine.randomMessageID(),
         ttl: Int = MeshProtocol.defaultTTL,
         storeIfUnreachable: Boolean = true,
+        retainUntilAck: Boolean = false,
     ): SendResult = withContext(actorContext) {
         if (!isRunning) throw RouterError.NotRunning
         val envelope = makeEnvelope(type, payload, conversation, msgID = msgID, ttl = ttl)
-        val reached = dispatch(envelope, storeIfUnreachable = storeIfUnreachable)
+        // Mosse di gioco: come i testi, restano in coda finche' il destinatario non conferma (una mossa
+        // persa bloccava la partita per sempre).
+        val reached = dispatch(envelope, storeIfUnreachable = storeIfUnreachable, retainUntilAck = retainUntilAck)
         SendResult(msgID, reached)
     }
 
@@ -1023,9 +1042,9 @@ class MeshRouterActor(
      * al massimo una volta ogni `reackThrottle` per non rispondere a ogni copia del flooding.
      */
     private suspend fun reacknowledgeDuplicate(envelope: MeshEnvelope) {
-        // Basta il messaggio salvato: esiste solo se era per noi (diretto o gruppo) e gia' verificato.
         val recipientID = envelope.recipientId.toByteArray()
-        if (envelope.packetType != PacketType.CHAT_TEXT ||
+        val type = envelope.packetType
+        if ((type != PacketType.CHAT_TEXT && type != PacketType.GAME_MOVE) ||
             !(recipientID.contentEquals(myNodeID) || isGroupRecipient(recipientID.toHex()))
         ) return
         val msgID = envelope.msgId.toByteArray()
@@ -1036,9 +1055,14 @@ class MeshRouterActor(
         // Anche un esito negativo viene ricordato: le copie successive non rileggono il DB.
         lastAckSentAt[key] = now
         val senderID = envelope.senderNodeId.toByteArray()
-        val stored = attempt { database.messages.fetch(msgID = msgID) } ?: return
-        if (stored.isOutgoing || !stored.senderNodeID.contentEquals(senderID)) return
         val peer = attempt { database.peers.fetch(nodeID = senderID) } ?: return
+        if (type == PacketType.CHAT_TEXT) {
+            // Basta il messaggio salvato: esiste solo se era per noi (diretto o gruppo) e gia' verificato.
+            val stored = attempt { database.messages.fetch(msgID = msgID) } ?: return
+            if (stored.isOutgoing || !stored.senderNodeID.contentEquals(senderID)) return
+        }
+        // Mosse di gioco: non hanno un messaggio proprio (lo stato vive nella bolla dell'invito); il
+        // duplicato di un msg_id gia' visto da un peer noto viene riconfermato cosi' smette di ritrasmettere.
         attempt { sendAck(envelope, peer) }
     }
 
@@ -1055,6 +1079,12 @@ class MeshRouterActor(
     suspend fun markConversationRead(conversation: ConversationRecord): Unit = withContext(actorContext) {
         val unread = attempt { database.messages.markIncomingRead(conversationID = conversation.id) } ?: return@withContext
         if (unread.isEmpty() || conversation.type == ConversationType.cabinLounge || !isRunning) return@withContext
+        // Le conferme partono in un task separato: le scritture BLE possono richiedere secondi e il
+        // chiamante (apertura della chat) non deve aspettarle, ne' l'actor restare occupato.
+        scope.launch { sendReadReceipts(unread) }
+    }
+
+    private suspend fun sendReadReceipts(unread: List<MessageRecord>) {
         val bySender = unread.groupBy { it.senderNodeID.toHex() }
         for ((senderHex, messages) in bySender) {
             if (senderHex == myNodeHex) continue
@@ -1139,7 +1169,14 @@ class MeshRouterActor(
             is Target.Lounge, Target.Other -> return
         }
         markSeenThrottled(packet.sender.nodeID, hopCount = hops, rssi = null)
-        for (channel in inboundSubscribers.values) channel.trySend(packet)
+        val type = packet.envelope.packetType
+        for ((id, channel) in inboundSubscribers) {
+            // I chunk media non devono intasare (e far perdere, DROP_OLDEST) la coda di chi vuole solo le mosse.
+            val filter = inboundFilters[id]
+            if (filter == null || type in filter) channel.trySend(packet)
+        }
+        // Le mosse di gioco vengono confermate come i testi: il mittente le ritrasmette finche' non arriva l'ACK.
+        if (type == PacketType.GAME_MOVE) attempt { sendAck(envelope, packet.sender) }
     }
 
     // MARK: - Group Key Gossip

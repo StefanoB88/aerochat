@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.PlayCircle
@@ -43,7 +42,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -177,10 +178,42 @@ private fun BubbleContent(
 ) {
     when (message.contentType) {
         MessageContentType.text, MessageContentType.system -> {
-            val text: @Composable () -> Unit = {
-                Text(message.text ?: "", style = AeroTheme.body, color = AeroTheme.textPrimary)
+            // Niente SelectionContainer per bolla: in una lista ne servivano decine, ognuno con il proprio
+            // gestore di selezione e dei gesti, ed era il costo maggiore all'apertura della chat. La copia
+            // passa da una pressione prolungata (menu di sistema "Copia").
+            val content = message.text ?: ""
+            if (selectableText) {
+                var showMenu by remember { mutableStateOf(false) }
+                val clipboard = LocalClipboardManager.current
+                Box {
+                    Text(
+                        content,
+                        style = AeroTheme.body,
+                        color = AeroTheme.textPrimary,
+                        modifier = Modifier.combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                            onLongClick = {
+                                Haptics.impact(Haptics.ImpactStyle.medium)
+                                showMenu = true
+                            },
+                        ),
+                    )
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(android.R.string.copy)) },
+                            onClick = {
+                                showMenu = false
+                                clipboard.setText(AnnotatedString(content))
+                                Haptics.tap()
+                            },
+                        )
+                    }
+                }
+            } else {
+                Text(content, style = AeroTheme.body, color = AeroTheme.textPrimary)
             }
-            if (selectableText) SelectionContainer { text() } else text()
         }
         MessageContentType.image -> {
             var showMenu by remember { mutableStateOf(false) }
@@ -256,7 +289,10 @@ private fun BubbleContent(
         }
         MessageContentType.game -> {
             val data = message.gameState
-            val state = remember(data) { data?.let { GameStateCache.state(it) } }
+            // Chiave sul contenuto, non sul riferimento: Room ricrea l'array a ogni emissione e la decodifica
+            // JSON ripartiva sul main thread per ogni bolla di gioco visibile.
+            val contentKey = remember(data) { data?.contentHashCode() ?: 0 }
+            val state = remember(contentKey, data?.size) { data?.let { GameStateCache.state(it) } }
             if (state != null) {
                 GameBubble(state = state, onAction = onGameAction)
             } else {
