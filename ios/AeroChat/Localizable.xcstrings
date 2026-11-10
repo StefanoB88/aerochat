@@ -6891,6 +6891,70 @@
         }
       }
     },
+    "Basato sugli ultimi %lld messaggi della Cabina." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baseret på de seneste %lld beskeder i kabinen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Basierend auf den letzten %lld Nachrichten der Kabine."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Based on the last %lld Cabin messages."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Basado en los últimos %lld mensajes de la Cabina."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Basé sur les %lld derniers messages de la Cabine."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Basert på de siste %lld meldingene i kabinen."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gebaseerd op de laatste %lld berichten in de cabine."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Na podstawie ostatnich %lld wiadomości z Kabiny."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Com base nas últimas %lld mensagens da Cabine."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baserat på de senaste %lld meddelandena i kabinen."
+          }
+        }
+      }
+    },
     "Basta un Pass nel gruppo: chi lo possiede lo condivide con tutti i membri, anche Android e con app gratuita." : {
       "localizations" : {
         "da" : {
@@ -9901,6 +9965,70 @@
           "stringUnit" : {
             "state" : "machine_translated",
             "value" : "Stäng bordet"
+          }
+        }
+      }
+    },
+    "Ci sono ancora pochi messaggi: leggili direttamente in Cabina." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der er kun få beskeder indtil videre: læs dem direkte i kabinen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bisher gibt es nur wenige Nachrichten – lies sie direkt in der Kabine."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are only a few messages so far: read them right in the Cabin."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todavía hay pocos mensajes: léelos directamente en la Cabina."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il n’y a encore que quelques messages : lis-les directement dans la Cabine."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det er bare noen få meldinger så langt: les dem direkte i kabinen."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er zijn nog maar een paar berichten: lees ze gewoon in de cabine."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Na razie jest tylko kilka wiadomości: przeczytaj je bezpośrednio w Kabinie."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ainda há poucas mensagens: lê-as diretamente na Cabine."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det finns bara några få meddelanden än: läs dem direkt i kabinen."
           }
         }
       }
@@ -12932,6 +13060,7 @@
       }
     },
     "Disattiva traduzione" : {
+      "extractionState" : "stale",
       "localizations" : {
         "da" : {
           "stringUnit" : {
@@ -25698,6 +25827,70 @@
         }
       }
     },
+    "Non ho trovato argomenti chiari da riassumere: dai un'occhiata ai messaggi in Cabina." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen tydelige emner at opsummere: kig på beskederne i kabinen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine klaren Themen zum Zusammenfassen – schau dir die Nachrichten in der Kabine an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No clear topics to summarize: take a look at the messages in the Cabin."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay temas claros que resumir: echa un vistazo a los mensajes de la Cabina."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun sujet clair à résumer : jette un œil aux messages de la Cabine."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen tydelige temaer å oppsummere: ta en titt på meldingene i kabinen."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen duidelijke onderwerpen om samen te vatten: bekijk de berichten in de cabine."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brak wyraźnych tematów do podsumowania: zajrzyj do wiadomości w Kabinie."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não há temas claros para resumir: dá uma vista de olhos às mensagens na Cabine."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inga tydliga ämnen att sammanfatta: titta på meddelandena i kabinen."
+          }
+        }
+      }
+    },
     "Non è consentito usare AeroChat per molestare, minacciare, discriminare, diffondere spam, contenuti sessuali espliciti, violenti o illegali, né per impersonare altre persone. Nella Cabina Pubblica valgono inoltre le regole mostrate alla prima apertura. Chi viola queste condizioni può essere bloccato dagli altri passeggeri e segnalato." : {
       "localizations" : {
         "da" : {
@@ -37865,6 +38058,7 @@
       }
     },
     "Traduci i messaggi ricevuti" : {
+      "extractionState" : "stale",
       "localizations" : {
         "da" : {
           "stringUnit" : {
@@ -37929,6 +38123,7 @@
       }
     },
     "Traduzione: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "da" : {
           "stringUnit" : {

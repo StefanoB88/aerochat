@@ -57,7 +57,7 @@ struct QRPairingSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Chiudi") { dismiss() }
+                    Button("Chiudi") { dismiss() }.toolbarLabel()
                 }
             }
         }
@@ -199,7 +199,7 @@ struct StoreQRSheet: View {
             .navigationTitle("Scarica al gate")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
             }
         }
         .preferredColorScheme(.dark)

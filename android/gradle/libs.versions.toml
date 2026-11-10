@@ -20,8 +20,6 @@ bouncycastle = "1.79"
 lz4 = "1.8.0"
 camerax = "1.4.1"
 mlkitBarcode = "17.3.0"
-mlkitTranslate = "17.0.3"
-mlkitLanguageId = "17.0.6"
 mlkitSmartReply = "17.0.4"
 zxing = "3.5.3"
 billing = "7.1.1"
@@ -69,8 +67,6 @@ androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", 
 androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 mlkit-barcode-scanning = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" }
-mlkit-translate = { group = "com.google.mlkit", name = "translate", version.ref = "mlkitTranslate" }
-mlkit-language-id = { group = "com.google.mlkit", name = "language-id", version.ref = "mlkitLanguageId" }
 mlkit-smart-reply = { group = "com.google.mlkit", name = "smart-reply", version.ref = "mlkitSmartReply" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 

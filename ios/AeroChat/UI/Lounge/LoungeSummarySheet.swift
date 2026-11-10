@@ -7,6 +7,8 @@ struct LoungeSummarySheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var summary: String?
+    @State private var points: [String] = []
+    @State private var readCount = 0
     @State private var errorMessage: String?
 
     var body: some View {
@@ -23,11 +25,25 @@ struct LoungeSummarySheet: View {
                                 .font(AeroTheme.title(24))
                                 .foregroundStyle(AeroTheme.textPrimary)
                         }
-                        if let summary {
+                        if !points.isEmpty {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(points, id: \.self) { point in
+                                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                        Text(verbatim: "•").foregroundStyle(AeroTheme.accentCyan)
+                                        Text(point)
+                                            .font(.body)
+                                            .foregroundStyle(AeroTheme.textPrimary)
+                                            .textSelection(.enabled)
+                                    }
+                                }
+                            }
+                            Text("Basato sugli ultimi \(readCount) messaggi della Cabina.")
+                                .font(.caption)
+                                .foregroundStyle(AeroTheme.textSecondary)
+                        } else if let summary {
                             Text(summary)
                                 .font(.body)
                                 .foregroundStyle(AeroTheme.textPrimary)
-                                .textSelection(.enabled)
                         } else if let errorMessage {
                             Text(errorMessage)
                                 .font(.footnote)
@@ -50,20 +66,31 @@ struct LoungeSummarySheet: View {
             .navigationTitle("Riassunto")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
             }
         }
         .task {
-            let lines = messages.compactMap { message -> String? in
-                guard message.contentType == .text, let text = message.text, !text.isEmpty else { return nil }
-                return "\(message.senderNickname ?? String(localized: "Passeggero")): \(text)"
-            }
-            guard !lines.isEmpty else {
-                summary = String(localized: "La Cabina è ancora silenziosa: nessun messaggio da riassumere.")
+            // Solo i testi scritti dai passeggeri, in ordine cronologico (niente avvisi di sistema ne' quiz).
+            let lines = messages
+                .filter { $0.contentType == .text }
+                .sorted { $0.createdAtMs < $1.createdAtMs }
+                .compactMap { message -> CabinAssistant.ChatLine? in
+                    guard let text = message.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+                    let author = message.isOutgoing ? String(localized: "Io") : (message.senderNickname ?? String(localized: "Passeggero"))
+                    return CabinAssistant.ChatLine(author: author, text: text)
+                }
+            guard lines.count >= CabinAssistant.minimumLinesForSummary else {
+                summary = lines.isEmpty
+                    ? String(localized: "La Cabina è ancora silenziosa: nessun messaggio da riassumere.")
+                    : String(localized: "Ci sono ancora pochi messaggi: leggili direttamente in Cabina.")
                 return
             }
+            readCount = min(lines.count, 50)
             do {
-                summary = try await CabinAssistant.summarize(lines)
+                points = try await CabinAssistant.summarize(lines)
+                if points.isEmpty {
+                    summary = String(localized: "Non ho trovato argomenti chiari da riassumere: dai un'occhiata ai messaggi in Cabina.")
+                }
             } catch {
                 errorMessage = String(localized: "Riassunto non disponibile: \(error.localizedDescription)")
             }

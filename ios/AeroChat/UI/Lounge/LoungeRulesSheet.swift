@@ -102,7 +102,7 @@ struct LoungeRulesSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if !requiresAcceptance {
-                    ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
                 }
             }
             .sheet(isPresented: $showTerms) { LegalView(document: .terms) }

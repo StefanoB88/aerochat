@@ -54,7 +54,7 @@ struct RadarSheet: View {
             .navigationTitle("Radar")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
             }
         }
         .onAppear {

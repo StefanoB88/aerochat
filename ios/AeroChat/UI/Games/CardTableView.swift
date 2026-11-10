@@ -490,7 +490,7 @@ struct CardScoreSheet: View {
             .navigationTitle(state.gameKind == .briscola ? LocalizedStringKey("Punteggio") : LocalizedStringKey("Punteggio della mano"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Chiudi") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
             }
         }
         .preferredColorScheme(.dark)

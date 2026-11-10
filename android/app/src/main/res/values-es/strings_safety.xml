@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, traduzione, risposte rapide. Dal catalogo iOS. -->
+<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, risposte rapide. Dal catalogo iOS. -->
 <resources>
     <string name="safety_report_message">Denunciar mensaje</string>
     <string name="safety_block_user">Bloquear a %1$s</string>
@@ -25,9 +25,6 @@
     <string name="safety_unverified_photo">Foto de un contacto no verificado</string>
     <string name="safety_tap_to_show">Toca para mostrarla</string>
     <string name="safety_tap_to_show_hint">Toca para mostrar la foto</string>
-    <string name="safety_translation_a11y">Traducción: %1$s</string>
-    <string name="safety_translate_on">Traducir los mensajes recibidos</string>
-    <string name="safety_translate_off">Desactivar traducción</string>
     <string name="safety_smart_replies_a11y">Respuestas rápidas sugeridas</string>
     <string name="safety_settings_title">Ajustes</string>
     <string name="safety_settings_edit_profile">Editar apodo, color y foto</string>
@@ -105,10 +102,6 @@
     <string name="safety_rules_accept">Acepto las normas</string>
     <string name="safety_rules_understood">Entendido</string>
     <string name="safety_no_email_app">No hay ninguna app de correo instalada: escribe a %1$s.</string>
-    <string name="safety_translate_download_title">¿Descargar los idiomas?</string>
-    <string name="safety_translate_download_text">La traducción se hace por completo en tu teléfono y nada sale del dispositivo. Pero la primera vez hay que descargar cada idioma (unos 30 MB): necesitas conexión, así que hazlo antes del vuelo.</string>
-    <string name="safety_translate_download_confirm">Descargar</string>
-    <string name="safety_translate_unavailable">Algunos idiomas aún no se han descargado: conéctate a una red para traducirlos.</string>
     <string name="safety_settings_smart_replies">Respuestas rápidas (en el dispositivo)</string>
     <string name="safety_settings_play_terms">Condiciones de servicio de Google Play</string>
     <string name="safety_back">Atrás</string>

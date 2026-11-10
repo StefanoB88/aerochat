@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, traduzione, risposte rapide. Dal catalogo iOS. -->
+<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, risposte rapide. Dal catalogo iOS. -->
 <resources>
     <string name="safety_report_message">Signaler le message</string>
     <string name="safety_block_user">Bloquer %1$s</string>
@@ -25,9 +25,6 @@
     <string name="safety_unverified_photo">Photo d’un contact non vérifié</string>
     <string name="safety_tap_to_show">Touche pour l’afficher</string>
     <string name="safety_tap_to_show_hint">Touche pour afficher la photo</string>
-    <string name="safety_translation_a11y">Traduction : %1$s</string>
-    <string name="safety_translate_on">Traduire les messages reçus</string>
-    <string name="safety_translate_off">Désactiver la traduction</string>
     <string name="safety_smart_replies_a11y">Réponses rapides suggérées</string>
     <string name="safety_settings_title">Réglages</string>
     <string name="safety_settings_edit_profile">Modifier le pseudo, la couleur et la photo</string>
@@ -105,10 +102,6 @@
     <string name="safety_rules_accept">J’accepte les règles</string>
     <string name="safety_rules_understood">Compris</string>
     <string name="safety_no_email_app">Aucune app de messagerie installée : écris à %1$s.</string>
-    <string name="safety_translate_download_title">Télécharger les langues ?</string>
-    <string name="safety_translate_download_text">La traduction se fait entièrement sur ton téléphone et rien ne quitte l’appareil. La première fois, chaque langue doit toutefois être téléchargée (environ 30 Mo) : il faut une connexion, alors fais-le avant le vol.</string>
-    <string name="safety_translate_download_confirm">Télécharger</string>
-    <string name="safety_translate_unavailable">Certaines langues ne sont pas encore téléchargées : connecte-toi à un réseau pour les traduire.</string>
     <string name="safety_settings_smart_replies">Réponses rapides (sur l’appareil)</string>
     <string name="safety_settings_play_terms">Conditions d’utilisation de Google Play</string>
     <string name="safety_back">Retour</string>

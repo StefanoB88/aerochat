@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, traduzione, risposte rapide. Dal catalogo iOS. -->
+<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, risposte rapide. Dal catalogo iOS. -->
 <resources>
     <string name="safety_report_message">Rapporter melding</string>
     <string name="safety_block_user">Blokker %1$s</string>
@@ -25,9 +25,6 @@
     <string name="safety_unverified_photo">Bilde fra en ubekreftet kontakt</string>
     <string name="safety_tap_to_show">Trykk for å vise det</string>
     <string name="safety_tap_to_show_hint">Trykk for å vise bildet</string>
-    <string name="safety_translation_a11y">Oversettelse: %1$s</string>
-    <string name="safety_translate_on">Oversett mottatte meldinger</string>
-    <string name="safety_translate_off">Slå av oversettelse</string>
     <string name="safety_smart_replies_a11y">Foreslåtte hurtigsvar</string>
     <string name="safety_settings_title">Innstillinger</string>
     <string name="safety_settings_edit_profile">Endre kallenavn, farge og bilde</string>
@@ -105,10 +102,6 @@
     <string name="safety_rules_accept">Jeg godtar reglene</string>
     <string name="safety_rules_understood">Skjønner</string>
     <string name="safety_no_email_app">Ingen e-postapp installert: skriv til %1$s.</string>
-    <string name="safety_translate_download_title">Laste ned språk?</string>
-    <string name="safety_translate_download_text">Oversettelsen skjer helt på telefonen din, og ingenting forlater enheten. Første gang må hvert språk likevel lastes ned (omtrent 30 MB): du trenger tilkobling, så gjør det før flyturen.</string>
-    <string name="safety_translate_download_confirm">Last ned</string>
-    <string name="safety_translate_unavailable">Noen språk er ikke lastet ned ennå: koble til et nettverk for å oversette dem.</string>
     <string name="safety_settings_smart_replies">Hurtigsvar (på enheten)</string>
     <string name="safety_settings_play_terms">Vilkår for bruk av Google Play</string>
     <string name="safety_back">Tilbake</string>

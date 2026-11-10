@@ -22,7 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Report
@@ -30,7 +29,6 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -115,7 +113,6 @@ fun timeLabel(epochMs: Long): String {
  *   ha gia' un menu a pressione prolungata (Cabina Pubblica), per non contendersi il gesto.
  * @param hidesMediaUntilTap foto da un mittente non verificato: resta sfocata (solo BlurHash) finche'
  *   l'utente non la tocca (anti AirDrop-molesto). La scelta vale per la sessione ([RevealedMedia]).
- * @param translation traduzione offline del testo ricevuto, mostrata sotto l'originale.
  * @param onReport / [onBlock] voci "Segnala messaggio" / [blockLabel] nel menu a pressione prolungata
  *   (solo messaggi ricevuti; `null` = voce assente). Il menu unico contiene anche Copia / Salva nelle Foto.
  */
@@ -134,7 +131,6 @@ fun MessageBubble(
     onOpenImage: () -> Unit = {},
     selectableText: Boolean = true,
     hidesMediaUntilTap: Boolean = false,
-    translation: String? = null,
     onReport: (() -> Unit)? = null,
     onBlock: (() -> Unit)? = null,
     blockLabel: String? = null,
@@ -177,7 +173,6 @@ fun MessageBubble(
                     onOpenImage = onOpenImage,
                     selectableText = selectableText,
                     hidesMediaUntilTap = hidesMediaUntilTap,
-                    translation = translation,
                     menu = menu,
                 )
                 BubbleFooter(message)
@@ -251,7 +246,6 @@ private fun BubbleContent(
     onOpenImage: () -> Unit,
     selectableText: Boolean,
     hidesMediaUntilTap: Boolean,
-    translation: String?,
     menu: BubbleMenu,
 ) {
     when (message.contentType) {
@@ -297,9 +291,6 @@ private fun BubbleContent(
                 }
             } else {
                 Text(content, style = AeroTheme.body, color = AeroTheme.textPrimary)
-            }
-            if (translation != null) {
-                TranslationView(translation)
             }
         }
         MessageContentType.image -> {
@@ -434,25 +425,6 @@ private fun BubbleContent(
                 Text(message.text ?: "🎮", color = AeroTheme.textPrimary)
             }
         }
-    }
-}
-
-/** Traduzione sotto l'originale (Swift: divisore ciano + icona `translate` smeraldo). */
-@Composable
-private fun TranslationView(translation: String) {
-    val description = stringResource(R.string.safety_translation_a11y, translation)
-    HorizontalDivider(color = AeroTheme.accentCyan.copy(alpha = 0.4f))
-    Row(
-        modifier = Modifier.clearAndSetSemantics { contentDescription = description },
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Icon(
-            Icons.Filled.Translate,
-            contentDescription = null,
-            tint = AeroTheme.accentEmerald,
-            modifier = Modifier.padding(top = 3.dp).size(14.dp),
-        )
-        Text(translation, fontSize = 16.sp, color = AeroTheme.textPrimary.copy(alpha = 0.9f))
     }
 }
 

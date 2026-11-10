@@ -18,8 +18,6 @@ struct MessageBubble: View {
     var onOpenImage: () -> Void = {}
     /// Foto da un mittente non verificato: resta sfocata finche' l'utente non la tocca (anti AirDrop-molesto).
     var hidesMediaUntilTap = false
-    /// Traduzione offline del testo ricevuto, mostrata sotto l'originale.
-    var translation: String?
 
     @State private var isRevealed = false
 
@@ -68,20 +66,6 @@ struct MessageBubble: View {
                 .font(.body)
                 .foregroundStyle(AeroTheme.textPrimary)
                 .textSelection(.enabled)
-            if let translation {
-                Divider().overlay(AeroTheme.accentCyan.opacity(0.4))
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "translate")
-                        .font(.caption2)
-                        .foregroundStyle(AeroTheme.accentEmerald)
-                        .padding(.top, 3)
-                    Text(translation)
-                        .font(.callout)
-                        .foregroundStyle(AeroTheme.textPrimary.opacity(0.9))
-                        .textSelection(.enabled)
-                }
-                .accessibilityLabel(Text("Traduzione: \(translation)"))
-            }
         case .image:
             MediaImageView(blurhash: message.blurhash,
                            relativePath: message.mediaLocalPath,

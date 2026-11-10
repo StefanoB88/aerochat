@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, traduzione, risposte rapide. Dal catalogo iOS. -->
+<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, risposte rapide. Dal catalogo iOS. -->
 <resources>
     <string name="safety_report_message">Nachricht melden</string>
     <string name="safety_block_user">%1$s blockieren</string>
@@ -25,9 +25,6 @@
     <string name="safety_unverified_photo">Foto von einem nicht verifizierten Kontakt</string>
     <string name="safety_tap_to_show">Zum Anzeigen tippen</string>
     <string name="safety_tap_to_show_hint">Tippen, um das Foto anzuzeigen</string>
-    <string name="safety_translation_a11y">Übersetzung: %1$s</string>
-    <string name="safety_translate_on">Empfangene Nachrichten übersetzen</string>
-    <string name="safety_translate_off">Übersetzung deaktivieren</string>
     <string name="safety_smart_replies_a11y">Vorgeschlagene Schnellantworten</string>
     <string name="safety_settings_title">Einstellungen</string>
     <string name="safety_settings_edit_profile">Nickname, Farbe und Foto bearbeiten</string>
@@ -105,10 +102,6 @@
     <string name="safety_rules_accept">Ich akzeptiere die Regeln</string>
     <string name="safety_rules_understood">Verstanden</string>
     <string name="safety_no_email_app">Keine E-Mail-App installiert: Schreib an %1$s.</string>
-    <string name="safety_translate_download_title">Sprachen herunterladen?</string>
-    <string name="safety_translate_download_text">Die Übersetzung erfolgt komplett auf deinem Smartphone, nichts verlässt das Gerät. Beim ersten Mal muss jedoch jede Sprache heruntergeladen werden (ca. 30 MB): Dafür brauchst du eine Verbindung, also am besten vor dem Flug.</string>
-    <string name="safety_translate_download_confirm">Herunterladen</string>
-    <string name="safety_translate_unavailable">Einige Sprachen sind noch nicht heruntergeladen: Verbinde dich mit einem Netz, um sie zu übersetzen.</string>
     <string name="safety_settings_smart_replies">Schnellantworten (auf dem Gerät)</string>
     <string name="safety_settings_play_terms">Nutzungsbedingungen von Google Play</string>
     <string name="safety_back">Zurück</string>

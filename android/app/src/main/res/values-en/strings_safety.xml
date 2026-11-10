@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, traduzione, risposte rapide. Dal catalogo iOS. -->
+<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, risposte rapide. Dal catalogo iOS. -->
 <resources>
     <string name="safety_report_message">Report Message</string>
     <string name="safety_block_user">Block %1$s</string>
@@ -25,9 +25,6 @@
     <string name="safety_unverified_photo">Photo from an unverified contact</string>
     <string name="safety_tap_to_show">Tap to show it</string>
     <string name="safety_tap_to_show_hint">Tap to show the photo</string>
-    <string name="safety_translation_a11y">Translation: %1$s</string>
-    <string name="safety_translate_on">Translate received messages</string>
-    <string name="safety_translate_off">Turn off translation</string>
     <string name="safety_smart_replies_a11y">Suggested smart replies</string>
     <string name="safety_settings_title">Settings</string>
     <string name="safety_settings_edit_profile">Edit nickname, color, and photo</string>
@@ -105,10 +102,6 @@
     <string name="safety_rules_accept">I Accept the Rules</string>
     <string name="safety_rules_understood">Got It</string>
     <string name="safety_no_email_app">No email app installed: write to %1$s.</string>
-    <string name="safety_translate_download_title">Download languages?</string>
-    <string name="safety_translate_download_text">Translation happens entirely on your phone and nothing leaves the device. The first time, though, each language has to be downloaded (about 30 MB): you need a connection, so do it before your flight.</string>
-    <string name="safety_translate_download_confirm">Download</string>
-    <string name="safety_translate_unavailable">Some languages aren’t downloaded yet: connect to a network to translate them.</string>
     <string name="safety_settings_smart_replies">Smart Replies (on-device)</string>
     <string name="safety_settings_play_terms">Google Play Terms of Service</string>
     <string name="safety_back">Back</string>

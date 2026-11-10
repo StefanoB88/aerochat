@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, traduzione, risposte rapide. Dal catalogo iOS. -->
+<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, risposte rapide. Dal catalogo iOS. -->
 <resources>
     <string name="safety_report_message">Zgłoś wiadomość</string>
     <string name="safety_block_user">Zablokuj %1$s</string>
@@ -25,9 +25,6 @@
     <string name="safety_unverified_photo">Zdjęcie od niezweryfikowanego kontaktu</string>
     <string name="safety_tap_to_show">Dotknij, aby pokazać</string>
     <string name="safety_tap_to_show_hint">Dotknij, aby pokazać zdjęcie</string>
-    <string name="safety_translation_a11y">Tłumaczenie: %1$s</string>
-    <string name="safety_translate_on">Tłumacz otrzymane wiadomości</string>
-    <string name="safety_translate_off">Wyłącz tłumaczenie</string>
     <string name="safety_smart_replies_a11y">Sugerowane szybkie odpowiedzi</string>
     <string name="safety_settings_title">Ustawienia</string>
     <string name="safety_settings_edit_profile">Edytuj pseudonim, kolor i zdjęcie</string>
@@ -105,10 +102,6 @@
     <string name="safety_rules_accept">Akceptuję zasady</string>
     <string name="safety_rules_understood">Rozumiem</string>
     <string name="safety_no_email_app">Brak zainstalowanej aplikacji e-mail: napisz na %1$s.</string>
-    <string name="safety_translate_download_title">Pobrać języki?</string>
-    <string name="safety_translate_download_text">Tłumaczenie odbywa się w całości na telefonie i nic nie opuszcza urządzenia. Za pierwszym razem trzeba jednak pobrać każdy język (ok. 30 MB): potrzebne jest połączenie, więc zrób to przed lotem.</string>
-    <string name="safety_translate_download_confirm">Pobierz</string>
-    <string name="safety_translate_unavailable">Niektóre języki nie zostały jeszcze pobrane: połącz się z siecią, aby je przetłumaczyć.</string>
     <string name="safety_settings_smart_replies">Szybkie odpowiedzi (na urządzeniu)</string>
     <string name="safety_settings_play_terms">Warunki korzystania z usługi Google Play</string>
     <string name="safety_back">Wstecz</string>

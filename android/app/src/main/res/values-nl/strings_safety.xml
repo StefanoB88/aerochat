@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, traduzione, risposte rapide. Dal catalogo iOS. -->
+<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, risposte rapide. Dal catalogo iOS. -->
 <resources>
     <string name="safety_report_message">Bericht melden</string>
     <string name="safety_block_user">%1$s blokkeren</string>
@@ -25,9 +25,6 @@
     <string name="safety_unverified_photo">Foto van een niet-geverifieerd contact</string>
     <string name="safety_tap_to_show">Tik om te tonen</string>
     <string name="safety_tap_to_show_hint">Tik om de foto te tonen</string>
-    <string name="safety_translation_a11y">Vertaling: %1$s</string>
-    <string name="safety_translate_on">Ontvangen berichten vertalen</string>
-    <string name="safety_translate_off">Vertaling uitschakelen</string>
     <string name="safety_smart_replies_a11y">Voorgestelde snelle antwoorden</string>
     <string name="safety_settings_title">Instellingen</string>
     <string name="safety_settings_edit_profile">Nickname, kleur en foto wijzigen</string>
@@ -105,10 +102,6 @@
     <string name="safety_rules_accept">Ik accepteer de regels</string>
     <string name="safety_rules_understood">Begrepen</string>
     <string name="safety_no_email_app">Geen e-mailapp geïnstalleerd: schrijf naar %1$s.</string>
-    <string name="safety_translate_download_title">Talen downloaden?</string>
-    <string name="safety_translate_download_text">De vertaling gebeurt volledig op je telefoon en niets verlaat het apparaat. De eerste keer moet elke taal wel worden gedownload (ongeveer 30 MB): daarvoor heb je verbinding nodig, dus doe het vóór je vlucht.</string>
-    <string name="safety_translate_download_confirm">Downloaden</string>
-    <string name="safety_translate_unavailable">Sommige talen zijn nog niet gedownload: maak verbinding met een netwerk om ze te vertalen.</string>
     <string name="safety_settings_smart_replies">Snelle antwoorden (op het apparaat)</string>
     <string name="safety_settings_play_terms">Servicevoorwaarden van Google Play</string>
     <string name="safety_back">Terug</string>

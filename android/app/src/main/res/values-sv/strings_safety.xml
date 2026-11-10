@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, traduzione, risposte rapide. Dal catalogo iOS. -->
+<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, risposte rapide. Dal catalogo iOS. -->
 <resources>
     <string name="safety_report_message">Rapportera meddelande</string>
     <string name="safety_block_user">Blockera %1$s</string>
@@ -25,9 +25,6 @@
     <string name="safety_unverified_photo">Foto från en overifierad kontakt</string>
     <string name="safety_tap_to_show">Tryck för att visa den</string>
     <string name="safety_tap_to_show_hint">Tryck för att visa fotot</string>
-    <string name="safety_translation_a11y">Översättning: %1$s</string>
-    <string name="safety_translate_on">Översätt mottagna meddelanden</string>
-    <string name="safety_translate_off">Stäng av översättning</string>
     <string name="safety_smart_replies_a11y">Föreslagna snabbsvar</string>
     <string name="safety_settings_title">Inställningar</string>
     <string name="safety_settings_edit_profile">Ändra smeknamn, färg och bild</string>
@@ -105,10 +102,6 @@
     <string name="safety_rules_accept">Jag godkänner reglerna</string>
     <string name="safety_rules_understood">Jag förstår</string>
     <string name="safety_no_email_app">Ingen e-postapp installerad: skriv till %1$s.</string>
-    <string name="safety_translate_download_title">Ladda ner språk?</string>
-    <string name="safety_translate_download_text">Översättningen sker helt på din telefon och inget lämnar enheten. Första gången måste dock varje språk laddas ner (cirka 30 MB): du behöver en uppkoppling, så gör det före flyget.</string>
-    <string name="safety_translate_download_confirm">Ladda ner</string>
-    <string name="safety_translate_unavailable">Vissa språk är inte nedladdade än: anslut till ett nätverk för att översätta dem.</string>
     <string name="safety_settings_smart_replies">Snabbsvar (på enheten)</string>
     <string name="safety_settings_play_terms">Användarvillkor för Google Play</string>
     <string name="safety_back">Tillbaka</string>

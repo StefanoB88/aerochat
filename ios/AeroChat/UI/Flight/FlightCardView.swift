@@ -54,7 +54,7 @@ struct FlightCardSheet: View {
             .navigationTitle("Cartolina di volo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
             }
         }
         .task(id: period) { await reload() }

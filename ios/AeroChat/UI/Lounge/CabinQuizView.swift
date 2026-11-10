@@ -23,7 +23,7 @@ struct CabinQuizSheet: View {
             .navigationTitle("Quiz di cabina")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
                 if state != nil {
                     ToolbarItem(placement: .destructiveAction) {
                         Button("Esci") {
@@ -31,6 +31,7 @@ struct CabinQuizSheet: View {
                             Task { await environment.quiz?.leave() }
                         }
                         .foregroundStyle(.red)
+                        .toolbarLabel()
                     }
                 }
             }

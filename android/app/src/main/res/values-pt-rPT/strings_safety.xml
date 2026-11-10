@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, traduzione, risposte rapide. Dal catalogo iOS. -->
+<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, risposte rapide. Dal catalogo iOS. -->
 <resources>
     <string name="safety_report_message">Denunciar mensagem</string>
     <string name="safety_block_user">Bloquear %1$s</string>
@@ -25,9 +25,6 @@
     <string name="safety_unverified_photo">Fotografia de um contacto não verificado</string>
     <string name="safety_tap_to_show">Toca para a mostrar</string>
     <string name="safety_tap_to_show_hint">Toca para mostrar a fotografia</string>
-    <string name="safety_translation_a11y">Tradução: %1$s</string>
-    <string name="safety_translate_on">Traduzir as mensagens recebidas</string>
-    <string name="safety_translate_off">Desativar tradução</string>
     <string name="safety_smart_replies_a11y">Respostas rápidas sugeridas</string>
     <string name="safety_settings_title">Definições</string>
     <string name="safety_settings_edit_profile">Editar alcunha, cor e fotografia</string>
@@ -105,10 +102,6 @@
     <string name="safety_rules_accept">Aceito as regras</string>
     <string name="safety_rules_understood">Entendi</string>
     <string name="safety_no_email_app">Nenhuma app de email instalada: escreve para %1$s.</string>
-    <string name="safety_translate_download_title">Transferir os idiomas?</string>
-    <string name="safety_translate_download_text">A tradução é feita inteiramente no teu telemóvel e nada sai do dispositivo. Mas da primeira vez cada idioma tem de ser transferido (cerca de 30 MB): precisas de ligação, por isso fá-lo antes do voo.</string>
-    <string name="safety_translate_download_confirm">Transferir</string>
-    <string name="safety_translate_unavailable">Alguns idiomas ainda não foram transferidos: liga-te a uma rede para os traduzir.</string>
     <string name="safety_settings_smart_replies">Respostas rápidas (no dispositivo)</string>
     <string name="safety_settings_play_terms">Termos de Serviço do Google Play</string>
     <string name="safety_back">Voltar</string>

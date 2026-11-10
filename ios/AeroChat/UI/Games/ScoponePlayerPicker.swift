@@ -48,7 +48,7 @@ struct ScoponePlayerPicker: View {
             .navigationTitle("Scopone")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() }.toolbarLabel() }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Invita") {
                         Haptics.tap()
@@ -56,6 +56,7 @@ struct ScoponePlayerPicker: View {
                         dismiss()
                     }
                     .disabled(selected.count != 3)
+                    .toolbarLabel()
                 }
             }
         }

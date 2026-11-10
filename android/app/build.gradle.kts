@@ -104,9 +104,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.mlkit.barcode.scanning)
-    // ML Kit on-device: traduzione offline, riconoscimento lingua, risposte rapide.
-    implementation(libs.mlkit.translate)
-    implementation(libs.mlkit.language.id)
+    // ML Kit on-device: risposte rapide.
     implementation(libs.mlkit.smart.reply)
     implementation(libs.zxing.core)
 

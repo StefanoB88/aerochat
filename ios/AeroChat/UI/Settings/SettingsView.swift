@@ -37,7 +37,7 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(AeroTheme.background, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
             }
             .sheet(isPresented: $showPaywall) { PaywallView() }
             .sheet(isPresented: $showFlightCard) { FlightCardSheet() }

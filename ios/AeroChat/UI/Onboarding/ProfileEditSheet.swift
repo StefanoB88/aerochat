@@ -54,13 +54,14 @@ struct ProfileEditView: View {
         .toolbarBackground(AeroTheme.background, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Annulla") { dismiss() }
+                Button("Annulla") { dismiss() }.toolbarLabel()
             }
             ToolbarItem(placement: .confirmationAction) {
                 if isSaving {
                     ProgressView().tint(AeroTheme.accentCyan)
                 } else {
                     Button("Salva") { Task { await save() } }
+                        .toolbarLabel()
                         .disabled(trimmed.count < 2 || isProcessingPhoto)
                 }
             }

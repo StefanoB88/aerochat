@@ -82,12 +82,13 @@ struct EmergencySheet: View {
             .navigationTitle("Avviso di emergenza")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() }.toolbarLabel() }
                 ToolbarItem(placement: .confirmationAction) {
                     if isSending {
                         ProgressView().tint(AeroTheme.accentCyan)
                     } else {
                         Button("Invia") { Task { await send() } }
+                            .toolbarLabel()
                             .disabled(includeLocation && locator.coordinate == nil && !locator.isDenied)
                     }
                 }

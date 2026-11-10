@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, traduzione, risposte rapide. Dal catalogo iOS. -->
+<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, risposte rapide. Dal catalogo iOS. -->
 <resources>
     <string name="safety_report_message">Segnala messaggio</string>
     <string name="safety_block_user">Blocca %1$s</string>
@@ -25,9 +25,6 @@
     <string name="safety_unverified_photo">Foto da un contatto non verificato</string>
     <string name="safety_tap_to_show">Tocca per mostrarla</string>
     <string name="safety_tap_to_show_hint">Tocca per mostrare la foto</string>
-    <string name="safety_translation_a11y">Traduzione: %1$s</string>
-    <string name="safety_translate_on">Traduci i messaggi ricevuti</string>
-    <string name="safety_translate_off">Disattiva traduzione</string>
     <string name="safety_smart_replies_a11y">Risposte rapide suggerite</string>
     <string name="safety_settings_title">Impostazioni</string>
     <string name="safety_settings_edit_profile">Modifica nickname, colore e foto</string>
@@ -105,10 +102,6 @@
     <string name="safety_rules_accept">Accetto le regole</string>
     <string name="safety_rules_understood">Ho capito</string>
     <string name="safety_no_email_app">Nessuna app email installata: scrivi a %1$s.</string>
-    <string name="safety_translate_download_title">Scaricare le lingue?</string>
-    <string name="safety_translate_download_text">La traduzione avviene interamente sul telefono e nulla lascia il dispositivo. La prima volta però ogni lingua va scaricata (circa 30 MB): serve una connessione, quindi fallo prima del volo.</string>
-    <string name="safety_translate_download_confirm">Scarica</string>
-    <string name="safety_translate_unavailable">Alcune lingue non sono ancora scaricate: collegati a una rete per tradurle.</string>
     <string name="safety_settings_smart_replies">Risposte rapide (sul dispositivo)</string>
     <string name="safety_settings_play_terms">Termini di servizio di Google Play</string>
     <string name="safety_back">Indietro</string>

@@ -88,14 +88,14 @@ struct ReportSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(saved == nil ? "Annulla" : "Chiudi") { dismiss() }
+                    Button(saved == nil ? "Annulla" : "Chiudi") { dismiss() }.toolbarLabel()
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if saved == nil {
                         if isSaving {
                             ProgressView().tint(AeroTheme.accentCyan)
                         } else {
-                            Button("Invia") { Task { await submit() } }
+                            Button("Invia") { Task { await submit() } }.toolbarLabel()
                         }
                     }
                 }

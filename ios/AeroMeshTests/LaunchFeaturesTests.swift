@@ -115,6 +115,24 @@ struct LaunchFeaturesTests {
         #expect(EmergencyService.systemText(nickname: "Luca", broadcast: broadcast).contains("🆘 Luca"))
     }
 
+    // MARK: - Riassunto Cabina
+
+    @Test func summaryKeepsOnlyGroundedPoints() {
+        let lines = [
+            CabinAssistant.ChatLine(author: "Marco", text: "Il volo per Londra ha 40 minuti di ritardo"),
+            CabinAssistant.ChatLine(author: "Anna", text: "Qualcuno divide un taxi da Heathrow?"),
+            CabinAssistant.ChatLine(author: "Luca", text: "Io ci sto per il taxi"),
+        ]
+        let result = CabinAssistant.grounded([
+            ("Il volo ha 40 minuti di ritardo", [1]),
+            ("Anna e Luca dividono un taxi", [2, 3]),
+            ("Tutti sono molto felici del pranzo", [2]),   // inventato: nessuna parola in comune
+            ("Si parla di un concerto", [9]),             // riga inesistente
+            ("Il volo ha 40 minuti di ritardo", [1]),     // duplicato
+        ], lines: lines)
+        #expect(result == ["Il volo ha 40 minuti di ritardo", "Anna e Luca dividono un taxi"])
+    }
+
     // MARK: - Pass
 
     @Test func singleFlightPassTier() {

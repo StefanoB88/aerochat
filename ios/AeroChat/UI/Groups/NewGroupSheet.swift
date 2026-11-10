@@ -60,9 +60,10 @@ struct NewGroupSheet: View {
             .navigationTitle("Nuovo gruppo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() }.toolbarLabel() }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Crea") { Task { await create() } }
+                        .toolbarLabel()
                         .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || isCreating)
                 }
             }

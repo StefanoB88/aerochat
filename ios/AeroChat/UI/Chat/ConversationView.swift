@@ -39,9 +39,6 @@ final class ConversationViewModel {
     var reportTarget: MessageRecord?
     /// Contatti verificati di persona (QR): le foto degli altri restano sfocate finche' non vengono toccate.
     private(set) var trustedSenders: Set<Data> = []
-    /// Traduzione offline dei messaggi ricevuti (iOS 18+); `translations[msgID] == ""` = gia' nella nostra lingua.
-    var translationEnabled = false
-    var translations: [Data: String] = [:]
     /// Risposte rapide suggerite dal modello on-device per l'ultimo messaggio ricevuto.
     private(set) var suggestions: [String] = []
     private var suggestionsFor: Data?
@@ -569,20 +566,7 @@ private struct ConversationContent: View {
                     .accessibilityLabel("QR del gruppo")
                 }
             }
-            if MessageTranslation.isSupported {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Haptics.tap()
-                        viewModel.translationEnabled.toggle()
-                    } label: {
-                        Image(systemName: "translate")
-                            .foregroundStyle(viewModel.translationEnabled ? AeroTheme.accentEmerald : AeroTheme.accentCyan)
-                    }
-                    .accessibilityLabel(viewModel.translationEnabled ? "Disattiva traduzione" : "Traduci i messaggi ricevuti")
-                }
-            }
         }
-        .messageTranslation(viewModel)
         .toolbarBackground(AeroTheme.background, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .onChange(of: viewModel.photoItem) { _, item in
@@ -678,8 +662,7 @@ private struct MessageListView: View {
                                       onGameAction: { viewModel.handleGame($0, message: message) },
                                       onSaveImage: { viewModel.saveImage(message) },
                                       onOpenImage: { viewModel.viewedImage = ViewedImage(message: message) },
-                                      hidesMediaUntilTap: viewModel.hidesMedia(message),
-                                      translation: viewModel.translations[message.msgID].flatMap { $0.isEmpty ? nil : $0 })
+                                      hidesMediaUntilTap: viewModel.hidesMedia(message))
                             .id(message.msgID)
                             .contextMenu {
                                 if !message.isOutgoing, message.contentType != .game {

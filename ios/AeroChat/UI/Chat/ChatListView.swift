@@ -96,7 +96,9 @@ struct ChatListView: View {
                         showPaywall = true
                     } label: {
                         Label(environment.isPro ? String(localized: "Pro") : String(localized: "Pass"), systemImage: environment.isPro ? "ticket.fill" : "ticket")
+                            .labelStyle(.titleAndIcon)
                             .foregroundStyle(environment.isPro ? AeroTheme.accentEmerald : AeroTheme.accentCyan)
+                            .toolbarLabel()
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {

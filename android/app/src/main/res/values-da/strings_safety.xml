@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, traduzione, risposte rapide. Dal catalogo iOS. -->
+<!-- Release 1.1 (sicurezza): segnalazioni, blocco, foto sfocate, impostazioni, regole Cabina, risposte rapide. Dal catalogo iOS. -->
 <resources>
     <string name="safety_report_message">Anmeld besked</string>
     <string name="safety_block_user">Bloker %1$s</string>
@@ -25,9 +25,6 @@
     <string name="safety_unverified_photo">Billede fra en ubekræftet kontakt</string>
     <string name="safety_tap_to_show">Tryk for at vise det</string>
     <string name="safety_tap_to_show_hint">Tryk for at vise billedet</string>
-    <string name="safety_translation_a11y">Oversættelse: %1$s</string>
-    <string name="safety_translate_on">Oversæt modtagne beskeder</string>
-    <string name="safety_translate_off">Slå oversættelse fra</string>
     <string name="safety_smart_replies_a11y">Foreslåede hurtige svar</string>
     <string name="safety_settings_title">Indstillinger</string>
     <string name="safety_settings_edit_profile">Rediger kaldenavn, farve og billede</string>
@@ -105,10 +102,6 @@
     <string name="safety_rules_accept">Jeg accepterer reglerne</string>
     <string name="safety_rules_understood">Forstået</string>
     <string name="safety_no_email_app">Ingen mailapp installeret: skriv til %1$s.</string>
-    <string name="safety_translate_download_title">Hent sprog?</string>
-    <string name="safety_translate_download_text">Oversættelsen sker helt på din telefon, og intet forlader enheden. Første gang skal hvert sprog dog hentes (ca. 30 MB): du skal have forbindelse, så gør det før flyveturen.</string>
-    <string name="safety_translate_download_confirm">Hent</string>
-    <string name="safety_translate_unavailable">Nogle sprog er ikke hentet endnu: opret forbindelse til et netværk for at oversætte dem.</string>
     <string name="safety_settings_smart_replies">Hurtige svar (på enheden)</string>
     <string name="safety_settings_play_terms">Servicevilkår for Google Play</string>
     <string name="safety_back">Tilbage</string>
