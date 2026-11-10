@@ -314,3 +314,10 @@ fun suitName(suit: Int): String = when (suit) {
     2 -> stringResource(R.string.games_suit_spade)
     else -> stringResource(R.string.games_suit_bastoni)
 }
+
+/** Nome breve localizzato per le descrizioni delle mosse: "7 Coppe", "10 Bastoni" (semi napoletani, non francesi). */
+@Composable
+fun cardShortNamer(): (Int) -> String {
+    val names = (0 until NeapolitanCards.suitCount).map { suitName(it) }
+    return { card -> "${NeapolitanCards.rank(card)} ${names[NeapolitanCards.suit(card)]}" }
+}

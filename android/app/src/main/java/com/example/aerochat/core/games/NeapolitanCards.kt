@@ -100,14 +100,8 @@ object NeapolitanCards {
 
     fun bytes(cards: List<Int>): ByteArray = ByteArray(cards.size) { cards[it].toByte() }
 
-    /** Etichetta d'angolo: "A", "2"…"7", "F", "C", "R". */
-    fun cornerLabel(card: Int): String = when (val rank = rank(card)) {
-        1 -> "A"
-        8 -> "F"
-        9 -> "C"
-        10 -> "R"
-        else -> rank.toString()
-    }
+    /** Etichetta d'angolo: il valore da 1 a 10 (come sulle carte napoletane numerate). */
+    fun cornerLabel(card: Int): String = rank(card).toString()
 
     /** Simbolo del seme: ♦ denari, ♥ coppe, ♠ spade, ♣ bastoni. */
     fun suitSymbol(suit: Int): String = when (suit) {
@@ -117,6 +111,11 @@ object NeapolitanCards {
         else -> "♣"
     }
 
-    /** Nome breve per le descrizioni delle mosse ("7♦", "R♣"). */
-    fun shortName(card: Int): String = cornerLabel(card) + suitSymbol(suit(card))
+    /** Nome breve senza risorse (log, test): "7 Denari", "10 Bastoni". In UI usare `cardShortNamer()`. */
+    fun shortName(card: Int): String = "${rank(card)} " + when (suit(card)) {
+        0 -> "Denari"
+        1 -> "Coppe"
+        2 -> "Spade"
+        else -> "Bastoni"
+    }
 }

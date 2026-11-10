@@ -84,14 +84,15 @@ fun resignText(state: GameSessionState): String? {
 /** Ultima giocata: "Marco ha preso 3♦ + 4♣ con 7♦ — Scopa!", "Hai calato 5♠", "Anna prende A♦ · 2♦ (11 punti)". */
 @Composable
 fun lastMoveText(state: GameSessionState): String? {
+    val shortName = cardShortNamer()
     state.scopa?.lastPlay?.let { play ->
-        val card = NeapolitanCards.shortName(play.card)
+        val card = shortName(play.card)
         val isMe = play.seat == state.mySeat
         var text = if (play.captured.isEmpty()) {
             if (isMe) stringResource(R.string.games_you_played, card)
             else stringResource(R.string.games_player_played, seatName(state, play.seat), card)
         } else {
-            val taken = play.captured.joinToString(" + ") { NeapolitanCards.shortName(it) }
+            val taken = play.captured.joinToString(" + ") { shortName(it) }
             if (isMe) stringResource(R.string.games_you_captured, taken, card)
             else stringResource(R.string.games_player_captured, seatName(state, play.seat), taken, card)
         }
@@ -99,7 +100,7 @@ fun lastMoveText(state: GameSessionState): String? {
         return text
     }
     state.briscola?.lastTrick?.let { trick ->
-        val cards = trick.cards.joinToString(" · ") { NeapolitanCards.shortName(it) }
+        val cards = trick.cards.joinToString(" · ") { shortName(it) }
         if (trick.winner == state.mySeat) {
             return pluralStringResource(R.plurals.games_you_take_trick, trick.points, cards, trick.points)
         }

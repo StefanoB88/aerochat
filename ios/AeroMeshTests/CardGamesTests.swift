@@ -40,8 +40,9 @@ struct CardEngineTests {
         #expect(NeapolitanCards.id(suit: .coppe, rank: 1) == 10)
         #expect(NeapolitanCards.suit(39) == .bastoni && NeapolitanCards.rank(39) == 10)
         #expect(NeapolitanCards.settebello == 6)
-        #expect(NeapolitanCards.shortName(6) == "7♦")
-        #expect(NeapolitanCards.cornerLabel(37) == "F" && NeapolitanCards.cornerLabel(38) == "C" && NeapolitanCards.cornerLabel(30) == "A")
+        #expect(NeapolitanCards.shortName(6) == "7 Denari")
+        #expect(NeapolitanCards.cornerLabel(39) == "10")
+        #expect(NeapolitanCards.cornerLabel(37) == "8" && NeapolitanCards.cornerLabel(38) == "9" && NeapolitanCards.cornerLabel(30) == "1")
         #expect((0..<40).map(NeapolitanCards.briscolaPoints).reduce(0, +) == 120)
     }
 

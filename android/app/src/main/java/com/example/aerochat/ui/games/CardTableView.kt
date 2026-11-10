@@ -16,7 +16,11 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.runtime.key
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -110,13 +114,19 @@ fun CardTableDialog(
     statusMessage: String? = null,
     onStatusExpire: () -> Unit = {},
 ) {
+    // Inset letti dalla finestra dell'Activity, non dal Dialog: nella finestra del Dialog arrivano a zero
+    // (o solo dopo il primo layout), e mano e "Gioca" finivano sotto la barra di navigazione, dove i tocchi
+    // li prendono i gesti di sistema: il turno sembrava bloccato finche' non si riapriva il tavolo.
+    val hostInsets = WindowInsets.safeDrawing.asPaddingValues()
     Dialog(
         onDismissRequest = onDismiss,
-        // Edge-to-edge (target 35): il Dialog disegna sotto le barre di sistema; gli inset li applica
-        // CardTableView (systemBarsPadding), altrimenti la mano e "Gioca" finivano sotto la barra di navigazione.
+        // Edge-to-edge: il feltro disegna sotto le barre di sistema, il contenuto rispetta `hostInsets`.
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        CardTableView(state, onAction, onDismiss, statusMessage = statusMessage, onStatusExpire = onStatusExpire)
+        CardTableView(
+            state, onAction, onDismiss, statusMessage = statusMessage, onStatusExpire = onStatusExpire,
+            contentPadding = hostInsets,
+        )
     }
 }
 
@@ -134,6 +144,7 @@ fun CardTableView(
     onDismiss: () -> Unit,
     statusMessage: String? = null,
     onStatusExpire: () -> Unit = {},
+    contentPadding: PaddingValues? = null,
 ) {
     var selectedCard by remember { mutableStateOf<Int?>(null) }
     var selectedOption by remember { mutableIntStateOf(0) }
@@ -243,7 +254,11 @@ fun CardTableView(
             .background(Brush.radialGradient(listOf(feltCenter, feltEdge), radius = 1400f)),
     ) {
         Column(
-            Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 12.dp).padding(top = 8.dp, bottom = 8.dp),
+            Modifier
+                .fillMaxSize()
+                .then(if (contentPadding != null) Modifier.padding(contentPadding) else Modifier.safeDrawingPadding())
+                .padding(horizontal = 12.dp)
+                .padding(top = 8.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -544,6 +559,7 @@ private fun InfoLine(state: GameSessionState) {
 
 @Composable
 private fun CaptureChooser(options: List<List<Int>>, selected: Int, onSelect: (Int) -> Unit) {
+    val shortName = cardShortNamer()
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(stringResource(R.string.games_choose_capture), style = AeroTheme.caption.copy(fontSize = 11.sp), color = AeroTheme.textSecondary)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -551,7 +567,7 @@ private fun CaptureChooser(options: List<List<Int>>, selected: Int, onSelect: (I
                 val isSelected = index == selected
                 val names = option.map { cardName(it) }.joinToString(", ")
                 Text(
-                    option.joinToString(" + ") { NeapolitanCards.shortName(it) },
+                    option.joinToString(" + ") { shortName(it) },
                     style = AeroTheme.body.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
                     color = AeroTheme.textPrimary,
                     modifier = Modifier

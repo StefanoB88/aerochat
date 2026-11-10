@@ -113,19 +113,11 @@ enum NeapolitanCards {
 
     // MARK: Testi
 
-    /// Etichetta d'angolo della carta: "A", "2"…"7", "F", "C", "R".
-    static func cornerLabel(_ card: Int) -> String {
-        switch rank(card) {
-        case 1: return "A"
-        case 8: return "F"
-        case 9: return "C"
-        case 10: return "R"
-        case let value: return String(value)
-        }
-    }
+    /// Etichetta d'angolo della carta: il valore da 1 a 10 (come sulle carte napoletane numerate).
+    static func cornerLabel(_ card: Int) -> String { String(rank(card)) }
 
-    /// Forma breve per le descrizioni: "7♦", "A♠", "R♣".
-    static func shortName(_ card: Int) -> String { cornerLabel(card) + suit(card).symbol }
+    /// Forma breve per le descrizioni: "7 Coppe", "1 Spade", "10 Bastoni" (semi napoletani, non francesi).
+    static func shortName(_ card: Int) -> String { "\(rank(card)) \(suit(card).name)" }
 
     /// Nome completo per VoiceOver: "Asso di Spade", "7 di Denari", "Settebello".
     static func fullName(_ card: Int) -> String {
