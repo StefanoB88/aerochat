@@ -65,10 +65,11 @@ extension ButtonStyle where Self == HapticButtonStyle {
 }
 
 extension View {
-    /// Pulsanti nella barra di navigazione: sempre su una riga e alla loro larghezza naturale. Con lo stile
-    /// `.haptic` la barra comprimeva i pulsanti laterali quando il titolo era lungo e il testo andava a capo.
+    /// Pulsanti nella barra di navigazione: sempre su una riga. Con lo stile `.haptic` la barra comprimeva i
+    /// pulsanti laterali e il testo andava a capo. Niente `fixedSize`: la "bolla" di vetro della barra non si
+    /// allarga di conseguenza e il testo finiva fuori; la priorita' di layout chiede invece la larghezza piena.
     func toolbarLabel() -> some View {
-        lineLimit(1).fixedSize(horizontal: true, vertical: false)
+        lineLimit(1).layoutPriority(1)
     }
 
     /// Vibrazione morbida al tocco per i pulsanti con uno stile di sistema (es. `.borderedProminent`)

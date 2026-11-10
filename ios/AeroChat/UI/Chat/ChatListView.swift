@@ -97,14 +97,10 @@ struct ChatListView: View {
                     Button {
                         showPaywall = true
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: environment.isPro ? "ticket.fill" : "ticket")
-                            Text(environment.isPro ? String(localized: "Pro") : String(localized: "Pass"))
-                                .font(.body.weight(.semibold))
-                        }
-                        .foregroundStyle(environment.isPro ? AeroTheme.accentEmerald : AeroTheme.accentCyan)
-                        .padding(.horizontal, 10)
-                        .toolbarLabel()
+                        Label(environment.isPro ? String(localized: "Pro") : String(localized: "Pass"), systemImage: environment.isPro ? "ticket.fill" : "ticket")
+                            .labelStyle(.titleAndIcon)
+                            .foregroundStyle(environment.isPro ? AeroTheme.accentEmerald : AeroTheme.accentCyan)
+                            .toolbarLabel()
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
