@@ -51,7 +51,7 @@ struct OnboardingView: View {
                             Circle()
                                 .fill(Color(hex: UInt32(hex, radix: 16) ?? 0))
                                 .frame(width: 34, height: 34)
-                                .overlay(Circle().strokeBorder(.white, lineWidth: colorHex == hex ? 3 : 0))
+                                .overlay(Circle().strokeBorder(AeroTheme.textPrimary, lineWidth: colorHex == hex ? 3 : 0))
                                 .onTapGesture { colorHex = hex; Haptics.impact() }
                                 .accessibilityLabel("Colore avatar \(hex)")
                                 .accessibilityAddTraits(colorHex == hex ? .isSelected : [])

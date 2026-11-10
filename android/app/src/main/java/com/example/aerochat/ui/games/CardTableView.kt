@@ -91,6 +91,7 @@ import com.example.aerochat.core.games.ScopaGame
 import com.example.aerochat.core.games.playerCount
 import com.example.aerochat.core.games.turnSeat
 import com.example.aerochat.proto.GameKind
+import com.example.aerochat.ui.AeroForcedDark
 import com.example.aerochat.ui.AeroTheme
 import com.example.aerochat.ui.components.GameBubbleAction
 import com.example.aerochat.ui.components.HapticButton
@@ -123,10 +124,13 @@ fun CardTableDialog(
         // Edge-to-edge: il feltro disegna sotto le barre di sistema, il contenuto rispetta `hostInsets`.
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        CardTableView(
-            state, onAction, onDismiss, statusMessage = statusMessage, onStatusExpire = onStatusExpire,
-            contentPadding = hostInsets,
-        )
+        // Il panno verde resta scuro anche con il tema chiaro di sistema.
+        AeroForcedDark {
+            CardTableView(
+                state, onAction, onDismiss, statusMessage = statusMessage, onStatusExpire = onStatusExpire,
+                contentPadding = hostInsets,
+            )
+        }
     }
 }
 

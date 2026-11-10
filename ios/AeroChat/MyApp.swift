@@ -39,7 +39,6 @@ struct MyApp: App {
         WindowGroup {
             ContentView()
                 .environment(environment)
-                .preferredColorScheme(.dark)
                 // Tutti i pulsanti dell'app vibrano in modo morbido al tocco.
                 .buttonStyle(.haptic)
                 .task {

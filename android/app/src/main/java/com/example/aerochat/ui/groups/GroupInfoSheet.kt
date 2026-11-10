@@ -224,7 +224,7 @@ fun GroupInfoSheet(
                         val peer = peers[id]
                         val status = reachability[id] ?: Reachability.OutOfRange
                         val name = nickname(member)
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(start = 68.dp))
+                        HorizontalDivider(color = AeroTheme.onBackground.copy(alpha = 0.08f), modifier = Modifier.padding(start = 68.dp))
                         MemberRow(
                             imageData = peer?.avatarImage,
                             colorHex = peer?.avatarColorHex,
@@ -318,7 +318,7 @@ private fun PassSection(
                 }
             }
             giftMessage?.let {
-                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(start = 16.dp))
+                HorizontalDivider(color = AeroTheme.onBackground.copy(alpha = 0.08f), modifier = Modifier.padding(start = 16.dp))
                 Text(
                     it,
                     style = AeroTheme.footnote,

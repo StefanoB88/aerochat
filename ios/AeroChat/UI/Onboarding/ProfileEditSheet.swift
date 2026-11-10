@@ -137,7 +137,7 @@ struct ProfileEditView: View {
                     Circle()
                         .fill(Color(hexString: hex) ?? AeroTheme.accentCyan)
                         .frame(width: 38, height: 38)
-                        .overlay(Circle().strokeBorder(.white, lineWidth: colorHex == hex ? 3 : 0))
+                        .overlay(Circle().strokeBorder(AeroTheme.textPrimary, lineWidth: colorHex == hex ? 3 : 0))
                         .onTapGesture { colorHex = hex; Haptics.impact() }
                         .accessibilityLabel("Colore avatar \(hex)")
                         .accessibilityAddTraits(colorHex == hex ? .isSelected : [])

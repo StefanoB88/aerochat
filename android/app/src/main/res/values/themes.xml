@@ -1,8 +1,10 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Tema base OLED dark-first (la UI e' in Jetpack Compose, vedi ui/AeroTheme.kt). -->
-    <style name="Theme.AeroChat" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@android:color/black</item>
-        <item name="android:statusBarColor">@android:color/black</item>
-        <item name="android:navigationBarColor">@android:color/black</item>
+    <!-- Tema base chiaro (la UI e' in Jetpack Compose, vedi ui/AeroTheme.kt); la variante scura e' in values-night. -->
+    <style name="Theme.AeroChat" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/aero_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

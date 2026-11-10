@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.aerochat.R
 import com.example.aerochat.core.games.NeapolitanCards
-import com.example.aerochat.ui.AeroTheme
+import com.example.aerochat.ui.AeroColors
 import com.example.aerochat.ui.hex
 import kotlin.math.cos
 import kotlin.math.max
@@ -67,12 +67,12 @@ fun NeapolitanCardView(
     Box(
         modifier
             .size(width, height)
-            .shadow(if (highlighted) 8.dp else 2.dp, shape, ambientColor = if (highlighted) AeroTheme.accentCyan else Color.Black,
-                spotColor = if (highlighted) AeroTheme.accentCyan else Color.Black)
+            .shadow(if (highlighted) 8.dp else 2.dp, shape, ambientColor = if (highlighted) AeroColors.Dark.accentCyan else Color.Black,
+                spotColor = if (highlighted) AeroColors.Dark.accentCyan else Color.Black)
             .clip(shape)
             .border(
                 width = if (highlighted) max(2f, width.value * 0.05f).dp else 0.8.dp,
-                color = if (highlighted) AeroTheme.accentCyan else Color.Black.copy(alpha = 0.35f),
+                color = if (highlighted) AeroColors.Dark.accentCyan else Color.Black.copy(alpha = 0.35f),
                 shape = shape,
             )
             .alpha(if (dimmed) 0.45f else 1f)
@@ -283,12 +283,12 @@ fun CardBack(modifier: Modifier = Modifier) {
         val inset = size.width * 0.09f
         val accentWidth = max(1f, size.width * 0.03f)
         drawRoundRect(
-            AeroTheme.accentCyan, Offset(inset, inset), Size(size.width - 2 * inset, size.height - 2 * inset),
+            AeroColors.Dark.accentCyan, Offset(inset, inset), Size(size.width - 2 * inset, size.height - 2 * inset),
             CornerRadius(size.width * 0.07f), style = Stroke(accentWidth),
         )
         val emblem = size.width * 0.36f
         drawCircle(navy, radius = emblem / 2, center = center)
-        drawCircle(AeroTheme.accentCyan, radius = emblem / 2, center = center, style = Stroke(accentWidth))
+        drawCircle(AeroColors.Dark.accentCyan, radius = emblem / 2, center = center, style = Stroke(accentWidth))
     }
 }
 

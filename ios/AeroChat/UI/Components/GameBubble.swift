@@ -109,7 +109,7 @@ struct GameBubble: View {
                         .font(AeroTheme.title(24))
                         .foregroundStyle(mark == state.myMark ? AeroTheme.accentCyan : AeroTheme.accentEmerald)
                         .frame(width: 52, height: 52)
-                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(AeroTheme.textPrimary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .buttonStyle(.hapticCompact)
                 .disabled(!canPlay || mark != .empty)
@@ -148,7 +148,7 @@ struct GameBubble: View {
                 grid { cell in
                     Rectangle()
                         .fill(hits.contains(cell) ? Color.red : shipCells.contains(cell) ? AeroTheme.accentEmerald.opacity(0.8)
-                              : board.shotsReceived.contains(cell) ? Color.white.opacity(0.25) : Color.white.opacity(0.06))
+                              : board.shotsReceived.contains(cell) ? AeroTheme.textPrimary.opacity(0.25) : AeroTheme.textPrimary.opacity(0.06))
                         .frame(width: 10, height: 10)
                 }
             }
@@ -169,8 +169,8 @@ struct GameBubble: View {
 
     private func colorForShot(_ outcome: Battleship.Outcome?) -> Color {
         switch outcome {
-        case .none: return Color.white.opacity(0.08)
-        case .miss: return Color.white.opacity(0.3)
+        case .none: return AeroTheme.textPrimary.opacity(0.08)
+        case .miss: return AeroTheme.textPrimary.opacity(0.3)
         case .hit: return .orange
         case .sunk: return .red
         }

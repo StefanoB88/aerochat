@@ -232,7 +232,7 @@ internal fun AvatarColorPicker(selected: String, onSelect: (String) -> Unit, cir
                     .size(circleSize.dp)
                     .clip(CircleShape)
                     .background(Color.fromHexString(hex) ?: AeroTheme.accentCyan)
-                    .let { if (selected == hex) it.border(3.dp, Color.White, CircleShape) else it }
+                    .let { if (selected == hex) it.border(3.dp, AeroTheme.textPrimary, CircleShape) else it }
                     .clickable(enabled = enabled) {
                         onSelect(hex)
                         Haptics.impact()

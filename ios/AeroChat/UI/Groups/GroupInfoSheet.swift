@@ -124,7 +124,6 @@ struct GroupInfoSheet: View {
             viewModel?.start()
         }
         .onDisappear { viewModel?.stop() }
-        .preferredColorScheme(.dark)
     }
 
     private func content(_ viewModel: GroupInfoViewModel) -> some View {

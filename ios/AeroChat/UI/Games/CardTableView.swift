@@ -493,7 +493,6 @@ struct CardScoreSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private func scopaGrid(score: ScopaGame.HandScore, totals: [Int]) -> some View {

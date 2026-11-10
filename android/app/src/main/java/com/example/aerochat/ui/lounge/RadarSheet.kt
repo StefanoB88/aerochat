@@ -261,7 +261,7 @@ private fun RadarCanvas(neighbors: List<Neighbor>, peers: Map<String, PeerRecord
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    Box(Modifier.border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape)) {
+                    Box(Modifier.border(1.dp, AeroTheme.onBackground.copy(alpha = 0.6f), CircleShape)) {
                         AvatarView(
                             imageData = peer?.avatarImage,
                             colorHex = peer?.avatarColorHex ?: RadarSheetDefaults.fallbackColor(neighbor.nodeID),

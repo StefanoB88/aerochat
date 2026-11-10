@@ -107,6 +107,5 @@ struct LoungeRulesSheet: View {
             }
             .sheet(isPresented: $showTerms) { LegalView(document: .terms) }
         }
-        .preferredColorScheme(.dark)
     }
 }

@@ -150,8 +150,8 @@ fun QRPairingSheet(
                             activeContentColor = AeroTheme.textPrimary,
                             inactiveContainerColor = AeroTheme.background,
                             inactiveContentColor = AeroTheme.textSecondary,
-                            activeBorderColor = Color.White.copy(alpha = 0.2f),
-                            inactiveBorderColor = Color.White.copy(alpha = 0.2f),
+                            activeBorderColor = AeroTheme.onBackground.copy(alpha = 0.2f),
+                            inactiveBorderColor = AeroTheme.onBackground.copy(alpha = 0.2f),
                         ),
                         icon = {},
                     ) {

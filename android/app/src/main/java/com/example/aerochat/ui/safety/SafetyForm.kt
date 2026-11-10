@@ -76,7 +76,7 @@ internal fun FormSection(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 internal fun FormDivider() {
-    HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(start = 52.dp))
+    HorizontalDivider(color = AeroTheme.onBackground.copy(alpha = 0.08f), modifier = Modifier.padding(start = 52.dp))
 }
 
 /** Riga toccabile con icona, titolo, valore facoltativo e chevron (`NavigationLink` / `Button`). */

@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import com.example.aerochat.ui.AeroTheme
 
 /**
  * Voce di [AeroDropdownMenu]. [dividerBefore] traccia un separatore tra questa voce e la precedente
@@ -179,7 +180,7 @@ fun BoxScope.AeroDropdownMenu(
                         if (divider) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(vertical = ContainerPadding),
-                                color = Color.White.copy(alpha = 0.1f),
+                                color = AeroTheme.onBackground.copy(alpha = 0.1f),
                             )
                         }
                         AeroMenuRow(item)

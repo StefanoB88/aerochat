@@ -58,7 +58,6 @@ struct FlightCardSheet: View {
             }
         }
         .task(id: period) { await reload() }
-        .preferredColorScheme(.dark)
     }
 
     private func reload() async {
@@ -146,6 +145,8 @@ struct FlightCardContent: View {
             }
             .padding(28)
         }
+        // Cartolina con grafica propria scura: stessa resa in app e nell'immagine condivisa, qualunque sia l'aspetto.
+        .environment(\.colorScheme, .dark)
     }
 
     private func heroNumber(value: Int, label: String) -> some View {

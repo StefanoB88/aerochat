@@ -161,7 +161,7 @@ fun EmergencySheet(onDismiss: () -> Unit) {
             SectionHeader(stringResource(R.string.lounge11_emergency_status))
             SectionCard {
                 statuses.forEachIndexed { index, candidate ->
-                    if (index > 0) HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                    if (index > 0) HorizontalDivider(color = AeroTheme.onBackground.copy(alpha = 0.08f))
                     Row(
                         Modifier
                             .fillMaxWidth()

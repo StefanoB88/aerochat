@@ -152,7 +152,7 @@ fun NewGroupSheet(onDismiss: () -> Unit) {
                         peers.forEachIndexed { index, peer ->
                             val id = peer.nodeID.toHex()
                             val isSelected = id in selected
-                            if (index > 0) HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(start = 16.dp))
+                            if (index > 0) HorizontalDivider(color = AeroTheme.onBackground.copy(alpha = 0.08f), modifier = Modifier.padding(start = 16.dp))
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()

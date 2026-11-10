@@ -56,6 +56,7 @@ import com.example.aerochat.R
 import com.example.aerochat.core.media.ImageProcessor
 import com.example.aerochat.core.media.MediaStore
 import com.example.aerochat.core.media.WebPEncoder
+import com.example.aerochat.ui.AeroForcedDark
 import com.example.aerochat.ui.AeroTheme
 import com.example.aerochat.ui.chat.InfoBanner
 import kotlinx.coroutines.Dispatchers
@@ -88,7 +89,8 @@ fun ImageViewer(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        ImageViewerContent(relativePath, store, onSave, onDismiss)
+        // Visore a tutto schermo: sempre scuro, indipendente dal tema di sistema.
+        AeroForcedDark { ImageViewerContent(relativePath, store, onSave, onDismiss) }
     }
 }
 

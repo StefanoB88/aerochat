@@ -101,6 +101,7 @@ fun TransferProgressRing(progress: Double, modifier: Modifier = Modifier, lineWi
             .size(size),
         contentAlignment = Alignment.Center,
     ) {
+        val progressColor = AeroTheme.accentCyan
         Canvas(Modifier.fillMaxSize()) {
             val stroke = lineWidth.toPx()
             val inset = stroke / 2f
@@ -111,7 +112,7 @@ fun TransferProgressRing(progress: Double, modifier: Modifier = Modifier, lineWi
                 topLeft = topLeft, size = arcSize, style = Stroke(width = stroke),
             )
             drawArc(
-                color = AeroTheme.accentCyan, startAngle = -90f, sweepAngle = 360f * animated, useCenter = false,
+                color = progressColor, startAngle = -90f, sweepAngle = 360f * animated, useCenter = false,
                 topLeft = topLeft, size = arcSize, style = Stroke(width = stroke, cap = StrokeCap.Round),
             )
         }

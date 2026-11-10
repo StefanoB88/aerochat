@@ -65,7 +65,6 @@ struct QRPairingSheet: View {
             mode = initialMode
             await loadPayload()
         }
-        .preferredColorScheme(.dark)
     }
 
     private var showSection: some View {
@@ -202,6 +201,5 @@ struct StoreQRSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }

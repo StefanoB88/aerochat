@@ -81,7 +81,6 @@ struct LegalView: View {
                     ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
                 }
         }
-        .preferredColorScheme(.dark)
     }
 }
 

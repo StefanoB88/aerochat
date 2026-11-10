@@ -67,7 +67,6 @@ struct RadarSheet: View {
             }
         }
         .onDisappear { task?.cancel(); task = nil }
-        .preferredColorScheme(.dark)
     }
 
     /// Distanza stimata dall'RSSI (Bluetooth in cabina: molto approssimativa, ma utile a orientarsi).
@@ -118,7 +117,7 @@ private struct RadarCanvas: View {
                     let peer = peers[neighbor.nodeID]
                     VStack(spacing: 2) {
                         AvatarView(imageData: peer?.avatarImage, colorHex: peer?.avatarColorHex ?? RadarSheet.fallbackColor(neighbor.nodeID), size: 34)
-                            .overlay(Circle().stroke(.white.opacity(0.6), lineWidth: 1))
+                            .overlay(Circle().stroke(AeroTheme.textPrimary.opacity(0.6), lineWidth: 1))
                         Text(peer?.nickname ?? String(localized: "Passeggero"))
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(AeroTheme.textPrimary)

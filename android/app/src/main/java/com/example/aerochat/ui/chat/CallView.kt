@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.aerochat.R
 import com.example.aerochat.app.LocalAppEnvironment
 import com.example.aerochat.core.calls.CallService
+import com.example.aerochat.ui.AeroForcedDark
 import com.example.aerochat.ui.AeroTheme
 import com.example.aerochat.ui.components.AvatarView
 import com.example.aerochat.ui.components.HapticButton
@@ -70,7 +71,8 @@ import kotlinx.coroutines.delay
  * muto, vivavoce, indicatore di segnale debole e riepilogo finale.
  */
 @Composable
-fun CallView() {
+fun CallView() = AeroForcedDark {
+    // Schermata di chiamata: design scuro a tutto schermo, indipendente dal tema di sistema.
     val environment = LocalAppEnvironment.current
     val calls by environment.calls.collectAsStateWithLifecycle()
     Box(
@@ -258,6 +260,7 @@ private fun PulsingRing(modifier: Modifier = Modifier) {
         label = "ringProgress",
     )
     // Scala letta in fase di layer (graphicsLayer), non in composizione: niente ricomposizione a ogni frame.
+    val ringColor = AeroTheme.accentCyan
     Canvas(
         modifier
             .graphicsLayer {
@@ -269,7 +272,7 @@ private fun PulsingRing(modifier: Modifier = Modifier) {
     ) {
         val stroke = 4.dp.toPx()
         drawCircle(
-            color = AeroTheme.accentCyan.copy(alpha = 0.7f * (1f - progress)),
+            color = ringColor.copy(alpha = 0.7f * (1f - progress)),
             radius = size.minDimension / 2f - stroke / 2f,
             style = Stroke(width = stroke),
         )

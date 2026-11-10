@@ -94,7 +94,6 @@ struct PaywallView: View {
             }
         }
         .sheet(item: $legalDocument) { LegalView(document: $0) }
-        .preferredColorScheme(.dark)
     }
 
     private var header: some View {

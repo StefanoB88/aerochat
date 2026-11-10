@@ -235,6 +235,9 @@ struct MessageRevisionTests {
         #expect(await eventually { try await bob.database.messages.fetch(msgID: sent.msgID)?.text == "Versione finale" })
         #expect(try await bob.database.messages.fetch(msgID: sent.msgID)?.editedAtMs != nil)
 
+        // La notifica del primo messaggio e' asincrona: va attesa prima di contare.
+        #expect(await eventually { bob.notifier.notified.count >= 1 })
+
         // DELETE prima dell'originale: il messaggio arriva gia' cancellato e non viene notificato.
         let notifiedBefore = bob.notifier.notified.count
         await bob.transport.holdIncoming()

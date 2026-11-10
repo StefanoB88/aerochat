@@ -60,7 +60,6 @@ struct ScoponePlayerPicker: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private func role(for index: Int) -> String {

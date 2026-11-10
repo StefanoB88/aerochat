@@ -77,6 +77,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.aerochat.R
 import com.example.aerochat.app.LocalAppEnvironment
 import com.example.aerochat.core.flight.FlightStats
+import com.example.aerochat.ui.AeroColors
 import com.example.aerochat.ui.AeroTheme
 import com.example.aerochat.ui.components.AeroSheet
 import com.example.aerochat.ui.components.Haptics
@@ -251,7 +252,7 @@ private fun shareCard(context: Context, file: File, title: String) {
 private fun rounded(size: Float, weight: FontWeight, color: Color = Color.White): TextStyle =
     TextStyle(fontSize = size.sp, fontWeight = weight, color = color)
 
-/** Grafica della cartolina (360x640 dp; resa a densita' 3 = 1080x1920 px). */
+/** Grafica della cartolina (sempre scura: e' un'immagine condivisibile, indipendente dal tema) (360x640 dp; resa a densita' 3 = 1080x1920 px). */
 @Composable
 private fun FlightCardContent(stats: FlightStats, nickname: String, modifier: Modifier = Modifier) {
     Box(
@@ -262,12 +263,12 @@ private fun FlightCardContent(stats: FlightStats, nickname: String, modifier: Mo
         // Cerchi del radar, centrati 140 dp sopra il centro della cartolina.
         Canvas(Modifier.fillMaxSize()) {
             val center = Offset(size.width / 2, size.height / 2 - 140.dp.toPx())
-            drawCircle(AeroTheme.accentCyan.copy(alpha = 0.12f), radius = 260.dp.toPx(), center = center, style = Stroke(1.dp.toPx()))
-            drawCircle(AeroTheme.accentCyan.copy(alpha = 0.08f), radius = 380.dp.toPx(), center = center, style = Stroke(1.dp.toPx()))
+            drawCircle(AeroColors.Dark.accentCyan.copy(alpha = 0.12f), radius = 260.dp.toPx(), center = center, style = Stroke(1.dp.toPx()))
+            drawCircle(AeroColors.Dark.accentCyan.copy(alpha = 0.08f), radius = 380.dp.toPx(), center = center, style = Stroke(1.dp.toPx()))
         }
         Column(Modifier.fillMaxSize().padding(28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Flight, contentDescription = null, tint = AeroTheme.accentCyan, modifier = Modifier.size(30.dp))
+                Icon(Icons.Filled.Flight, contentDescription = null, tint = AeroColors.Dark.accentCyan, modifier = Modifier.size(30.dp))
                 Spacer(Modifier.size(8.dp))
                 Text("AeroChat", style = rounded(26f, FontWeight.Bold))
                 Spacer(Modifier.weight(1f))
@@ -275,7 +276,7 @@ private fun FlightCardContent(stats: FlightStats, nickname: String, modifier: Mo
                     stringResource(stats.period.titleRes).uppercase(),
                     style = rounded(11f, FontWeight.Bold, Color.Black),
                     modifier = Modifier
-                        .background(AeroTheme.accentCyan, CircleShape)
+                        .background(AeroColors.Dark.accentCyan, CircleShape)
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                 )
             }
@@ -287,14 +288,14 @@ private fun FlightCardContent(stats: FlightStats, nickname: String, modifier: Mo
                 overflow = TextOverflow.Ellipsis,
             )
             stats.flightTitles.firstOrNull()?.let { flight ->
-                Text(flight, style = rounded(15f, FontWeight.SemiBold, AeroTheme.accentCyan), modifier = Modifier.padding(top = 4.dp))
+                Text(flight, style = rounded(15f, FontWeight.SemiBold, AeroColors.Dark.accentCyan), modifier = Modifier.padding(top = 4.dp))
             }
             Spacer(Modifier.height(30.dp))
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 val hero = "${stats.totalMessages}"
                 Text(
                     hero,
-                    style = rounded(if (hero.length > 5) 64f else 92f, FontWeight.Black, AeroTheme.accentCyan)
+                    style = rounded(if (hero.length > 5) 64f else 92f, FontWeight.Black, AeroColors.Dark.accentCyan)
                         .copy(lineHeight = (if (hero.length > 5) 68f else 96f).sp),
                     maxLines = 1,
                 )
@@ -324,7 +325,7 @@ private fun FlightCardContent(stats: FlightStats, nickname: String, modifier: Mo
                 }
                 Text(
                     "aeromesh.app",
-                    style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, color = AeroTheme.accentCyan),
+                    style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, color = AeroColors.Dark.accentCyan),
                 )
             }
         }
@@ -339,7 +340,7 @@ private fun StatTile(icon: ImageVector, value: Int, label: String, modifier: Mod
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = AeroTheme.accentEmerald, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, tint = AeroColors.Dark.accentEmerald, modifier = Modifier.size(18.dp))
         Text("$value", style = rounded(30f, FontWeight.Bold).copy(lineHeight = 32.sp), maxLines = 1)
         Text(
             label,

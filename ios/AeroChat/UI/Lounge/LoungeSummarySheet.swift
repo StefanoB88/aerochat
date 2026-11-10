@@ -95,6 +95,5 @@ struct LoungeSummarySheet: View {
                 errorMessage = String(localized: "Riassunto non disponibile: \(error.localizedDescription)")
             }
         }
-        .preferredColorScheme(.dark)
     }
 }

@@ -75,6 +75,8 @@ struct ImageViewer: View {
         .animation(.easeInOut, value: feedback?.text)
         .presentationBackground(.clear)
         .statusBarHidden()
+        // Visore foto sempre scuro (fondo nero, controlli bianchi), anche con l'aspetto chiaro.
+        .environment(\.colorScheme, .dark)
         .task(id: relativePath) { await loadFullImage() }
     }
 

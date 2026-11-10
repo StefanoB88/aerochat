@@ -71,7 +71,6 @@ struct NewGroupSheet: View {
         .task {
             peers = (try? await environment.database?.peers.trustedPeers()) ?? []
         }
-        .preferredColorScheme(.dark)
     }
 
     private func create() async {

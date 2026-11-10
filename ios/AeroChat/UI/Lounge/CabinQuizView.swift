@@ -49,7 +49,6 @@ struct CabinQuizSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private var lobby: some View {
@@ -149,7 +148,7 @@ struct CabinQuizSheet: View {
                         Text(Self.letter(index))
                             .font(.headline.weight(.bold))
                             .frame(width: 28, height: 28)
-                            .background(Circle().fill(.white.opacity(0.1)))
+                            .background(Circle().fill(AeroTheme.textPrimary.opacity(0.1)))
                         Text(option)
                             .font(.body.weight(.medium))
                             .multilineTextAlignment(.leading)
@@ -267,7 +266,7 @@ private struct CountdownRing: View {
         TimelineView(.periodic(from: .now, by: 0.5)) { context in
             let remaining = max(0, deadline.timeIntervalSince(context.date))
             ZStack {
-                Circle().stroke(.white.opacity(0.15), lineWidth: 5)
+                Circle().stroke(AeroTheme.textPrimary.opacity(0.15), lineWidth: 5)
                 Circle()
                     .trim(from: 0, to: min(1, remaining / duration))
                     .stroke(remaining < 5 ? Color.red : AeroTheme.accentCyan, style: StrokeStyle(lineWidth: 5, lineCap: .round))

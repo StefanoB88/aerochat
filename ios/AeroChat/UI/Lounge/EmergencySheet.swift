@@ -97,7 +97,6 @@ struct EmergencySheet: View {
                 if enabled { locator.request() }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private func send() async {

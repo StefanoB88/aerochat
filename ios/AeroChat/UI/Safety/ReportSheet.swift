@@ -101,7 +101,6 @@ struct ReportSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private func submit() async {

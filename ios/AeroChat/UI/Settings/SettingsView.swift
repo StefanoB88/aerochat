@@ -48,7 +48,6 @@ struct SettingsView: View {
                 Task { await environment.setDemoMode(enabled) }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private var profileSection: some View {

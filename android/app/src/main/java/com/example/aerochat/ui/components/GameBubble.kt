@@ -147,6 +147,7 @@ private fun statusText(state: GameSessionState): String = when (state.status) {
     }
 }
 
+@Composable
 private fun statusColor(state: GameSessionState): Color = when (state.outcome) {
     GameOutcome.iWon -> AeroTheme.accentEmerald
     GameOutcome.iLost -> Color.Red
@@ -184,7 +185,7 @@ private fun TicTacToeBoard(state: GameSessionState, onAction: (GameBubbleAction)
                         Box(
                             Modifier
                                 .size(52.dp)
-                                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(10.dp)),
+                                .background(AeroTheme.onBackground.copy(alpha = 0.06f), RoundedCornerShape(10.dp)),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
@@ -235,8 +236,8 @@ private fun BattleshipBoards(state: GameSessionState, onAction: (GameBubbleActio
                 val color = when {
                     cell in hits -> Color.Red
                     cell in shipCells -> AeroTheme.accentEmerald.copy(alpha = 0.8f)
-                    cell in received -> Color.White.copy(alpha = 0.25f)
-                    else -> Color.White.copy(alpha = 0.06f)
+                    cell in received -> AeroTheme.onBackground.copy(alpha = 0.25f)
+                    else -> AeroTheme.onBackground.copy(alpha = 0.06f)
                 }
                 Box(Modifier.size(10.dp).background(color))
             }
@@ -281,9 +282,10 @@ private fun BattleshipGrid(cellSize: Dp, cell: @Composable (Int) -> Unit) {
     }
 }
 
+@Composable
 private fun colorForShot(outcome: Battleship.Outcome?): Color = when (outcome) {
-    null -> Color.White.copy(alpha = 0.08f)
-    Battleship.Outcome.miss -> Color.White.copy(alpha = 0.3f)
+    null -> AeroTheme.onBackground.copy(alpha = 0.08f)
+    Battleship.Outcome.miss -> AeroTheme.onBackground.copy(alpha = 0.3f)
     Battleship.Outcome.hit -> Color(0xFFFF9500)
     Battleship.Outcome.sunk -> Color.Red
 }

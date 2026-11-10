@@ -271,7 +271,7 @@ private fun QuestionCard(state: QuizService.State, onAnswer: (Int) -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Box(
-                        Modifier.size(28.dp).background(Color.White.copy(alpha = 0.1f), CircleShape),
+                        Modifier.size(28.dp).background(AeroTheme.onBackground.copy(alpha = 0.1f), CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(letter(index), style = AeroTheme.headline, fontWeight = FontWeight.Bold, color = AeroTheme.textPrimary)
@@ -301,6 +301,7 @@ private fun QuestionCard(state: QuizService.State, onAnswer: (Int) -> Unit) {
     }
 }
 
+@Composable
 private fun optionBackground(index: Int, state: QuizService.State): Color = when {
     state.correctIndex == index -> AeroTheme.accentEmerald.copy(alpha = 0.25f)
     state.myAnswer == index -> AeroTheme.accentCyan.copy(alpha = 0.2f)
@@ -396,11 +397,12 @@ private fun CountdownRing(deadlineMs: Long, durationMs: Long) {
     val color = if (remainingMs < 5_000) Color.Red else AeroTheme.accentCyan
     val label = pluralStringResource(R.plurals.lounge11_quiz_seconds_left, (remainingMs / 1000).toInt(), (remainingMs / 1000).toInt())
     Box(Modifier.size(52.dp).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        val trackColor = AeroTheme.onBackground.copy(alpha = 0.15f)
         Canvas(Modifier.fillMaxSize()) {
             val stroke = 5.dp.toPx()
             val inset = stroke / 2
             val arcSize = Size(size.width - stroke, size.height - stroke)
-            drawArc(Color.White.copy(alpha = 0.15f), 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
+            drawArc(trackColor, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
             drawArc(color, -90f, 360f * fraction, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
         }
         Text("$seconds", style = AeroTheme.headline.copy(fontFamily = FontFamily.Monospace, fontSize = 17.sp), color = AeroTheme.textPrimary)

@@ -69,7 +69,6 @@ struct BoardingPassSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Chiudi") { dismiss() }.toolbarLabel() }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private var scanSection: some View {
