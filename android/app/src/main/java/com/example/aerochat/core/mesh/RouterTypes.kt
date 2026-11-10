@@ -1,5 +1,6 @@
 package com.example.aerochat.core.mesh
 
+import com.example.aerochat.core.emergency.EmergencyAlert
 import com.example.aerochat.core.protocol.toHex
 import com.example.aerochat.core.transport.RadioState
 import com.example.aerochat.data.records.ConversationRecord
@@ -157,6 +158,9 @@ sealed class RouterError(message: String) : Exception(message) {
 /** Consegna notifiche locali a schermo spento. Implementato con `NotificationManagerCompat`. */
 interface MeshNotifier {
     suspend fun notify(message: MessageRecord, conversation: ConversationRecord)
+
+    /** Avviso di emergenza: notifica prioritaria, mostrata anche con la Cabina aperta (default: nessuna). */
+    suspend fun notifyEmergency(alert: EmergencyAlert) {}
 }
 
 class NoopNotifier : MeshNotifier {
@@ -166,12 +170,13 @@ class NoopNotifier : MeshNotifier {
 /** Pacchetti testuali/di controllo che possono attendere in `relay_queue` (Delay-Tolerant Networking). */
 val PacketType.isStoreAndForwardEligible: Boolean
     get() = when (this) {
+        // L'emergenza deve arrivare anche a chi passa di li' piu' tardi.
         PacketType.CHAT_TEXT, PacketType.DELIVERY_ACK, PacketType.READ_RECEIPT, PacketType.GROUP_KEY_GOSSIP,
-        PacketType.PRO_PASS_GRANT, PacketType.GAME_MOVE -> true
+        PacketType.PRO_PASS_GRANT, PacketType.GAME_MOVE, PacketType.EMERGENCY -> true
         // Il profilo viene ripetuto a ogni nuovo link: non serve tenerlo in coda.
-        // Le chiamate hanno senso solo in tempo reale: niente coda.
+        // Le chiamate e il quiz hanno senso solo in tempo reale: niente coda.
         PacketType.PUBLIC_LOUNGE, PacketType.MEDIA_HEADER, PacketType.MEDIA_CHUNK, PacketType.PROFILE_UPDATE,
-        PacketType.CALL_SIGNAL, PacketType.CALL_AUDIO, PacketType.UNRECOGNIZED -> false
+        PacketType.CALL_SIGNAL, PacketType.CALL_AUDIO, PacketType.QUIZ, PacketType.UNRECOGNIZED -> false
     }
 
 val PacketType.isMedia: Boolean

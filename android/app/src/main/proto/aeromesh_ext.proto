@@ -32,7 +32,7 @@ message ProPassGrant {
   bytes group_uuid = 1;
   int64 valid_until_ms = 2;
   bytes issuer_ed25519_pub = 3;
-  string product_id = 4;            // com.aeromesh.pass72h | com.aeromesh.lifetime
+  string product_id = 4;            // com.aeromesh.pass24h | com.aeromesh.pass72h | com.aeromesh.lifetime
   bytes signature = 5;              // 64 byte
 }
 
@@ -107,4 +107,52 @@ message CallAudio {
   string call_id = 1;
   uint32 sequence = 2;      // progressivo per pacchetto, parte da 1; i pacchetti fuori ordine/vecchi si scartano
   repeated bytes frames = 3;
+}
+
+// Quiz di cabina (QUIZ, multicast sulla Lounge con la sua chiave pubblica, mai in coda). Il conduttore
+// (host) e' l'unica autorita': pubblica le domande, riceve le risposte, calcola e pubblica i punteggi.
+enum QuizAction {
+  QUIZ_ACTION_UNSPECIFIED = 0;
+  QUESTION = 1;  // host -> tutti: domanda, opzioni e scadenza
+  ANSWER = 2;    // giocatore -> tutti (l'host conta): indice scelto
+  REVEAL = 3;    // host -> tutti: risposta giusta e classifica
+  END = 4;       // host -> tutti: classifica finale
+}
+
+message QuizScore {
+  bytes node_id = 1;   // 8 byte
+  string nickname = 2;
+  uint32 points = 3;
+}
+
+message QuizPacket {
+  string quiz_id = 1;            // hex del msg_id del primo pacchetto dell'host
+  QuizAction action = 2;
+  uint32 round = 3;              // 1-based
+  uint32 total_rounds = 4;
+  string question = 5;           // QUESTION: nella lingua dell'host
+  repeated string options = 6;   // QUESTION: 2..4 opzioni
+  uint32 correct_index = 7;      // REVEAL
+  uint32 answer_index = 8;       // ANSWER
+  repeated QuizScore scores = 9; // REVEAL / END: classifica (max 32)
+  bytes host_node_id = 10;       // 8 byte: solo i pacchetti dell'host guidano il quiz
+  int64 deadline_ms = 11;        // QUESTION: dopo questo istante le risposte non contano
+}
+
+// Avviso di emergenza (EMERGENCY): multicast sulla Lounge, ttl massimo, resta in coda store-and-forward.
+// Il destinatario lo mostra come banner prioritario e notifica "time sensitive".
+enum EmergencyStatus {
+  EMERGENCY_STATUS_UNSPECIFIED = 0;
+  OK = 1;          // "Sto bene"
+  NEED_HELP = 2;   // "Ho bisogno di aiuto"
+  ALL_CLEAR = 3;   // cessato allarme / informazione
+}
+
+message EmergencyBroadcast {
+  EmergencyStatus status = 1;
+  string text = 2;            // max 280 caratteri
+  double latitude = 3;        // solo se has_location
+  double longitude = 4;
+  bool has_location = 5;
+  int64 issued_at_ms = 6;
 }

@@ -101,7 +101,11 @@ object MeshProtocol {
     /** `sender_node_id` per relay anonimo: 8 byte a zero. Restituisce sempre una copia nuova. */
     val anonymousSenderID: ByteArray get() = ByteArray(nodeIDLength)
 
+    /** Durata del Pass Volo Singolo (ms). */
+    const val singleFlightPassDuration: Long = 24 * 3_600_000L
+
     object ProductID {
+        const val pass24h = "com.aeromesh.pass24h"
         const val pass72h = "com.aeromesh.pass72h"
         const val lifetime = "com.aeromesh.lifetime"
     }

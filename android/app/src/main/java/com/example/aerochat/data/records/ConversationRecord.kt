@@ -7,6 +7,7 @@ import androidx.room.Ignore
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.example.aerochat.core.crypto.CryptoEngine
+import com.example.aerochat.core.flight.BoardingPass
 import com.example.aerochat.core.protocol.MeshProtocol
 import com.example.aerochat.core.protocol.toHex
 import com.example.aerochat.data.AppDatabase
@@ -65,7 +66,13 @@ data class ConversationRecord(
     /** Chat fissata in cima alla lista. */
     @ColumnInfo(name = "is_pinned", defaultValue = "0")
     val isPinned: Boolean = false,
+    /** Cabina del volo (gruppo derivato dalla carta d'imbarco): codice canonico `AZ|204|2026-11-10`. */
+    @ColumnInfo(name = "flight_code")
+    val flightCode: String? = null,
 ) {
+
+    /** Gruppo pubblico del volo: testo gratis per tutti, scade dopo il volo. */
+    val isFlightLounge: Boolean get() = flightCode != null
 
     /** UUID del gruppo (solo per `type == group`). */
     val groupID: UUID?
@@ -94,7 +101,8 @@ data class ConversationRecord(
             expiresAtMs == other.expiresAtMs &&
             lastMessageAtMs == other.lastMessageAtMs &&
             unreadCount == other.unreadCount &&
-            isPinned == other.isPinned
+            isPinned == other.isPinned &&
+            flightCode == other.flightCode
     }
 
     override fun hashCode(): Int {
@@ -110,6 +118,7 @@ data class ConversationRecord(
         result = 31 * result + (lastMessageAtMs?.hashCode() ?: 0)
         result = 31 * result + unreadCount
         result = 31 * result + isPinned.hashCode()
+        result = 31 * result + (flightCode?.hashCode() ?: 0)
         return result
     }
 
@@ -153,6 +162,14 @@ data class ConversationRecord(
                 lastMessageAtMs = null,
                 unreadCount = 0,
             )
+
+        /**
+         * Cabina del volo: un gruppo con id, chiave e titolo derivati dalla carta d'imbarco, uguali per
+         * tutti i passeggeri dello stesso volo. Scade 36 ore dopo il giorno di partenza. `createdAt` in epoch ms.
+         */
+        fun flightLounge(pass: BoardingPass, createdAt: Long = System.currentTimeMillis()): ConversationRecord =
+            group(id = pass.loungeGroupID, title = pass.loungeTitle, secretKey = pass.loungeSecretKey, createdAt = createdAt)
+                .copy(flightCode = pass.canonicalKey, expiresAtMs = pass.loungeExpiry)
 
         /** Cabina Pubblica: `recipient_id` tutto a zero, scade dopo 12 ore. `createdAt` in epoch ms. */
         fun cabinLounge(createdAt: Long = System.currentTimeMillis()): ConversationRecord =

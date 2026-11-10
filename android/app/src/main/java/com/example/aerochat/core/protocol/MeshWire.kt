@@ -5,6 +5,7 @@ import com.example.aerochat.core.crypto.IdentityKeys
 import com.example.aerochat.data.records.PeerRecord
 import com.example.aerochat.proto.CallAudio
 import com.example.aerochat.proto.CallSignal
+import com.example.aerochat.proto.EmergencyBroadcast
 import com.example.aerochat.proto.GameMove
 import com.example.aerochat.proto.GroupKeyGossip
 import com.example.aerochat.proto.GroupMember
@@ -12,6 +13,7 @@ import com.example.aerochat.proto.InnerPayload
 import com.example.aerochat.proto.MeshEnvelope
 import com.example.aerochat.proto.ProPassGrant
 import com.example.aerochat.proto.ProfileUpdate
+import com.example.aerochat.proto.QuizPacket
 import com.google.protobuf.ByteString
 import com.google.protobuf.InvalidProtocolBufferException
 
@@ -29,6 +31,14 @@ object MeshWire {
     fun serialize(profile: ProfileUpdate): ByteArray = profile.toByteArray()
     fun serialize(signal: CallSignal): ByteArray = signal.toByteArray()
     fun serialize(audio: CallAudio): ByteArray = audio.toByteArray()
+    fun serialize(quiz: QuizPacket): ByteArray = quiz.toByteArray()
+    fun serialize(emergency: EmergencyBroadcast): ByteArray = emergency.toByteArray()
+
+    @Throws(InvalidProtocolBufferException::class)
+    fun parseQuizPacket(data: ByteArray): QuizPacket = QuizPacket.parseFrom(data)
+
+    @Throws(InvalidProtocolBufferException::class)
+    fun parseEmergencyBroadcast(data: ByteArray): EmergencyBroadcast = EmergencyBroadcast.parseFrom(data)
 
     @Throws(InvalidProtocolBufferException::class)
     fun parseCallSignal(data: ByteArray): CallSignal = CallSignal.parseFrom(data)

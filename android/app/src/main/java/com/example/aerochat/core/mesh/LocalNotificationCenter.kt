@@ -20,6 +20,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.example.aerochat.MainActivity
+import com.example.aerochat.R
+import com.example.aerochat.core.emergency.EmergencyAlert
 import com.example.aerochat.core.protocol.toHex
 import com.example.aerochat.data.records.ConversationRecord
 import com.example.aerochat.data.records.ConversationType
@@ -152,6 +154,45 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
         }
     }
 
+    /**
+     * Avviso di emergenza: canale ad alta priorita' dedicato (equivalente della notifica *time sensitive*),
+     * pubblicato anche con l'app aperta sulla Cabina.
+     */
+    override suspend fun notifyEmergency(alert: EmergencyAlert) {
+        try {
+            createChannels()
+            if (!canPostNotifications()) return
+            val msgHex = alert.msgID.toHex()
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(extraConversationID, ConversationRecord.cabinLoungeID)
+                putExtra(extraMsgID, msgHex)
+                putExtra(extraEmergency, true)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context, msgHex.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val body = alert.text.ifEmpty { context.getString(R.string.core11_emergency_body_default) }
+            val builder = NotificationCompat.Builder(context, emergencyChannelID)
+                .setSmallIcon(android.R.drawable.stat_sys_warning)
+                .setContentTitle("${alert.emoji} ${alert.statusTitle(context)}")
+                .setSubText(alert.senderNickname)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setAutoCancel(true)
+                .setGroup("emergency") // threadIdentifier
+                .setContentIntent(pendingIntent)
+            NotificationManagerCompat.from(context).notify("emergency-$msgHex", notificationID, builder.build())
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("AeroMesh.Notify", "avviso di emergenza non pubblicato: $e")
+        }
+    }
+
     private fun canPostNotifications(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -165,6 +206,16 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
             enableVibration(true)
         }
         NotificationManagerCompat.from(context).createNotificationChannel(channel)
+        val emergency = NotificationChannel(
+            emergencyChannelID, context.getString(R.string.core11_emergency_channel_name), NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            enableVibration(true)
+            enableLights(true)
+            // Ignorato dal sistema senza l'accesso "Non disturbare"; se concesso, l'avviso passa comunque.
+            setBypassDnd(true)
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+        }
+        NotificationManagerCompat.from(context).createNotificationChannel(emergency)
     }
 
     companion object {
@@ -177,6 +228,10 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
         const val extraConversationID = "conversationID"
         /** Extra dell'Intent di apertura: `msg_id` esadecimale. */
         const val extraMsgID = "msgID"
+        /** Extra dell'Intent di apertura: `true` se la notifica e' un avviso di emergenza. */
+        const val extraEmergency = "emergency"
+        /** Canale degli avvisi di emergenza (priorita' massima). */
+        const val emergencyChannelID = "emergency"
 
         /** Id numerico comune: le notifiche si distinguono per tag (`msg_id` hex), come l'identifier iOS. */
         private const val notificationID = 1

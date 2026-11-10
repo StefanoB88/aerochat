@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.1 (fondamenta): emergenze, compagno demo, segnalazioni, statistiche di volo. Dal catalogo iOS. -->
+<resources>
+    <string name="core11_emergency_ok">Jeg har det bra</string>
+    <string name="core11_emergency_need_help">Jeg trenger hjelp</string>
+    <string name="core11_emergency_all_clear">Faren over / informasjon</string>
+    <string name="core11_emergency_generic">Varsel</string>
+    <string name="core11_emergency_body_default">Varsel fra en passasjer i nærheten.</string>
+    <string name="core11_emergency_channel_name">Nødvarsel</string>
+    <string name="core11_demo_nickname">Demomannskap</string>
+    <string name="core11_demo_reply_1">Hei! Jeg er den simulerte reisekameraten: jeg svarer fra den samme enheten, uten Bluetooth. 👋</string>
+    <string name="core11_demo_reply_2">Med en telefon til ville meldingene gått via BLE-mesh, ende-til-ende-kryptert.</string>
+    <string name="core11_demo_reply_3">Prøv å holde inne en av meldingene mine: du kan rapportere den eller blokkere meg.</string>
+    <string name="core11_demo_reply_4">I Kabin-fanen finner du den offentlige oppslagstavlen på 12 timer, med reglene du må godta.</string>
+    <string name="core11_demo_reply_5">Bilder du mottar fra personer du ikke har skannet personlig, forblir uskarpe til du trykker på dem.</string>
+    <string name="core11_demo_reply_6">God tur! ✈️ Du kan slå meg av når som helst i Innstillinger › Om.</string>
+    <string name="core11_demo_lounge_1">Er det noen som vet om trallen kommer før eller etter avgang? 🍫</string>
+    <string name="core11_demo_lounge_2">Rad 12 her: det er en helt vill solnedgang utenfor vinduet.</string>
+    <string name="core11_report_spam">Spam eller reklame</string>
+    <string name="core11_report_harassment">Trakassering eller mobbing</string>
+    <string name="core11_report_hate_speech">Hat eller diskriminering</string>
+    <string name="core11_report_sexual_content">Seksuelt innhold</string>
+    <string name="core11_report_violence">Vold eller trusler</string>
+    <string name="core11_report_other">Annet</string>
+    <string name="core11_report_email_title">AeroChat-rapport</string>
+    <string name="core11_report_email_reason">Årsak: %1$s</string>
+    <string name="core11_report_email_user">Rapportert bruker: %1$s (%2$s)</string>
+    <string name="core11_report_email_message">Melding: %1$s</string>
+    <string name="core11_report_email_date">Dato: %1$s</string>
+    <string name="core11_report_email_details">Detaljer: %1$s</string>
+    <string name="core11_report_email_text">Tekst: %1$s</string>
+    <string name="core11_stats_day">Siste 24 timer</string>
+    <string name="core11_stats_trip">Siste 3 dager</string>
+    <string name="core11_stats_all">Fra starten</string>
+</resources>

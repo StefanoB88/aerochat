@@ -5,15 +5,46 @@ import androidx.room.Entity
 import androidx.room.Ignore
 import androidx.room.PrimaryKey
 import com.example.aerochat.core.crypto.IdentityKeys
+import com.example.aerochat.core.protocol.MeshProtocol
 
 /** Livello Pro cache-ato localmente (verificato offline tramite ricevuta dello store). */
 enum class ProTier(val rawValue: String) {
     free("free"),
+    /** Pass Volo Singolo (24 ore). */
+    pass24h("pass_24h"),
     pass72h("pass_72h"),
     lifetime("lifetime");
 
+    /** Pass a tempo (scade), a differenza del lifetime. */
+    val isTimeLimited: Boolean get() = this == pass24h || this == pass72h
+
+    /** Durata del pass a tempo in ms (`null` per free e lifetime). */
+    val passDuration: Long?
+        get() = when (this) {
+            pass24h -> MeshProtocol.singleFlightPassDuration
+            pass72h -> MeshProtocol.proPassDuration
+            free, lifetime -> null
+        }
+
+    /** Prodotto dello store corrispondente (`null` per free). */
+    val productID: String?
+        get() = when (this) {
+            pass24h -> MeshProtocol.ProductID.pass24h
+            pass72h -> MeshProtocol.ProductID.pass72h
+            lifetime -> MeshProtocol.ProductID.lifetime
+            free -> null
+        }
+
     companion object {
         fun fromRawValue(rawValue: String): ProTier? = entries.firstOrNull { it.rawValue == rawValue }
+
+        /** Swift `ProTier(productID:)`. */
+        fun fromProductID(productID: String): ProTier? = when (productID) {
+            MeshProtocol.ProductID.pass24h -> pass24h
+            MeshProtocol.ProductID.pass72h -> pass72h
+            MeshProtocol.ProductID.lifetime -> lifetime
+            else -> null
+        }
     }
 }
 
@@ -77,7 +108,7 @@ data class IdentityRecord(
     /** `true` se l'utente e' Pro in questo istante (lifetime o pass non scaduto). `now` in epoch ms. */
     fun isPro(now: Long = System.currentTimeMillis()): Boolean = when (proTier) {
         ProTier.lifetime -> true
-        ProTier.pass72h -> (proValidUntilMs ?: 0L) > now
+        ProTier.pass24h, ProTier.pass72h -> (proValidUntilMs ?: 0L) > now
         ProTier.free -> false
     }
 

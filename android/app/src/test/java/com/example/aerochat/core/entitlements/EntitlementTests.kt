@@ -1,5 +1,6 @@
 package com.example.aerochat.core.entitlements
 
+import com.example.aerochat.core.protocol.MeshProtocol
 import android.app.Activity
 import com.android.billingclient.api.BillingClient
 import com.example.aerochat.core.crypto.CryptoEngine
@@ -55,8 +56,8 @@ import org.robolectric.annotation.Config
 class FakeBillingGateway : BillingGateway {
     var available = true
     var products = listOf(
-        StoreProduct(EntitlementManager.productIDs[1], "Lifetime", "Pro per sempre", "€ 14,99", 14_990_000, "EUR"),
-        StoreProduct(EntitlementManager.productIDs[0], "Pass 72h", "Pro per 72 ore", "€ 2,99", 2_990_000, "EUR"),
+        StoreProduct(MeshProtocol.ProductID.lifetime, "Lifetime", "Pro per sempre", "€ 14,99", 14_990_000, "EUR"),
+        StoreProduct(MeshProtocol.ProductID.pass72h, "Pass 72h", "Pro per 72 ore", "€ 2,99", 2_990_000, "EUR"),
     )
     val owned = mutableListOf<BillingPurchase>()
     var nextOutcome: ((String) -> BillingPurchaseOutcome)? = null
@@ -186,7 +187,7 @@ class EntitlementTests : MeshTestCase() {
         val purchase = System.currentTimeMillis() - 3_600_000
         fun payload() = JSONObject()
             .put("transactionId", "2000000123").put("originalTransactionId", "2000000123")
-            .put("productId", EntitlementManager.productIDs[0]).put("bundleId", "com.aeromesh.app")
+            .put("productId", MeshProtocol.ProductID.pass72h).put("bundleId", "com.aeromesh.app")
             .put("purchaseDate", purchase).put("type", "Consumable").put("environment", "Production")
         val jws = makeJWS(payload(), signer)
         val verified = verifier.verify(jws)

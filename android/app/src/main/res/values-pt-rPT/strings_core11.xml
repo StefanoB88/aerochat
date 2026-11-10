@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.1 (fondamenta): emergenze, compagno demo, segnalazioni, statistiche di volo. Dal catalogo iOS. -->
+<resources>
+    <string name="core11_emergency_ok">Estou bem</string>
+    <string name="core11_emergency_need_help">Preciso de ajuda</string>
+    <string name="core11_emergency_all_clear">Fim de alerta / informação</string>
+    <string name="core11_emergency_generic">Alerta</string>
+    <string name="core11_emergency_body_default">Alerta de um passageiro próximo.</string>
+    <string name="core11_emergency_channel_name">Alerta de emergência</string>
+    <string name="core11_demo_nickname">Tripulação Demo</string>
+    <string name="core11_demo_reply_1">Olá! Sou o companheiro de viagem simulado: respondo a partir do mesmo dispositivo, sem Bluetooth. 👋</string>
+    <string name="core11_demo_reply_2">Com um segundo telemóvel, as mensagens passariam pela rede mesh BLE, cifradas de ponta a ponta.</string>
+    <string name="core11_demo_reply_3">Experimenta manter premida uma mensagem minha: podes denunciá-la ou bloquear-me.</string>
+    <string name="core11_demo_reply_4">No separador Cabine encontras o mural público de 12 horas, com as regras a aceitar.</string>
+    <string name="core11_demo_reply_5">As fotografias que recebes de quem não digitalizaste pessoalmente ficam desfocadas até lhes tocares.</string>
+    <string name="core11_demo_reply_6">Boa viagem! ✈️ Quando quiseres, desativa-me em Definições › Informações.</string>
+    <string name="core11_demo_lounge_1">Alguém sabe se o carrinho passa antes ou depois da descolagem? 🍫</string>
+    <string name="core11_demo_lounge_2">Fila 12 aqui: vê-se um pôr do sol incrível pela janela.</string>
+    <string name="core11_report_spam">Spam ou publicidade</string>
+    <string name="core11_report_harassment">Assédio ou bullying</string>
+    <string name="core11_report_hate_speech">Ódio ou discriminação</string>
+    <string name="core11_report_sexual_content">Conteúdo sexual</string>
+    <string name="core11_report_violence">Violência ou ameaças</string>
+    <string name="core11_report_other">Outro</string>
+    <string name="core11_report_email_title">Denúncia AeroChat</string>
+    <string name="core11_report_email_reason">Motivo: %1$s</string>
+    <string name="core11_report_email_user">Utilizador denunciado: %1$s (%2$s)</string>
+    <string name="core11_report_email_message">Mensagem: %1$s</string>
+    <string name="core11_report_email_date">Data: %1$s</string>
+    <string name="core11_report_email_details">Detalhes: %1$s</string>
+    <string name="core11_report_email_text">Texto: %1$s</string>
+    <string name="core11_stats_day">Últimas 24 horas</string>
+    <string name="core11_stats_trip">Últimos 3 dias</string>
+    <string name="core11_stats_all">Desde sempre</string>
+</resources>

@@ -8,6 +8,13 @@ import com.example.aerochat.core.crypto.IdentityKeys
 import com.example.aerochat.core.crypto.IdentityStore
 import com.example.aerochat.core.crypto.KeychainStore
 import com.example.aerochat.core.crypto.PairingPayload
+import com.example.aerochat.core.emergency.EmergencyAlert
+import com.example.aerochat.core.emergency.EmergencyService
+import com.example.aerochat.core.flight.BoardingPass
+import com.example.aerochat.core.moderation.AppSettings
+import com.example.aerochat.core.quiz.QuizQuestionBank
+import com.example.aerochat.core.quiz.QuizService
+import com.example.aerochat.core.review.DemoPeerService
 import com.example.aerochat.core.entitlements.EntitlementManager
 import com.example.aerochat.core.entitlements.EntitlementState
 import com.example.aerochat.core.entitlements.ProPassService
@@ -31,7 +38,10 @@ import com.example.aerochat.data.AppDatabase
 import com.example.aerochat.data.records.ConversationRecord
 import com.example.aerochat.data.records.ConversationType
 import com.example.aerochat.data.records.IdentityRecord
+import com.example.aerochat.data.records.MessageRecord
 import com.example.aerochat.data.records.PeerRecord
+import com.example.aerochat.data.records.ReportReason
+import com.example.aerochat.data.records.ReportRecord
 import com.example.aerochat.BuildConfig
 import com.example.aerochat.ui.onboarding.OnboardingView
 import kotlinx.coroutines.CancellationException
@@ -76,6 +86,11 @@ class AppEnvironment(
 
     private val context: Context = context.applicationContext
 
+    init {
+        // Preferenze lette anche dal router (filtro linguaggio) fuori dal main thread: caricate subito.
+        AppSettings.initialize(this.context)
+    }
+
     private val _phase = MutableStateFlow<Phase>(Phase.Booting)
     val phase: StateFlow<Phase> = _phase.asStateFlow()
 
@@ -110,6 +125,29 @@ class AppEnvironment(
     /** Chiamate vocali in tempo reale (osservato dalla schermata di chiamata). */
     private val _calls = MutableStateFlow<CallService?>(null)
     val calls: StateFlow<CallService?> = _calls.asStateFlow()
+
+    /** Compagno simulato (revisione dello store / prova con un solo telefono), attivo solo se abilitato. */
+    private var demoPeer: DemoPeerService? = null
+
+    /** Quiz di cabina e avvisi di emergenza (entrambi sulla Lounge pubblica). */
+    private val _quiz = MutableStateFlow<QuizService?>(null)
+    val quiz: StateFlow<QuizService?> = _quiz.asStateFlow()
+
+    private val _emergency = MutableStateFlow<EmergencyService?>(null)
+    val emergency: StateFlow<EmergencyService?> = _emergency.asStateFlow()
+
+    /** Stato del quiz in corso (null = nessuno), osservato dal foglio del quiz e dal badge in Cabina. */
+    private val _quizState = MutableStateFlow<QuizService.State?>(null)
+    val quizState: StateFlow<QuizService.State?> = _quizState.asStateFlow()
+
+    /** Ultimo avviso di emergenza ricevuto, mostrato come banner finche' l'utente non lo chiude ([setActiveEmergency] `null`). */
+    private val _activeEmergency = MutableStateFlow<EmergencyAlert?>(null)
+    val activeEmergency: StateFlow<EmergencyAlert?> = _activeEmergency.asStateFlow()
+
+    /** Swift `activeEmergency = ...`: la UI lo azzera quando l'utente chiude il banner. */
+    fun setActiveEmergency(alert: EmergencyAlert?) {
+        _activeEmergency.value = alert
+    }
 
     // Stato osservabile dalla UI.
     private val _radioState = MutableStateFlow(RadioState.unknown)
@@ -213,6 +251,8 @@ class AppEnvironment(
         _media.value?.setNickname(trimmed)
         _games.value?.setNickname(trimmed)
         _proPass.value?.setNickname(trimmed)
+        _quiz.value?.setNickname(trimmed)
+        _emergency.value?.setNickname(trimmed)
     }
 
     /** Modifica il profilo (nickname, colore, foto) e lo annuncia a tutti i contatti. */
@@ -227,6 +267,8 @@ class AppEnvironment(
         _media.value?.setNickname(trimmed)
         _games.value?.setNickname(trimmed)
         _proPass.value?.setNickname(trimmed)
+        _quiz.value?.setNickname(trimmed)
+        _emergency.value?.setNickname(trimmed)
         _calls.value?.setNickname(trimmed)
         val router = _router.value
         val profile = localProfile
@@ -285,6 +327,34 @@ class AppEnvironment(
         _games.value = games
         games.start()
 
+        // Quiz ed emergenze: stessi vincoli (iscrizione a `inboundPackets` prima della radio). Gli avvisi
+        // rimasti in coda presso un vicino arrivano appena il link si apre.
+        val quiz = QuizService(
+            router = router, database = database, identity = identityKeys, nickname = nickname,
+            questions = { QuizQuestionBank.questions(context) },
+        )
+        _quiz.value = quiz
+        val quizEvents = quiz.events()
+        backgroundTasks += scope.launch {
+            quizEvents.collect { event ->
+                if (event is QuizService.Event.Updated && event.state != _quizState.value) _quizState.value = event.state
+            }
+        }
+        quiz.start()
+
+        val emergency = EmergencyService(
+            router = router, database = database, identity = identityKeys,
+            nickname = nickname, notifier = notifier, context = context,
+        )
+        _emergency.value = emergency
+        val emergencyEvents = emergency.events()
+        backgroundTasks += scope.launch {
+            emergencyEvents.collect { event ->
+                if (event is EmergencyService.Event.Received) _activeEmergency.value = event.alert
+            }
+        }
+        emergency.start()
+
         router.start()
         _radioState.value = router.radioState
         _neighbors.value = router.neighbors()
@@ -325,6 +395,27 @@ class AppEnvironment(
         // Notifiche gratuite per tutti: anche chi ha completato l'onboarding senza rispondere al
         // prompt deve poter ricevere i banner dei messaggi arrivati a schermo spento.
         (notifier as? LocalNotificationCenter)?.requestAuthorizationIfNeeded()
+
+        if (AppSettings.isDemoModeEnabled) {
+            setDemoMode(true)
+        }
+    }
+
+    /**
+     * Attiva/disattiva il compagno di volo simulato (Impostazioni › Informazioni) e salva la scelta in
+     * [AppSettings.isDemoModeEnabled].
+     */
+    suspend fun setDemoMode(enabled: Boolean) {
+        AppSettings.isDemoModeEnabled = enabled
+        val database = _database.value ?: return
+        if (enabled) {
+            val demo = demoPeer ?: DemoPeerService(database = database, context = context).also { demoPeer = it }
+            demo.enable()
+        } else {
+            demoPeer?.disable()
+            demoPeer?.close()
+            demoPeer = null
+        }
     }
 
     /** Ritorno in primo piano: riprova subito i messaggi in attesa di conferma di consegna. */
@@ -353,6 +444,13 @@ class AppEnvironment(
         backgroundTasks.clear()
         _calls.value?.stop()
         _calls.value = null
+        _quiz.value?.stop()
+        _emergency.value?.stop()
+        _quiz.value = null
+        _emergency.value = null
+        _quizState.value = null
+        demoPeer?.close()
+        demoPeer = null
         _games.value?.stop()
         _media.value?.stop()
         _proPass.value?.stop()
@@ -392,6 +490,14 @@ class AppEnvironment(
         return conversation
     }
 
+    /** Entra nella Cabina del volo della carta d'imbarco (gruppo derivato, nessun QR). */
+    suspend fun joinFlightLounge(pass: BoardingPass): ConversationRecord {
+        val router = _router.value ?: throw RouterError.NotRunning
+        val lounge = router.joinFlightLounge(pass)
+        runCatching { _proPass.value?.broadcastGrantIfEntitled(lounge) }
+        return lounge
+    }
+
     /** Crea un gruppo con i compagni selezionati e, se Pro, lo sblocca per tutti. */
     suspend fun createGroup(title: String, members: List<PeerRecord>): ConversationRecord {
         val router = _router.value ?: throw RouterError.NotRunning
@@ -401,6 +507,48 @@ class AppEnvironment(
         }
         runCatching { _proPass.value?.broadcastGrantIfEntitled(group) }
         return group
+    }
+
+    // MARK: - Sicurezza (blocco e segnalazioni)
+
+    /**
+     * Blocca un utente: i suoi pacchetti vengono ignorati e non piu' ritrasmessi. Il mittente della
+     * Cabina Pubblica puo' non essere ancora tra i peer: viene registrato con una chiave segnaposto.
+     */
+    suspend fun blockUser(nodeID: ByteArray, nickname: String?) {
+        val database = _database.value ?: return
+        val known = runCatching { database.peers.fetch(nodeID = nodeID) }.getOrNull()
+        if (known == null) {
+            // Chiave segnaposto unica per nodo (la colonna x25519_pub e' UNIQUE).
+            val placeholderKey = nodeID + ByteArray(MeshProtocol.publicKeyLength - nodeID.size)
+            runCatching {
+                database.peers.upsert(
+                    PeerRecord(
+                        nodeID = nodeID, x25519Pub = placeholderKey,
+                        ed25519Pub = ByteArray(MeshProtocol.publicKeyLength),
+                        nickname = nickname ?: context.getString(R.string.shell_default_nickname),
+                    ),
+                )
+            }
+        }
+        runCatching { database.peers.setBlocked(true, nodeID = nodeID) }
+        _router.value?.refreshBlockedPeers()
+    }
+
+    suspend fun unblockUser(nodeID: ByteArray) {
+        val database = _database.value ?: return
+        runCatching { database.peers.setBlocked(false, nodeID = nodeID) }
+        _router.value?.refreshBlockedPeers()
+    }
+
+    /** Segnala un messaggio: salva il rapporto in locale e, se richiesto, blocca subito il mittente. */
+    suspend fun report(message: MessageRecord, reason: ReportReason, details: String?, blockSender: Boolean): ReportRecord {
+        val database = _database.value ?: throw RouterError.NotRunning
+        val report = database.reports.insert(ReportRecord(message = message, reason = reason, details = details))
+        if (blockSender) {
+            blockUser(nodeID = message.senderNodeID, nickname = message.senderNickname)
+        }
+        return report
     }
 
     suspend fun setPinned(pinned: Boolean, conversation: ConversationRecord) {

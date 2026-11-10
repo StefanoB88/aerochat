@@ -45,6 +45,9 @@ class MessageRepository(val database: AppDatabase) {
     suspend fun fetch(conversationID: String, limit: Int = 200): List<MessageRecord> =
         dao.fetchLatest(conversationID, limit).asReversed()
 
+    /** Tutti i messaggi dal momento indicato (statistiche della cartolina di volo), piu' recenti per primi. `since` in epoch ms. */
+    suspend fun fetch(since: Long, limit: Int = 5_000): List<MessageRecord> = dao.fetchSince(since, limit)
+
     suspend fun updateDeliveryStatus(status: DeliveryStatus, msgID: ByteArray) {
         dao.updateDeliveryStatus(msgID, status)
     }
@@ -227,6 +230,9 @@ interface MessageDao {
 
     @Query("SELECT * FROM messages WHERE msg_id = :msgID")
     suspend fun fetchOne(msgID: ByteArray): MessageRecord?
+
+    @Query("SELECT * FROM messages WHERE created_at_ms >= :sinceMs ORDER BY created_at_ms DESC LIMIT :limit")
+    suspend fun fetchSince(sinceMs: Long, limit: Int): List<MessageRecord>
 
     @Query("SELECT * FROM messages WHERE conversation_id = :conversationID ORDER BY created_at_ms DESC LIMIT :limit")
     suspend fun fetchLatest(conversationID: String, limit: Int): List<MessageRecord>

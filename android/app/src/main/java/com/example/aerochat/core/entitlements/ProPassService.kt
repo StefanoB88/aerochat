@@ -112,10 +112,11 @@ class ProPassService(
 
         var validUntil = now + MeshProtocol.proPassDuration
         val ownLimit = state.validUntilMs
-        if (state.tier == ProTier.pass72h && ownLimit != null) {
+        if (state.tier.isTimeLimited && ownLimit != null) {
+            // Il gruppo resta sbloccato al massimo finche' dura il pass di chi lo regala.
             validUntil = minOf(validUntil, ownLimit)
         }
-        val productID = if (state.tier == ProTier.lifetime) MeshProtocol.ProductID.lifetime else MeshProtocol.ProductID.pass72h
+        val productID = state.tier.productID ?: MeshProtocol.ProductID.pass72h
         val grant = makeGrant(groupID = groupID, validUntilMs = validUntil, productID = productID, identity = identity)
 
         database.conversations.setProUnlocked(until = validUntil, conversationID = group.id)
@@ -247,6 +248,8 @@ object FeatureGate {
         now: Long = System.currentTimeMillis(),
     ): FeatureDecision {
         if (conversation.type == ConversationType.cabinLounge) return FeatureDecision.loungeTextOnly
+        // Cabina del volo: il testo e' gratis per tutti i passeggeri; media e giochi restano Pro.
+        if (conversation.isFlightLounge && feature == ProFeature.groupChat) return FeatureDecision.allowed
         val unlocked = userIsPro || conversation.isProUnlocked(now)
         if (!unlocked) return FeatureDecision.requiresPass
         return when (feature) {

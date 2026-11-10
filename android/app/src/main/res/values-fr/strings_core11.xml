@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.1 (fondamenta): emergenze, compagno demo, segnalazioni, statistiche di volo. Dal catalogo iOS. -->
+<resources>
+    <string name="core11_emergency_ok">Je vais bien</string>
+    <string name="core11_emergency_need_help">J’ai besoin d’aide</string>
+    <string name="core11_emergency_all_clear">Fin d’alerte / information</string>
+    <string name="core11_emergency_generic">Alerte</string>
+    <string name="core11_emergency_body_default">Alerte d’un passager à proximité.</string>
+    <string name="core11_emergency_channel_name">Alerte d’urgence</string>
+    <string name="core11_demo_nickname">Équipage Démo</string>
+    <string name="core11_demo_reply_1">Salut ! Je suis le compagnon de voyage simulé : je réponds depuis ce même appareil, sans Bluetooth. 👋</string>
+    <string name="core11_demo_reply_2">Avec un second téléphone, les messages passeraient par le réseau mesh BLE, chiffrés de bout en bout.</string>
+    <string name="core11_demo_reply_3">Essaie de maintenir le doigt sur l’un de mes messages : tu peux le signaler ou me bloquer.</string>
+    <string name="core11_demo_reply_4">Dans l’onglet Cabine, tu trouveras le tableau public de 12 heures, avec les règles à accepter.</string>
+    <string name="core11_demo_reply_5">Les photos que tu reçois de personnes que tu n’as pas scannées en personne restent floutées jusqu’à ce que tu les touches.</string>
+    <string name="core11_demo_reply_6">Bon vol ! ✈️ Tu peux me désactiver quand tu veux depuis Réglages › À propos.</string>
+    <string name="core11_demo_lounge_1">Quelqu’un sait si le chariot passe avant ou après le décollage ? 🍫</string>
+    <string name="core11_demo_lounge_2">Rangée 12 ici : le coucher de soleil par le hublot est dingue.</string>
+    <string name="core11_report_spam">Spam ou publicité</string>
+    <string name="core11_report_harassment">Harcèlement ou intimidation</string>
+    <string name="core11_report_hate_speech">Haine ou discrimination</string>
+    <string name="core11_report_sexual_content">Contenu sexuel</string>
+    <string name="core11_report_violence">Violence ou menaces</string>
+    <string name="core11_report_other">Autre</string>
+    <string name="core11_report_email_title">Signalement AeroChat</string>
+    <string name="core11_report_email_reason">Motif : %1$s</string>
+    <string name="core11_report_email_user">Utilisateur signalé : %1$s (%2$s)</string>
+    <string name="core11_report_email_message">Message : %1$s</string>
+    <string name="core11_report_email_date">Date : %1$s</string>
+    <string name="core11_report_email_details">Détails : %1$s</string>
+    <string name="core11_report_email_text">Texte : %1$s</string>
+    <string name="core11_stats_day">Dernières 24 heures</string>
+    <string name="core11_stats_trip">3 derniers jours</string>
+    <string name="core11_stats_all">Depuis toujours</string>
+</resources>

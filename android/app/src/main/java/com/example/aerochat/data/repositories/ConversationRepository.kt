@@ -4,9 +4,11 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import androidx.room.Upsert
 import androidx.room.withTransaction
 import com.example.aerochat.core.crypto.CryptoEngine
+import com.example.aerochat.core.flight.BoardingPass
 import com.example.aerochat.data.AppDatabase
 import com.example.aerochat.data.records.ConversationRecord
 import com.example.aerochat.data.records.GroupMemberRecord
@@ -51,6 +53,34 @@ class ConversationRepository(val database: AppDatabase) {
         }
         record
     }
+
+    /** Entra (o rientra) nella Cabina del volo della carta d'imbarco; idempotente. */
+    suspend fun joinFlightLounge(pass: BoardingPass): ConversationRecord = database.withTransaction {
+        val record = ConversationRecord.flightLounge(pass)
+        val existing = dao.fetchOne(record.id)
+        if (existing != null) {
+            // Gruppo arrivato prima via gossip (senza codice volo): ora sappiamo che e' la Cabina del volo.
+            if (existing.flightCode == null) {
+                val updated = existing.copy(flightCode = record.flightCode, title = record.title, expiresAtMs = record.expiresAtMs)
+                dao.update(updated)
+                return@withTransaction updated
+            }
+            return@withTransaction existing
+        }
+        dao.insert(record)
+        record
+    }
+
+    /** Non letti totali (badge della notifica / widget). */
+    suspend fun totalUnread(): Int = dao.totalUnread()
+
+    /** Cabine del volo attive (per la cartolina e il badge "a bordo"), piu' recenti per prime. `now` in epoch ms. */
+    suspend fun activeFlightLounges(now: Long = System.currentTimeMillis()): List<ConversationRecord> =
+        dao.activeFlightLounges(now)
+
+    /** Stream delle Cabine del volo attive (il filtro di scadenza e' valutato all'iscrizione). */
+    fun observeActiveFlightLounges(now: Long = System.currentTimeMillis()): Flow<List<ConversationRecord>> =
+        dao.observeActiveFlightLounges(now).distinctUntilChanged()
 
     suspend fun addGroupMember(peer: PeerRecord, to: String) {
         members.upsert(GroupMemberRecord(conversationID = to, peer = peer))
@@ -138,6 +168,24 @@ interface ConversationDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(record: ConversationRecord)
+
+    @Update
+    suspend fun update(record: ConversationRecord)
+
+    @Query("SELECT COALESCE(SUM(unread_count), 0) FROM conversations")
+    suspend fun totalUnread(): Int
+
+    @Query(
+        "SELECT * FROM conversations WHERE flight_code IS NOT NULL AND (expires_at_ms IS NULL OR expires_at_ms > :nowMs) " +
+            "ORDER BY created_at_ms DESC",
+    )
+    suspend fun activeFlightLounges(nowMs: Long): List<ConversationRecord>
+
+    @Query(
+        "SELECT * FROM conversations WHERE flight_code IS NOT NULL AND (expires_at_ms IS NULL OR expires_at_ms > :nowMs) " +
+            "ORDER BY created_at_ms DESC",
+    )
+    fun observeActiveFlightLounges(nowMs: Long): Flow<List<ConversationRecord>>
 
     @Query("DELETE FROM conversations WHERE id = :id")
     suspend fun deleteById(id: String): Int

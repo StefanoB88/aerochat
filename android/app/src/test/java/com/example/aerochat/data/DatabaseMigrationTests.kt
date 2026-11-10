@@ -89,7 +89,7 @@ class DatabaseMigrationTests {
 
         val migrated = AppDatabase.makeFile(context, databaseName)
         try {
-            assertEquals(2, migrated.openHelper.readableDatabase.version)
+            assertEquals("catena completa fino alla versione corrente", AppDatabaseMigrations.schemaVersion, migrated.openHelper.readableDatabase.version)
             assertTrue(migrated.tableNames().contains("message_reads"))
             assertEquals("i messaggi esistenti restano", DeliveryStatus.deliveredAck, migrated.messages.fetch(msgID)?.deliveryStatus)
 
@@ -100,6 +100,29 @@ class DatabaseMigrationTests {
             assertEquals(1, migrated.messages.readerNodeIDs(msgID).size)
             migrated.messages.delete(msgID)
             assertTrue("i lettori seguono il messaggio eliminato", migrated.messages.readerNodeIDs(msgID).isEmpty())
+        } finally {
+            migrated.close()
+        }
+    }
+
+    @Test
+    fun migrate2To3AddsReportsAndFlightCode() = runBlocking {
+        createDatabase(2).use { db ->
+            db.execSQL(
+                "INSERT INTO conversations (id, type, title, recipient_id, created_at_ms, unread_count, is_pinned) " +
+                    "VALUES ('g1', 'group', 'Volo', ?, 1, 3, 0)",
+                arrayOf<Any>(ByteArray(8)),
+            )
+        }
+
+        val migrated = AppDatabase.makeFile(context, databaseName)
+        try {
+            assertEquals(3, migrated.openHelper.readableDatabase.version)
+            assertTrue(migrated.tableNames().contains("reports"))
+            val existing = migrated.conversations.fetch(id = "g1")
+            assertEquals("i gruppi esistenti restano, senza codice volo", null, existing?.flightCode)
+            assertEquals(3, migrated.conversations.totalUnread())
+            assertEquals(0, migrated.reports.count())
         } finally {
             migrated.close()
         }

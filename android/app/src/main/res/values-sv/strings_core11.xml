@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.1 (fondamenta): emergenze, compagno demo, segnalazioni, statistiche di volo. Dal catalogo iOS. -->
+<resources>
+    <string name="core11_emergency_ok">Jag mår bra</string>
+    <string name="core11_emergency_need_help">Jag behöver hjälp</string>
+    <string name="core11_emergency_all_clear">Faran över / information</string>
+    <string name="core11_emergency_generic">Larm</string>
+    <string name="core11_emergency_body_default">Larm från en passagerare i närheten.</string>
+    <string name="core11_emergency_channel_name">Nödlarm</string>
+    <string name="core11_demo_nickname">Demobesättning</string>
+    <string name="core11_demo_reply_1">Hej! Jag är den simulerade resekamraten: jag svarar från samma enhet, utan Bluetooth. 👋</string>
+    <string name="core11_demo_reply_2">Med en andra telefon skulle meddelandena gå via BLE-meshnätet, totalsträckskrypterade.</string>
+    <string name="core11_demo_reply_3">Testa att hålla fingret på ett av mina meddelanden: du kan rapportera det eller blockera mig.</string>
+    <string name="core11_demo_reply_4">I fliken Kabin hittar du den offentliga 12-timmarsanslagstavlan med reglerna du behöver godkänna.</string>
+    <string name="core11_demo_reply_5">Foton du får från personer du inte har skannat personligen förblir suddiga tills du trycker på dem.</string>
+    <string name="core11_demo_reply_6">Trevlig flygresa! ✈️ Du kan stänga av mig när du vill under Inställningar › Om.</string>
+    <string name="core11_demo_lounge_1">Är det någon som vet om vagnen kommer före eller efter start? 🍫</string>
+    <string name="core11_demo_lounge_2">Rad 12 här: det är en helt galen solnedgång utanför fönstret.</string>
+    <string name="core11_report_spam">Spam eller reklam</string>
+    <string name="core11_report_harassment">Trakasserier eller mobbning</string>
+    <string name="core11_report_hate_speech">Hat eller diskriminering</string>
+    <string name="core11_report_sexual_content">Sexuellt innehåll</string>
+    <string name="core11_report_violence">Våld eller hot</string>
+    <string name="core11_report_other">Annat</string>
+    <string name="core11_report_email_title">AeroChat-rapport</string>
+    <string name="core11_report_email_reason">Orsak: %1$s</string>
+    <string name="core11_report_email_user">Rapporterad användare: %1$s (%2$s)</string>
+    <string name="core11_report_email_message">Meddelande: %1$s</string>
+    <string name="core11_report_email_date">Datum: %1$s</string>
+    <string name="core11_report_email_details">Detaljer: %1$s</string>
+    <string name="core11_report_email_text">Text: %1$s</string>
+    <string name="core11_stats_day">Senaste 24 timmarna</string>
+    <string name="core11_stats_trip">Senaste 3 dagarna</string>
+    <string name="core11_stats_all">Hela tiden</string>
+</resources>

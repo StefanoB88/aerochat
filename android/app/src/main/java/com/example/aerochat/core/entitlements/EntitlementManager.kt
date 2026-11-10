@@ -22,7 +22,7 @@ import kotlinx.coroutines.sync.withLock
 /** Stato Pro dell'utente locale. */
 data class EntitlementState(
     val tier: ProTier = ProTier.free,
-    /** Epoch ms (solo `pass72h`). */
+    /** Epoch ms (solo pass a tempo: `pass24h`, `pass72h`). */
     val validUntilMs: Long? = null,
     val source: Source = Source.none,
 ) {
@@ -36,7 +36,7 @@ data class EntitlementState(
     /** `now` in epoch ms. */
     fun isPro(now: Long = System.currentTimeMillis()): Boolean = when (tier) {
         ProTier.lifetime -> true
-        ProTier.pass72h -> (validUntilMs ?: 0L) > now
+        ProTier.pass24h, ProTier.pass72h -> (validUntilMs ?: 0L) > now
         ProTier.free -> false
     }
 
@@ -51,8 +51,8 @@ data class EntitlementState(
  * (`pro_receipt_jws`: ricevuta Play [PlayReceipt] oppure JWS StoreKit di origine iOS).
  *
  * - `com.aeromesh.lifetime`: prodotto non consumabile, viene **acknowledged** e mai consumato.
- * - `com.aeromesh.pass72h`: prodotto consumabile, viene **consumato** dopo la concessione; la validita'
- *   (72 h) si calcola da `purchaseTime`.
+ * - `com.aeromesh.pass24h` / `com.aeromesh.pass72h`: prodotti consumabili, vengono **consumati** dopo la
+ *   concessione; la validita' (24 h / 72 h, [ProTier.passDuration]) si calcola da `purchaseTime`.
  */
 class EntitlementManager(
     context: Context,
@@ -231,34 +231,38 @@ class EntitlementManager(
     }
 
     private fun needsFinishing(purchase: BillingPurchase): Boolean =
-        (MeshProtocol.ProductID.pass72h in purchase.productIDs) ||
+        (MeshProtocol.ProductID.pass24h in purchase.productIDs) ||
+            (MeshProtocol.ProductID.pass72h in purchase.productIDs) ||
             (MeshProtocol.ProductID.lifetime in purchase.productIDs && !purchase.isAcknowledged)
 
-    /** Concede l'acquisto, lo persiste e lo finalizza (acknowledge lifetime / consume pass 72h). */
+    /** Concede l'acquisto, lo persiste e lo finalizza (acknowledge lifetime / consume pass a tempo). */
     private suspend fun apply(purchase: BillingPurchase, now: Long = System.currentTimeMillis()) {
         val receipt = PlayReceipt.encode(purchase)
+        val tier = tier(purchase.productIDs)
         val granted = mutex.withLock {
             var next = state
+            val duration = tier?.passDuration
             when {
-                MeshProtocol.ProductID.lifetime in purchase.productIDs ->
+                tier == null -> return@withLock false
+                tier == ProTier.lifetime ->
                     next = EntitlementState(tier = ProTier.lifetime, validUntilMs = null, source = EntitlementState.Source.storeKit)
-                MeshProtocol.ProductID.pass72h in purchase.productIDs -> {
-                    val validUntil = purchase.purchaseTime + MeshProtocol.proPassDuration
-                    if (next.tier != ProTier.lifetime && validUntil > now) {
-                        next = EntitlementState(
-                            tier = ProTier.pass72h,
-                            validUntilMs = maxOf(validUntil, next.validUntilMs ?: 0L),
-                            source = EntitlementState.Source.storeKit,
-                        )
+                duration != null -> {
+                    val validUntil = purchase.purchaseTime + duration
+                    // Un pass a tempo non declassa un lifetime e non accorcia un pass gia' attivo piu' a lungo.
+                    if (next.tier != ProTier.lifetime && validUntil > now && validUntil > (next.validUntilMs ?: 0L)) {
+                        next = EntitlementState(tier = tier, validUntilMs = validUntil, source = EntitlementState.Source.storeKit)
                     }
                 }
                 else -> return@withLock false
             }
-            try {
-                database.identities.updateProStatus(tier = next.tier, validUntilMs = next.validUntilMs, receiptJWS = receipt)
-            } catch (_: Exception) {
+            // Un pass piu' corto di quello attivo viene solo finalizzato: la ricevuta salvata resta quella migliore.
+            if (tier == ProTier.lifetime || next != state) {
+                try {
+                    database.identities.updateProStatus(tier = next.tier, validUntilMs = next.validUntilMs, receiptJWS = receipt)
+                } catch (_: Exception) {
+                }
+                update(next)
             }
-            update(next)
             true
         }
         if (!granted) return
@@ -293,7 +297,16 @@ class EntitlementManager(
     }
 
     companion object {
-        val productIDs: List<String> = listOf(MeshProtocol.ProductID.pass72h, MeshProtocol.ProductID.lifetime)
+        val productIDs: List<String> =
+            listOf(MeshProtocol.ProductID.pass24h, MeshProtocol.ProductID.pass72h, MeshProtocol.ProductID.lifetime)
+
+        /** Livello piu' alto tra i prodotti di un acquisto (lifetime > 72h > 24h). */
+        internal fun tier(productIDs: List<String>): ProTier? = when {
+            MeshProtocol.ProductID.lifetime in productIDs -> ProTier.lifetime
+            MeshProtocol.ProductID.pass72h in productIDs -> ProTier.pass72h
+            MeshProtocol.ProductID.pass24h in productIDs -> ProTier.pass24h
+            else -> null
+        }
 
         /** Stato da un payload JWS StoreKit verificato. `now` in epoch ms. */
         fun state(from: JWSTransactionPayload, now: Long, source: EntitlementState.Source): EntitlementState =
@@ -301,23 +314,17 @@ class EntitlementManager(
 
         /** Stato da una ricevuta Play verificata. `now` in epoch ms. */
         fun state(from: PlayReceipt.Payload, now: Long, source: EntitlementState.Source): EntitlementState {
-            val productID = when {
-                MeshProtocol.ProductID.lifetime in from.productIDs -> MeshProtocol.ProductID.lifetime
-                MeshProtocol.ProductID.pass72h in from.productIDs -> MeshProtocol.ProductID.pass72h
-                else -> return EntitlementState.free
-            }
+            val productID = tier(from.productIDs)?.productID ?: return EntitlementState.free
             return state(productID = productID, purchaseTime = from.purchaseTime, now = now, source = source)
         }
 
-        private fun state(productID: String, purchaseTime: Long, now: Long, source: EntitlementState.Source): EntitlementState =
-            when (productID) {
-                MeshProtocol.ProductID.lifetime -> EntitlementState(tier = ProTier.lifetime, validUntilMs = null, source = source)
-                MeshProtocol.ProductID.pass72h -> {
-                    val validUntil = purchaseTime + MeshProtocol.proPassDuration
-                    if (validUntil > now) EntitlementState(tier = ProTier.pass72h, validUntilMs = validUntil, source = source)
-                    else EntitlementState.free
-                }
-                else -> EntitlementState.free
-            }
+        private fun state(productID: String, purchaseTime: Long, now: Long, source: EntitlementState.Source): EntitlementState {
+            val tier = ProTier.fromProductID(productID) ?: return EntitlementState.free
+            if (tier == ProTier.lifetime) return EntitlementState(tier = ProTier.lifetime, validUntilMs = null, source = source)
+            val duration = tier.passDuration ?: return EntitlementState.free
+            val validUntil = purchaseTime + duration
+            return if (validUntil > now) EntitlementState(tier = tier, validUntilMs = validUntil, source = source)
+            else EntitlementState.free
+        }
     }
 }

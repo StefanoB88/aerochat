@@ -92,6 +92,8 @@ class BLECentralController(
     private var wantsScanning = true
     private var lowLatency = true
     private var scanRefreshTimer: ScheduledFuture<*>? = null
+    /** Lettura periodica dell'RSSI dei link aperti (radar di prossimita'): la scansione non la ripete. */
+    private var rssiTimer: ScheduledFuture<*>? = null
     private var pendingScanStart: ScheduledFuture<*>? = null
     /** Avvii di scansione recenti (uptime ms): Android blocca chi avvia piu' di 5 scansioni in 30 s. */
     private val scanStarts = ArrayDeque<Long>()
@@ -140,6 +142,7 @@ class BLECentralController(
             authorizationPoll = null
             stopScan()
             stopScanRefresh()
+            stopRSSIPolling()
             for (session in sessions.values.toList()) {
                 tearDown(session, reason = "stop", notify = false)
             }
@@ -293,9 +296,11 @@ class BLECentralController(
         if (newState == RadioState.poweredOn) {
             startScanIfNeeded()
             startScanRefresh()
+            startRSSIPolling()
             connectTrustedPeripherals()
         } else {
             stopScanRefresh()
+            stopRSSIPolling()
             isScanning = false
             scanCallback = null
             scanner = null
@@ -407,6 +412,29 @@ class BLECentralController(
     private fun stopScanRefresh() {
         scanRefreshTimer?.cancel(false)
         scanRefreshTimer = null
+    }
+
+    private fun startRSSIPolling() {
+        if (rssiTimer != null) return
+        rssiTimer = queue.performRepeating(RSSI_POLL_INTERVAL_MS) { pollRSSI() }
+    }
+
+    private fun stopRSSIPolling() {
+        rssiTimer?.cancel(false)
+        rssiTimer = null
+    }
+
+    /**
+     * Chiede l'RSSI a ogni sessione con canale aperto; la risposta arriva in `onReadRemoteRssi`.
+     * Solo a coda GATT libera: la lettura non deve ritardare handshake o risvegli.
+     */
+    private fun pollRSSI() {
+        if (!isRunning) return
+        for (session in sessions.values) {
+            val gatt = session.gatt ?: continue
+            if (!session.channelOpen || session.state != SessionState.connected || !session.operations.isIdle) continue
+            session.operations.enqueue("readRemoteRssi") { gatt.readRemoteRssi() }
+        }
     }
 
     private fun discovered(device: BluetoothDevice, rssi: Int) {
@@ -634,6 +662,14 @@ class BLECentralController(
             post(gatt) { session.operations.complete() }
         }
 
+        override fun onReadRemoteRssi(gatt: BluetoothGatt?, rssi: Int, status: Int) {
+            post(gatt) {
+                session.operations.complete()
+                // 127 = valore non disponibile secondo la specifica Bluetooth.
+                if (status == BluetoothGatt.GATT_SUCCESS && rssi != 127) handler(Event.Discovered(session.address, rssi))
+            }
+        }
+
         override fun onServiceChanged(gatt: BluetoothGatt) {
             // Il peer ha ripubblicato il servizio (es. nuovo PSM dopo un riavvio): ripartiamo dalla discovery.
             post(gatt) {
@@ -812,6 +848,8 @@ class BLECentralController(
         const val GATT_OPERATION_TIMEOUT_MS = 5_000L
         /** ms: frequenza massima degli eventi `Discovered` (e quindi degli aggiornamenti RSSI) per dispositivo. */
         const val DISCOVERY_REPORT_INTERVAL_MS = 5_000L
+        /** ms: lettura periodica dell'RSSI dei link aperti (iOS `rssiPollInterval`). */
+        const val RSSI_POLL_INTERVAL_MS = 4_000L
         /** ms. */
         const val AUTHORIZATION_POLL_MS = 3_000L
         /** ms. */

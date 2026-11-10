@@ -4,8 +4,11 @@ import com.example.aerochat.core.crypto.CryptoEngine
 import com.example.aerochat.core.crypto.IdentityKeys
 import com.example.aerochat.core.crypto.PairingPayload
 import com.example.aerochat.core.crypto.SymmetricKey
+import com.example.aerochat.core.flight.BoardingPass
 import com.example.aerochat.core.media.ImageProcessor
 import com.example.aerochat.core.media.WebPEncoder
+import com.example.aerochat.core.moderation.AppSettings
+import com.example.aerochat.core.moderation.ContentFilter
 import com.example.aerochat.core.protocol.EnvelopeBuilder
 import com.example.aerochat.core.protocol.EnvelopeVerifier
 import com.example.aerochat.core.protocol.GroupMember
@@ -409,6 +412,17 @@ class MeshRouterActor(
         group
     }
 
+    /**
+     * Cabina del volo: gruppo derivato dalla carta d'imbarco, nessun invito necessario. I membri si
+     * scoprono dai messaggi (ogni testo di gruppo registra il mittente tra i membri).
+     */
+    suspend fun joinFlightLounge(pass: BoardingPass): ConversationRecord = withContext(actorContext) {
+        val lounge = database.conversations.joinFlightLounge(pass)
+        knownGroupRecipientIDs.add(lounge.recipientID.toHex())
+        emit(RouterEvent.GroupMembersChanged(conversationID = lounge.id))
+        lounge
+    }
+
     /** Entra nel gruppo descritto dal QR e annuncia la propria adesione all'invitante (Group Key Gossip). */
     suspend fun joinGroup(from: PairingPayload, inviter: PeerRecord): ConversationRecord = withContext(actorContext) {
         val groupID = from.groupID
@@ -657,9 +671,15 @@ class MeshRouterActor(
             }
             is TransportEvent.AdvertisingChanged -> Unit
             is TransportEvent.PeerDiscovered -> {
+                // RSSI dalla scansione o dal polling periodico (radar): la UI si aggiorna solo se cambia davvero.
+                var changed = false
                 for ((id, link) in links.entries.toList()) {
-                    if (id.deviceID == event.deviceID) links[id] = link.copy(rssi = event.rssi)
+                    if (id.deviceID != event.deviceID) continue
+                    val previous = link.rssi
+                    if (previous == null || kotlin.math.abs(previous.toLong() - event.rssi.toLong()) >= 2) changed = true
+                    links[id] = link.copy(rssi = event.rssi)
                 }
+                if (changed) emit(RouterEvent.NeighborsChanged(currentNeighbors()))
             }
             is TransportEvent.LinkOpened -> {
                 val link = event.link
@@ -847,6 +867,8 @@ class MeshRouterActor(
     private fun relayIfAllowed(envelope: MeshEnvelope, from: LinkID, target: Target) {
         if (!configuration.relayEnabled || envelope.ttl <= 1) return
         if (envelope.encryptedPayload.size() > MeshProtocol.maxRelayPayloadBytes) return
+        // Un utente bloccato non viene nemmeno ritrasmesso: niente ponte per chi molesta.
+        if (blocked.contains(envelope.senderNodeId.toByteArray().toHex())) return
         if (envelope.packetType.isMedia) {
             if (envelope.hopCount != 0 || target !is Target.Group) return
         }
@@ -911,6 +933,9 @@ class MeshRouterActor(
                 }
                 type == PacketType.MEDIA_HEADER || type == PacketType.MEDIA_CHUNK ||
                     type == PacketType.PRO_PASS_GRANT || type == PacketType.GAME_MOVE ->
+                    forwardToSubsystems(envelope, hops, target)
+                // Quiz ed emergenze viaggiano sulla Lounge (chiave pubblica) e vengono gestiti dai loro servizi.
+                (type == PacketType.QUIZ || type == PacketType.EMERGENCY) && target is Target.Lounge ->
                     forwardToSubsystems(envelope, hops, target)
                 else -> return
             }
@@ -977,13 +1002,15 @@ class MeshRouterActor(
         val (payload, sender) = openShared(envelope, CryptoEngine.publicCabinKey)
         // Cabina Pubblica: solo testo, niente link.
         if (containsLink(payload.text) || payload.text.isEmpty()) throw RouterError.LinkNotAllowedInLounge
+        // Bacheca tra sconosciuti: le parolacce vengono mascherate (impostazione dell'utente).
+        val text = if (AppSettings.isLanguageFilterEnabled) ContentFilter.masked(payload.text) else payload.text
         val message = MessageRecord(
             msgID = envelope.msgId.toByteArray(),
             conversationID = lounge.id,
             senderNodeID = sender.nodeID,
             senderNickname = sender.nickname,
             contentType = MessageContentType.text,
-            text = payload.text,
+            text = text,
             isOutgoing = false,
             deliveryStatus = DeliveryStatus.deliveredAck,
             hopCountReceived = hops,
@@ -1166,7 +1193,12 @@ class MeshRouterActor(
                 val peer = database.peers.upsert(sender)
                 InboundPacket(envelope, payload, group, peer, hopCount = hops)
             }
-            is Target.Lounge, Target.Other -> return
+            is Target.Lounge -> {
+                // Lounge anonima: il mittente non viene registrato tra i peer (resta un record temporaneo).
+                val (payload, sender) = openShared(envelope, CryptoEngine.publicCabinKey)
+                InboundPacket(envelope, payload, target.conversation, sender, hopCount = hops)
+            }
+            Target.Other -> return
         }
         markSeenThrottled(packet.sender.nodeID, hopCount = hops, rssi = null)
         val type = packet.envelope.packetType

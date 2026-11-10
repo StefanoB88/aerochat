@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.1 (fondamenta): emergenze, compagno demo, segnalazioni, statistiche di volo. Dal catalogo iOS. -->
+<resources>
+    <string name="core11_emergency_ok">Nic mi nie jest</string>
+    <string name="core11_emergency_need_help">Potrzebuję pomocy</string>
+    <string name="core11_emergency_all_clear">Odwołanie alarmu / informacja</string>
+    <string name="core11_emergency_generic">Alert</string>
+    <string name="core11_emergency_body_default">Alert od pasażera w pobliżu.</string>
+    <string name="core11_emergency_channel_name">Alert awaryjny</string>
+    <string name="core11_demo_nickname">Załoga Demo</string>
+    <string name="core11_demo_reply_1">Cześć! Jestem symulowanym towarzyszem podróży: odpowiadam z tego samego urządzenia, bez Bluetooth. 👋</string>
+    <string name="core11_demo_reply_2">Z drugim telefonem wiadomości szłyby przez sieć mesh BLE, szyfrowane end-to-end.</string>
+    <string name="core11_demo_reply_3">Spróbuj przytrzymać jedną z moich wiadomości: możesz ją zgłosić albo mnie zablokować.</string>
+    <string name="core11_demo_reply_4">W karcie Kabina znajdziesz publiczną tablicę 12-godzinną z zasadami do zaakceptowania.</string>
+    <string name="core11_demo_reply_5">Zdjęcia otrzymane od osób, których nie zeskanowano osobiście, pozostają rozmyte, dopóki ich nie dotkniesz.</string>
+    <string name="core11_demo_reply_6">Miłego lotu! ✈️ W każdej chwili możesz mnie wyłączyć w Ustawienia › Informacje.</string>
+    <string name="core11_demo_lounge_1">Wie ktoś, czy wózek z przekąskami przyjeżdża przed startem czy po? 🍫</string>
+    <string name="core11_demo_lounge_2">Tu rząd 12: za oknem widać niesamowity zachód słońca.</string>
+    <string name="core11_report_spam">Spam lub reklama</string>
+    <string name="core11_report_harassment">Nękanie lub prześladowanie</string>
+    <string name="core11_report_hate_speech">Nienawiść lub dyskryminacja</string>
+    <string name="core11_report_sexual_content">Treści seksualne</string>
+    <string name="core11_report_violence">Przemoc lub groźby</string>
+    <string name="core11_report_other">Inne</string>
+    <string name="core11_report_email_title">Zgłoszenie AeroChat</string>
+    <string name="core11_report_email_reason">Powód: %1$s</string>
+    <string name="core11_report_email_user">Zgłoszony użytkownik: %1$s (%2$s)</string>
+    <string name="core11_report_email_message">Wiadomość: %1$s</string>
+    <string name="core11_report_email_date">Data: %1$s</string>
+    <string name="core11_report_email_details">Szczegóły: %1$s</string>
+    <string name="core11_report_email_text">Tekst: %1$s</string>
+    <string name="core11_stats_day">Ostatnie 24 godziny</string>
+    <string name="core11_stats_trip">Ostatnie 3 dni</string>
+    <string name="core11_stats_all">Od zawsze</string>
+</resources>

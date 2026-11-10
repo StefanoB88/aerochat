@@ -14,6 +14,7 @@ import com.example.aerochat.data.records.MessageReadRecord
 import com.example.aerochat.data.records.MessageRecord
 import com.example.aerochat.data.records.PeerRecord
 import com.example.aerochat.data.records.RelayQueueRecord
+import com.example.aerochat.data.records.ReportRecord
 import com.example.aerochat.data.records.SeenPacketRecord
 import com.example.aerochat.data.repositories.ConversationDao
 import com.example.aerochat.data.repositories.ConversationRepository
@@ -26,6 +27,8 @@ import com.example.aerochat.data.repositories.PeerDao
 import com.example.aerochat.data.repositories.PeerRepository
 import com.example.aerochat.data.repositories.RelayQueueDao
 import com.example.aerochat.data.repositories.RelayQueueStore
+import com.example.aerochat.data.repositories.ReportDao
+import com.example.aerochat.data.repositories.ReportRepository
 import com.example.aerochat.data.repositories.SeenPacketDao
 import com.example.aerochat.data.repositories.SeenPacketStore
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +53,7 @@ import kotlinx.coroutines.withContext
         SeenPacketRecord::class,
         RelayQueueRecord::class,
         MessageReadRecord::class,
+        ReportRecord::class,
     ],
     version = AppDatabaseMigrations.schemaVersion,
     exportSchema = true,
@@ -66,6 +70,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun seenPacketDao(): SeenPacketDao
     abstract fun relayQueueDao(): RelayQueueDao
+    abstract fun reportDao(): ReportDao
 
     // MARK: - Repository
 
@@ -75,6 +80,7 @@ abstract class AppDatabase : RoomDatabase() {
     val messages: MessageRepository get() = MessageRepository(this)
     val seenPackets: SeenPacketStore get() = SeenPacketStore(this)
     val relayQueue: RelayQueueStore get() = RelayQueueStore(this)
+    val reports: ReportRepository get() = ReportRepository(this)
 
     /** Percorso del file (diagnostica); `":memory:"` per il DB temporaneo. */
     val path: String

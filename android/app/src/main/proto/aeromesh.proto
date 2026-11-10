@@ -22,6 +22,8 @@ enum PacketType {
   PROFILE_UPDATE = 9; // diretto: extra_data = ProfileUpdate (aeromesh_ext.proto)
   CALL_SIGNAL = 10;   // chiamata, solo link diretto (ttl 1): extra_data = CallSignal
   CALL_AUDIO = 11;    // audio della chiamata, solo link diretto (ttl 1), mai in coda: extra_data = CallAudio
+  QUIZ = 12;          // quiz di cabina: recipient = Lounge (8 zeri), chiave della Lounge, mai in coda: extra_data = QuizPacket
+  EMERGENCY = 13;     // avviso di emergenza: recipient = Lounge, chiave della Lounge, ttl massimo, in coda: extra_data = EmergencyBroadcast
 }
 
 message MeshEnvelope {
