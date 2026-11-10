@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Primo piano dell'icona adattiva: le due bolle di design/icona.svg, ridotte al 75% per restare
+     dentro la zona sicura della maschera del launcher. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <group
+        android:pivotX="512"
+        android:pivotY="512"
+        android:scaleX="0.75"
+        android:scaleY="0.75">
+        <group android:translateY="-30">
+            <!-- Bolla ciano con il segnale -->
+            <path
+                android:fillColor="#2FD8F0"
+                android:pathData="M560,230h100a160,160 0,0 1,160 160v0a160,160 0,0 1,-160 160h-100a160,160 0,0 1,-160 -160v0a160,160 0,0 1,160 -160z" />
+            <path
+                android:fillColor="#2FD8F0"
+                android:pathData="M720,500 Q760,600 830,625 Q730,625 650,545 Z" />
+            <path
+                android:fillColor="#0A1A4F"
+                android:pathData="M650,345m-18,0a18,18 0,1 1,36 0a18,18 0,1 1,-36 0" />
+            <path
+                android:pathData="M663.5,294.8 A52,52 0,0 1,700.2 331.5"
+                android:strokeColor="#0A1A4F"
+                android:strokeLineCap="round"
+                android:strokeWidth="24" />
+            <path
+                android:pathData="M675.9,248.4 A100,100 0,0 1,746.6 319.1"
+                android:strokeColor="#0A1A4F"
+                android:strokeLineCap="round"
+                android:strokeWidth="24" />
+            <!-- Bolla bianca con i nodi della rete -->
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M366,380h200a170,170 0,0 1,170 170v60a170,170 0,0 1,-170 170h-200a170,170 0,0 1,-170 -170v-60a170,170 0,0 1,170 -170z" />
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M270,700 Q262,800 196,856 Q330,846 410,772 Z" />
+            <path
+                android:pathData="M350,610 L466,545 L582,610"
+                android:strokeColor="#2547D0"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round"
+                android:strokeWidth="18" />
+            <path
+                android:fillColor="#2547D0"
+                android:pathData="M350,610m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0" />
+            <path
+                android:fillColor="#2547D0"
+                android:pathData="M582,610m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0" />
+            <path
+                android:fillColor="#2547D0"
+                android:pathData="M466,545m-48,0a48,48 0,1 1,96 0a48,48 0,1 1,-96 0" />
+        </group>
+    </group>
+</vector>
