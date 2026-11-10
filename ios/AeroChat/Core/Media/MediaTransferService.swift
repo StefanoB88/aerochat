@@ -278,7 +278,12 @@ actor MediaTransferService {
         }
         do {
             let path = try store.write(data, mediaID: mediaID, kind: assembly.kind)
-            try await database.messages.updateMedia(localPath: path, msgID: assembly.headerMsgID)
+            // Cancellato per tutti mentre arrivavano i chunk: il file non serve piu'.
+            guard try await database.messages.updateMedia(localPath: path, msgID: assembly.headerMsgID) else {
+                store.remove(relativePath: path)
+                emit(.failed(mediaID: mediaID, msgID: assembly.headerMsgID))
+                return
+            }
             // ACK sul msg_id dell'header: il mittente passa a delivered_ack.
             let ack = InnerPayload.deliveryAck(for: assembly.headerMsgID, identity: identity, nickname: nickname)
             _ = try? await router.sendDirectPacket(type: .deliveryAck, payload: ack, to: assembly.sender, ttl: MeshProtocol.ackTTL)

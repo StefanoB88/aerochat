@@ -90,6 +90,23 @@ sealed interface RouterEvent {
 
     data class RelayQueueChanged(val count: Int) : RouterEvent
     data class GroupMembersChanged(val conversationID: String) : RouterEvent
+
+    /**
+     * Un messaggio ricevuto e' stato modificato o cancellato dal suo autore (`MESSAGE_REVISION`).
+     * [deletedMediaPath]: file media (path relativo) da rimuovere dal disco dopo una cancellazione.
+     */
+    data class MessageRevised(
+        val conversationID: String,
+        val msgID: ByteArray,
+        val isDeleted: Boolean,
+        val deletedMediaPath: String?,
+    ) : RouterEvent {
+        override fun equals(other: Any?): Boolean =
+            other is MessageRevised && conversationID == other.conversationID && msgID.contentEquals(other.msgID) &&
+                isDeleted == other.isDeleted && deletedMediaPath == other.deletedMediaPath
+        override fun hashCode(): Int = 31 * (31 * conversationID.hashCode() + msgID.contentHashCode()) + isDeleted.hashCode()
+        override fun toString(): String = "MessageRevised(conversationID=$conversationID, msgID=${msgID.toHex()}, isDeleted=$isDeleted)"
+    }
 }
 
 /**
@@ -153,6 +170,11 @@ sealed class RouterError(message: String) : Exception(message) {
     data object LinkNotAllowedInLounge : RouterError("link not allowed in lounge") {
         private fun readResolve(): Any = LinkNotAllowedInLounge
     }
+
+    /** Modifica/cancellazione non consentita: non e' nostro, fuori dai 15 minuti, gia' cancellato o tipo errato. */
+    data object RevisionNotAllowed : RouterError("revision not allowed") {
+        private fun readResolve(): Any = RevisionNotAllowed
+    }
 }
 
 /** Consegna notifiche locali a schermo spento. Implementato con `NotificationManagerCompat`. */
@@ -161,6 +183,12 @@ interface MeshNotifier {
 
     /** Avviso di emergenza: notifica prioritaria, mostrata anche con la Cabina aperta (default: nessuna). */
     suspend fun notifyEmergency(alert: EmergencyAlert) {}
+
+    /** Il messaggio e' stato cancellato per tutti dal mittente: via la sua notifica (e dal badge). */
+    suspend fun cancelMessage(msgID: ByteArray, conversationID: String) {}
+
+    /** La conversazione e' stata letta o eliminata: via tutte le sue notifiche (e dal badge). */
+    suspend fun cancelConversation(conversationID: String) {}
 }
 
 class NoopNotifier : MeshNotifier {
@@ -172,7 +200,7 @@ val PacketType.isStoreAndForwardEligible: Boolean
     get() = when (this) {
         // L'emergenza deve arrivare anche a chi passa di li' piu' tardi.
         PacketType.CHAT_TEXT, PacketType.DELIVERY_ACK, PacketType.READ_RECEIPT, PacketType.GROUP_KEY_GOSSIP,
-        PacketType.PRO_PASS_GRANT, PacketType.GAME_MOVE, PacketType.EMERGENCY -> true
+        PacketType.PRO_PASS_GRANT, PacketType.GAME_MOVE, PacketType.EMERGENCY, PacketType.MESSAGE_REVISION -> true
         // Il profilo viene ripetuto a ogni nuovo link: non serve tenerlo in coda.
         // Le chiamate e il quiz hanno senso solo in tempo reale: niente coda.
         PacketType.PUBLIC_LOUNGE, PacketType.MEDIA_HEADER, PacketType.MEDIA_CHUNK, PacketType.PROFILE_UPDATE,

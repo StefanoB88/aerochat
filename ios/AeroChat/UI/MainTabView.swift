@@ -10,6 +10,7 @@ struct MainTabView: View {
         TabView {
             ChatListView()
                 .tabItem { Label("Chat & Gruppi", systemImage: "bubble.left.and.bubble.right.fill") }
+                .badge(environment.unreadTotal)
             CabinLoungeView()
                 .tabItem { Label("Cabina", systemImage: "airplane") }
         }
@@ -36,6 +37,8 @@ struct MainTabView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await environment.sceneDidBecomeActive() }
+            } else if phase == .background {
+                Task { await environment.sceneDidEnterBackground() }
             }
         }
         // Chiamata in entrata o in corso: sopra a tutto, da qualsiasi schermata.

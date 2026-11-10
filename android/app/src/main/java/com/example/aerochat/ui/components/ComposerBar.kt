@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -29,9 +30,11 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowCircleUp
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.outlined.DirectionsBoat
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -84,6 +87,8 @@ internal object CameraShots {
  * [onPhotoPicked] riceve l'URI (Swift: binding `photoItem`).
  *
  * @param recorder `null` dove le note vocali non sono disponibili (Cabina Pubblica).
+ * @param isEditing modifica di un proprio messaggio: striscia "Modifica messaggio" con la X per annullare
+ *   ([onCancelEditing]), niente allegati ne' microfono; l'invio manda la revisione invece di un nuovo messaggio.
  */
 @Composable
 fun ComposerBar(
@@ -100,8 +105,11 @@ fun ComposerBar(
     onPhotoPicked: (Uri) -> Unit = {},
     canTakePhoto: () -> Boolean = { true },
     onCameraDenied: () -> Unit = {},
+    isEditing: Boolean = false,
+    onCancelEditing: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val attachmentsVisible = showsAttachments && !isEditing
     val isRecording = recorder?.isRecording?.collectAsStateWithLifecycle()?.value ?: false
     val canSend = text.isNotBlank()
     var showGames by remember { mutableStateOf(false) }
@@ -134,15 +142,16 @@ fun ComposerBar(
         if (granted) launchCamera() else onCameraDenied()
     }
 
+    Column(modifier = modifier.fillMaxWidth().background(AeroTheme.background)) {
+    if (isEditing) EditingStrip(onCancel = onCancelEditing)
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .background(AeroTheme.background)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (showsAttachments && !isRecording) {
+        if (attachmentsVisible && !isRecording) {
             Box {
                 val gamesDescription = stringResource(R.string.chat_minigames)
                 HapticButton(
@@ -241,7 +250,7 @@ fun ComposerBar(
             ) {
                 Icon(Icons.Filled.ArrowCircleUp, contentDescription = null, modifier = Modifier.size(42.dp))
             }
-        } else if (showsAttachments) {
+        } else if (attachmentsVisible) {
             val description = stringResource(if (isRecording) R.string.chat_stop_send_voice else R.string.chat_record_voice)
             HapticButton(
                 onClick = onToggleRecording,
@@ -260,6 +269,36 @@ fun ComposerBar(
                     }
                 }
             }
+        }
+    }
+    }
+}
+
+/** Striscia "Modifica messaggio" sopra il campo, con la X per annullare la modifica. */
+@Composable
+private fun EditingStrip(onCancel: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(AeroTheme.surface)
+            .padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Edit, contentDescription = null, tint = AeroTheme.accentCyan, modifier = Modifier.size(18.dp))
+        Text(
+            stringResource(R.string.revisions_editing_title),
+            style = AeroTheme.captionSemibold,
+            color = AeroTheme.accentCyan,
+            modifier = Modifier.weight(1f),
+        )
+        val description = stringResource(R.string.revisions_cancel_editing)
+        HapticButton(
+            onClick = onCancel,
+            tint = AeroTheme.textSecondary,
+            modifier = Modifier.semantics { contentDescription = description },
+        ) {
+            Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(22.dp))
         }
     }
 }

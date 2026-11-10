@@ -85,11 +85,29 @@ enum RouterError: Error, Equatable {
     case invalidConversation
     case senderMismatch
     case linkNotAllowedInLounge
+    /// Linguaggio non ammesso in Cabina Pubblica (modifica di un messaggio).
+    case languageNotAllowedInLounge
+    /// Modifica / cancellazione non consentita (non nostro, gia' cancellato, tipo non modificabile).
+    case revisionNotAllowed
+    /// Sono passati piu' di 15 minuti dall'invio.
+    case revisionWindowExpired
 }
 
 /// Consegna notifiche locali a schermo spento. Implementato con `UNUserNotificationCenter`.
 protocol MeshNotifier: Sendable {
     func notify(message: MessageRecord, conversation: ConversationRecord) async
+    /// Come `notify(message:conversation:)`, con il numero da mostrare sul badge dell'icona.
+    func notify(message: MessageRecord, conversation: ConversationRecord, badgeCount: Int?) async
+    /// Messaggio cancellato per tutti dal mittente: la sua notifica va tolta dal Centro Notifiche.
+    func removeNotification(msgID: Data) async
+}
+
+extension MeshNotifier {
+    func notify(message: MessageRecord, conversation: ConversationRecord, badgeCount: Int?) async {
+        await notify(message: message, conversation: conversation)
+    }
+
+    func removeNotification(msgID: Data) async {}
 }
 
 struct NoopNotifier: MeshNotifier {
@@ -101,7 +119,7 @@ extension PacketType {
     var isStoreAndForwardEligible: Bool {
         switch self {
         // L'emergenza deve arrivare anche a chi passa di li' piu' tardi.
-        case .chatText, .deliveryAck, .readReceipt, .groupKeyGossip, .proPassGrant, .gameMove, .emergency: return true
+        case .chatText, .deliveryAck, .readReceipt, .groupKeyGossip, .proPassGrant, .gameMove, .emergency, .messageRevision: return true
         // Il profilo viene ripetuto a ogni nuovo link: non serve tenerlo in coda.
         // Le chiamate e il quiz hanno senso solo in tempo reale: niente coda.
         case .publicLounge, .mediaHeader, .mediaChunk, .profileUpdate, .callSignal, .callAudio, .quiz, .UNRECOGNIZED: return false

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.2: modifica e cancellazione per tutti dei propri messaggi, badge dei non letti. -->
+<resources>
+    <string name="revisions_edit">Bewerken</string>
+    <string name="revisions_delete_for_everyone">Verwijderen voor iedereen</string>
+    <string name="revisions_editing_title">Bericht bewerken</string>
+    <string name="revisions_cancel_editing">Bewerken annuleren</string>
+    <string name="revisions_edited">bewerkt</string>
+    <string name="revisions_deleted_message">Bericht verwijderd</string>
+    <string name="revisions_deleted_by_you">Je hebt dit bericht verwijderd</string>
+    <string name="revisions_delete_confirm_title">Bericht voor iedereen verwijderen?</string>
+    <string name="revisions_delete_confirm_body">Het bericht wordt ook verwijderd op de telefoons van de ontvangers die het ontvangen.</string>
+    <string name="revisions_cancel">Annuleren</string>
+    <string name="revisions_failed">Kon niet worden voltooid: %1$s</string>
+    <string name="revisions_window_expired">Er zijn meer dan 15 minuten verstreken: het bericht kan niet meer worden bewerkt of verwijderd.</string>
+    <plurals name="revisions_unread_badge">
+        <item quantity="one">%1$d ongelezen</item>
+        <item quantity="other">%1$d ongelezen</item>
+    </plurals>
+</resources>

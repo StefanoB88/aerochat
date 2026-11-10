@@ -12,8 +12,10 @@ import com.example.aerochat.core.protocol.toHex
 import com.example.aerochat.data.AppDatabase
 import com.example.aerochat.data.records.ConversationType
 import com.example.aerochat.data.records.DeliveryStatus
+import com.example.aerochat.data.records.MessageContentType
 import com.example.aerochat.data.records.MessageReadRecord
 import com.example.aerochat.data.records.MessageRecord
+import com.example.aerochat.data.records.isRevisableContent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -52,9 +54,45 @@ class MessageRepository(val database: AppDatabase) {
         dao.updateDeliveryStatus(msgID, status)
     }
 
-    /** Collega il file media ricostruito al messaggio placeholder (BlurHash/forma d'onda gia' mostrati). */
-    suspend fun updateMedia(localPath: String, msgID: ByteArray) {
-        dao.updateMedia(msgID, localPath)
+    /**
+     * Collega il file media ricostruito al messaggio placeholder (BlurHash/forma d'onda gia' mostrati).
+     * Ritorna `false` se il messaggio non esiste o e' stato cancellato per tutti nel frattempo (il file va rimosso).
+     */
+    suspend fun updateMedia(localPath: String, msgID: ByteArray): Boolean = dao.updateMedia(msgID, localPath) > 0
+
+    // MARK: - Modifica e cancellazione per tutti (MESSAGE_REVISION)
+
+    /**
+     * EDIT: nuovo testo di un messaggio testuale non cancellato. Vince la revisione con l'istante piu'
+     * recente: una revisione piu' vecchia di quella gia' applicata viene ignorata. Ritorna `true` se applicata.
+     */
+    suspend fun applyEdit(msgID: ByteArray, newText: String, editedAtMs: Long): Boolean = database.withTransaction {
+        val message = dao.fetchOne(msgID) ?: return@withTransaction false
+        if (message.isDeleted || message.contentType != MessageContentType.text) return@withTransaction false
+        val previous = message.editedAtMs
+        if (previous != null && editedAtMs <= previous) return@withTransaction false
+        dao.update(message.copy(text = newText, editedAtMs = editedAtMs))
+        true
+    }
+
+    /**
+     * DELETE (definitivo): azzera testo e media del messaggio e lo segna cancellato. Se era un messaggio
+     * ricevuto non ancora letto, non conta piu' nel badge della conversazione.
+     * Ritorna `null` se non applicata (inesistente, gia' cancellato, gioco/sistema), altrimenti l'esito con
+     * il path del file media da rimuovere dal disco.
+     */
+    suspend fun applyDelete(msgID: ByteArray): MessageDeletion? = database.withTransaction {
+        val message = dao.fetchOne(msgID) ?: return@withTransaction null
+        if (message.isDeleted || !message.isRevisableContent) return@withTransaction null
+        dao.update(
+            message.copy(
+                text = null, mediaLocalPath = null, blurhash = null, audioWaveform = null,
+                durationMs = null, isDeleted = true,
+            ),
+        )
+        val wasUnread = !message.isOutgoing && message.deliveryStatus != DeliveryStatus.read
+        if (wasUnread) database.conversationDao().decrementUnread(message.conversationID)
+        MessageDeletion(conversationID = message.conversationID, mediaPath = message.mediaLocalPath, wasUnread = wasUnread)
     }
 
     /** Aggiorna lo stato serializzato di una partita (la bolla di gioco e' un unico messaggio che evolve). */
@@ -207,6 +245,15 @@ class MessageRepository(val database: AppDatabase) {
     }
 }
 
+/** Esito di [MessageRepository.applyDelete]. */
+data class MessageDeletion(
+    val conversationID: String,
+    /** File media (path relativo alla directory media) da rimuovere, se c'era. */
+    val mediaPath: String?,
+    /** `true` se era un messaggio ricevuto non ancora letto (il badge e' sceso di uno). */
+    val wasUnread: Boolean,
+)
+
 /** Ordine di avanzamento dello stato di consegna. */
 val DeliveryStatus.rank: Int
     get() = when (this) {
@@ -243,8 +290,8 @@ interface MessageDao {
     @Query("UPDATE messages SET delivery_status = :status WHERE msg_id = :msgID")
     suspend fun updateDeliveryStatus(msgID: ByteArray, status: DeliveryStatus)
 
-    @Query("UPDATE messages SET media_local_path = :localPath WHERE msg_id = :msgID")
-    suspend fun updateMedia(msgID: ByteArray, localPath: String)
+    @Query("UPDATE messages SET media_local_path = :localPath WHERE msg_id = :msgID AND is_deleted = 0")
+    suspend fun updateMedia(msgID: ByteArray, localPath: String): Int
 
     @Query("UPDATE messages SET game_state = :state WHERE msg_id = :msgID")
     suspend fun updateGameState(msgID: ByteArray, state: ByteArray)

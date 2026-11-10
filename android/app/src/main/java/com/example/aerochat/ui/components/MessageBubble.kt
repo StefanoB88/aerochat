@@ -24,9 +24,13 @@ import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Report
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,6 +58,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -67,6 +72,8 @@ import com.example.aerochat.core.protocol.toHex
 import com.example.aerochat.data.records.DeliveryStatus
 import com.example.aerochat.data.records.MessageContentType
 import com.example.aerochat.data.records.MessageRecord
+import com.example.aerochat.data.records.canBeEdited
+import com.example.aerochat.data.records.canBeRevised
 import com.example.aerochat.ui.AeroTheme
 import java.util.Date
 import java.util.Locale
@@ -113,6 +120,8 @@ fun timeLabel(epochMs: Long): String {
  *   l'utente non la tocca (anti AirDrop-molesto). La scelta vale per la sessione ([RevealedMedia]).
  * @param onReport / [onBlock] voci "Segnala messaggio" / [blockLabel] nel menu a pressione prolungata
  *   (solo messaggi ricevuti; `null` = voce assente). Il menu unico contiene anche Copia / Salva nelle Foto.
+ * @param onEdit / [onDeleteForEveryone] voci "Modifica" (solo testo) ed "Elimina per tutti" (rossa, con
+ *   conferma) sui propri messaggi: compaiono solo entro 15 minuti dall'invio (`null` = mai, es. chat scaduta).
  */
 @Composable
 fun MessageBubble(
@@ -132,13 +141,31 @@ fun MessageBubble(
     onReport: (() -> Unit)? = null,
     onBlock: (() -> Unit)? = null,
     blockLabel: String? = null,
+    onEdit: (() -> Unit)? = null,
+    onDeleteForEveryone: (() -> Unit)? = null,
 ) {
     val isOutgoing = message.isOutgoing
+    var confirmDelete by remember { mutableStateOf(false) }
     val menu = BubbleMenu(
-        onReport = if (isOutgoing) null else onReport,
-        onBlock = if (isOutgoing) null else onBlock,
+        onReport = if (isOutgoing || message.isDeleted) null else onReport,
+        onBlock = if (isOutgoing || message.isDeleted) null else onBlock,
         blockLabel = blockLabel,
+        onEdit = if (isOutgoing && !message.isDeleted) onEdit else null,
+        onDelete = if (isOutgoing && !message.isDeleted && onDeleteForEveryone != null) {
+            { confirmDelete = true }
+        } else {
+            null
+        },
     )
+    if (confirmDelete && onDeleteForEveryone != null) {
+        DeleteForEveryoneDialog(
+            onConfirm = {
+                confirmDelete = false
+                onDeleteForEveryone()
+            },
+            onDismiss = { confirmDelete = false },
+        )
+    }
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
@@ -159,7 +186,9 @@ fun MessageBubble(
                 if (showSender && !isOutgoing && sender != null) {
                     Text(sender, style = AeroTheme.captionSemibold, color = AeroTheme.accentCyan)
                 }
-                BubbleContent(
+                if (message.isDeleted) {
+                    DeletedMessageContent(isOutgoing = isOutgoing)
+                } else BubbleContent(
                     message = message,
                     store = store,
                     player = player,
@@ -194,13 +223,74 @@ fun MessageBubble(
     }
 }
 
-/** Voci di sicurezza del menu della bolla (segnala / blocca il mittente). */
+/**
+ * Voci del menu della bolla: sicurezza (segnala / blocca il mittente) sui messaggi ricevuti, modifica e
+ * cancellazione per tutti sui propri.
+ */
 private class BubbleMenu(
     val onReport: (() -> Unit)?,
     val onBlock: (() -> Unit)?,
     val blockLabel: String?,
+    val onEdit: (() -> Unit)?,
+    val onDelete: (() -> Unit)?,
 ) {
     val hasSafetyItems: Boolean get() = onReport != null || onBlock != null
+}
+
+/** Voci "Modifica" (solo testo) ed "Elimina per tutti" (rossa) sui propri messaggi, entro 15 minuti. */
+@Composable
+private fun revisionMenuItems(menu: BubbleMenu, message: MessageRecord, close: () -> Unit): List<AeroMenuItem> {
+    val editLabel = stringResource(R.string.revisions_edit)
+    val deleteLabel = stringResource(R.string.revisions_delete_for_everyone)
+    val now = System.currentTimeMillis()
+    return listOfNotNull(
+        menu.onEdit?.takeIf { message.canBeEdited(now) }?.let { edit ->
+            AeroMenuItem(editLabel, Icons.Outlined.Edit) {
+                close()
+                Haptics.tap()
+                edit()
+            }
+        },
+        menu.onDelete?.takeIf { message.canBeRevised(now) }?.let { delete ->
+            AeroMenuItem(deleteLabel, Icons.Outlined.Delete, destructive = true) {
+                close()
+                Haptics.tap()
+                delete()
+            }
+        },
+    )
+}
+
+/** Conferma di "Elimina per tutti". */
+@Composable
+private fun DeleteForEveryoneDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = AeroTheme.surface,
+        titleContentColor = AeroTheme.textPrimary,
+        textContentColor = AeroTheme.textSecondary,
+        title = { Text(stringResource(R.string.revisions_delete_confirm_title)) },
+        text = { Text(stringResource(R.string.revisions_delete_confirm_body)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.revisions_delete_for_everyone), color = Color.Red)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.revisions_cancel), color = AeroTheme.accentCyan) }
+        },
+    )
+}
+
+/** Segnaposto in corsivo di un messaggio cancellato per tutti (niente risposta, copia o segnalazione). */
+@Composable
+private fun DeletedMessageContent(isOutgoing: Boolean) {
+    Text(
+        stringResource(if (isOutgoing) R.string.revisions_deleted_by_you else R.string.revisions_deleted_message),
+        style = AeroTheme.body,
+        fontStyle = FontStyle.Italic,
+        color = AeroTheme.textSecondary,
+    )
 }
 
 /** Voci "Segnala messaggio" e "Blocca …" (rosso) in coda al menu a pressione prolungata. */
@@ -248,9 +338,12 @@ private fun BubbleContent(
             // gestore di selezione e dei gesti, ed era il costo maggiore all'apertura della chat. La copia
             // passa da una pressione prolungata (menu di sistema "Copia").
             val content = message.text ?: ""
-            // Menu unico: Copia (se il testo e' copiabile) + Segnala / Blocca (messaggi ricevuti).
-            val safety = message.contentType == MessageContentType.text && menu.hasSafetyItems
-            if (selectableText || safety) {
+            // Menu unico: Copia (se il testo e' copiabile) + Modifica / Elimina per tutti (propri, 15 minuti)
+            // + Segnala / Blocca (messaggi ricevuti).
+            val isText = message.contentType == MessageContentType.text
+            val safety = isText && menu.hasSafetyItems
+            val revisable = isText && (menu.onEdit != null || menu.onDelete != null)
+            if (selectableText || safety || revisable) {
                 var showMenu by remember { mutableStateOf(false) }
                 val clipboard = LocalClipboardManager.current
                 Box {
@@ -270,6 +363,11 @@ private fun BubbleContent(
                     )
                     val copyLabel = stringResource(android.R.string.copy)
                     val safetyItems = if (safety) safetyMenuItems(menu) { showMenu = false } else emptyList()
+                    val revisionItems = if (revisable && showMenu) {
+                        revisionMenuItems(menu, message) { showMenu = false }
+                    } else {
+                        emptyList()
+                    }
                     AeroDropdownMenu(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false },
@@ -283,6 +381,7 @@ private fun BubbleContent(
                                     },
                                 )
                             }
+                            addAll(revisionItems)
                             addAll(safetyItems)
                         },
                     )
@@ -298,7 +397,7 @@ private fun BubbleContent(
             // Sfocata finche' non viene rivelata: si mostra solo il BlurHash, il file vero non viene nemmeno caricato.
             val isBlurred = hidesMediaUntilTap && !RevealedMedia.contains(id)
             val canSave = hasFile && !isBlurred
-            val hasMenu = canSave || menu.hasSafetyItems
+            val hasMenu = canSave || menu.hasSafetyItems || menu.onDelete != null
             val revealHint = stringResource(R.string.safety_tap_to_show_hint)
             Box {
                 Box(
@@ -342,6 +441,7 @@ private fun BubbleContent(
                 }
                 val saveLabel = stringResource(R.string.chat_save_to_photos)
                 val safetyItems = safetyMenuItems(menu) { showMenu = false }
+                val revisionItems = if (showMenu) revisionMenuItems(menu, message) { showMenu = false } else emptyList()
                 AeroDropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
@@ -354,6 +454,7 @@ private fun BubbleContent(
                                 },
                             )
                         }
+                        addAll(revisionItems)
                         addAll(safetyItems)
                     },
                 )
@@ -362,9 +463,10 @@ private fun BubbleContent(
         MessageContentType.audio -> {
             val missing = message.mediaLocalPath == null
             var showMenu by remember { mutableStateOf(false) }
+            val hasMenu = menu.hasSafetyItems || menu.onDelete != null
             Box {
             Row(
-                modifier = if (menu.hasSafetyItems) {
+                modifier = if (hasMenu) {
                     Modifier.combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -408,11 +510,13 @@ private fun BubbleContent(
                     color = AeroTheme.textSecondary,
                 )
             }
-            if (menu.hasSafetyItems) {
+            if (hasMenu) {
+                val revisionItems = if (showMenu) revisionMenuItems(menu, message) { showMenu = false } else emptyList()
+                val safetyItems = safetyMenuItems(menu) { showMenu = false }
                 AeroDropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
-                    items = safetyMenuItems(menu) { showMenu = false },
+                    items = revisionItems + safetyItems,
                 )
             }
             }
@@ -461,6 +565,9 @@ private fun ColumnScope.BubbleFooter(message: MessageRecord) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (message.editedAtMs != null && !message.isDeleted) {
+            Text(stringResource(R.string.revisions_edited), fontSize = 11.sp, color = AeroTheme.textSecondary)
+        }
         Text(timeLabel(message.createdAtMs), fontSize = 11.sp, color = AeroTheme.textSecondary)
         if (message.isOutgoing) StatusIcon(message.deliveryStatus)
     }

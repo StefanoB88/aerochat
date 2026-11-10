@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -42,7 +44,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -253,6 +258,7 @@ private fun TabsScreen(radioState: RadioState) {
                 else -> CabinLoungeView()
             }
         }
+        val totalUnread by environment.totalUnread.collectAsStateWithLifecycle()
         NavigationBar(containerColor = AeroTheme.background, contentColor = AeroTheme.accentCyan) {
             val colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = AeroTheme.accentCyan,
@@ -264,7 +270,25 @@ private fun TabsScreen(radioState: RadioState) {
             NavigationBarItem(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
-                icon = { Icon(Icons.Filled.Forum, contentDescription = null) },
+                icon = {
+                    // Badge dei non letti di chat e gruppi (la Cabina Pubblica non conta).
+                    BadgedBox(
+                        badge = {
+                            if (totalUnread > 0) {
+                                val description = pluralStringResource(R.plurals.revisions_unread_badge, totalUnread, totalUnread)
+                                Badge(
+                                    containerColor = Color.Red,
+                                    contentColor = Color.White,
+                                    modifier = Modifier.semantics { contentDescription = description },
+                                ) {
+                                    Text(if (totalUnread > 99) "99+" else totalUnread.toString())
+                                }
+                            }
+                        },
+                    ) {
+                        Icon(Icons.Filled.Forum, contentDescription = null)
+                    }
+                },
                 label = { Text(stringResource(R.string.shell_tab_chats)) },
                 colors = colors,
                 modifier = Modifier.hapticOnTap(),

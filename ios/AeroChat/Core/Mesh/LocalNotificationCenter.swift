@@ -37,6 +37,10 @@ struct LocalNotificationCenter: MeshNotifier {
     }
 
     func notify(message: MessageRecord, conversation: ConversationRecord) async {
+        await notify(message: message, conversation: conversation, badgeCount: nil)
+    }
+
+    func notify(message: MessageRecord, conversation: ConversationRecord, badgeCount: Int?) async {
         // Chat aperta e iPhone sbloccato: la UI mostra gia' il messaggio (con feedback aptico).
         let conversationID = conversation.id
         let isShowing = await MainActor.run { NotificationPresence.isShowing(conversationID: conversationID) }
@@ -51,9 +55,26 @@ struct LocalNotificationCenter: MeshNotifier {
         content.sound = .default
         content.threadIdentifier = conversation.id
         content.userInfo = ["conversation_id": conversation.id, "msg_id": message.msgID.hexString]
+        // Totale dei non letti: l'icona si aggiorna anche se l'app viene sospesa subito dopo.
+        if let badgeCount {
+            content.badge = NSNumber(value: badgeCount)
+        }
 
         let request = UNNotificationRequest(identifier: message.msgID.hexString, content: content, trigger: nil)
         try? await UNUserNotificationCenter.current().add(request)
+    }
+
+    /// Messaggio cancellato per tutti: via la notifica con il suo testo (identificatore = `msg_id` hex).
+    func removeNotification(msgID: Data) async {
+        let identifier = msgID.hexString
+        let center = UNUserNotificationCenter.current()
+        center.removeDeliveredNotifications(withIdentifiers: [identifier])
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+    }
+
+    /// Badge dell'icona nella schermata Home: totale dei messaggi non letti (0 lo nasconde).
+    static func setAppBadge(_ count: Int) async {
+        try? await UNUserNotificationCenter.current().setBadgeCount(max(0, count))
     }
 
     /// Avviso di emergenza: notifica "time sensitive" (passa la modalita' Concentrazione) anche con l'app aperta.

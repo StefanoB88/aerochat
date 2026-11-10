@@ -37,6 +37,10 @@ final class ConversationViewModel {
     var openedCardTable: CardTableItem?
     /// Messaggio in corso di segnalazione (menu contestuale).
     var reportTarget: MessageRecord?
+    /// Nostro messaggio in modifica: il testo e' nella barra di scrittura, l'invio manda la revisione.
+    private(set) var editingMessage: MessageRecord?
+    /// Nostro messaggio da eliminare per tutti (in attesa della conferma).
+    var deleteTarget: MessageRecord?
     /// Contatti verificati di persona (QR): le foto degli altri restano sfocate finche' non vengono toccate.
     private(set) var trustedSenders: Set<Data> = []
     /// Risposte rapide suggerite dal modello on-device per l'ultimo messaggio ricevuto.
@@ -138,6 +142,10 @@ final class ConversationViewModel {
 
     func sendText() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let editingMessage {
+            commitEdit(of: editingMessage, text: text)
+            return
+        }
         guard !text.isEmpty, let router = environment.router else { return }
         if conversation.type == .cabinLounge, MeshRouterActor.containsLink(text) {
             infoMessage = String(localized: "Nella Cabina Pubblica non si possono condividere link.")
@@ -150,6 +158,60 @@ final class ConversationViewModel {
                 Haptics.impact(.light)
             } catch {
                 errorMessage = String(localized: "Invio non riuscito: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MARK: Modifica e cancellazione per tutti
+
+    /// Voci del menu solo sui nostri messaggi entro 15 minuti e in una conversazione non scaduta.
+    func canEdit(_ message: MessageRecord) -> Bool {
+        message.canBeEdited() && !conversation.isExpired()
+    }
+
+    func canDeleteForEveryone(_ message: MessageRecord) -> Bool {
+        message.canBeDeletedForEveryone() && !conversation.isExpired()
+    }
+
+    func startEditing(_ message: MessageRecord) {
+        guard canEdit(message) else { return }
+        Haptics.tap()
+        editingMessage = message
+        draft = message.text ?? ""
+    }
+
+    func cancelEditing() {
+        editingMessage = nil
+        draft = ""
+    }
+
+    private func commitEdit(of message: MessageRecord, text: String) {
+        guard !text.isEmpty else { return }
+        editingMessage = nil
+        draft = ""
+        guard text != message.text else { return }
+        Task {
+            do {
+                try await environment.editMessage(message, newText: text)
+                Haptics.impact(.light)
+            } catch {
+                errorMessage = AppEnvironment.revisionFailureText(error, isDelete: false)
+            }
+        }
+    }
+
+    func deleteForEveryone(_ message: MessageRecord) {
+        if editingMessage?.msgID == message.msgID { cancelEditing() }
+        if playingMessageID == message.msgID {
+            player.stop()
+            playingMessageID = nil
+        }
+        Task {
+            do {
+                try await environment.deleteMessageForEveryone(message)
+                Haptics.impact(.medium)
+            } catch {
+                errorMessage = AppEnvironment.revisionFailureText(error, isDelete: true)
             }
         }
     }
@@ -416,6 +478,7 @@ final class ConversationViewModel {
     }
 
     func useSuggestion(_ text: String) {
+        editingMessage = nil
         draft = text
         suggestions = []
         sendText()
@@ -511,7 +574,9 @@ private struct ConversationContent: View {
                             onToggleRecording: viewModel.toggleRecording,
                             onStartGame: viewModel.startGame,
                             availableGames: viewModel.availableGames,
-                            onTakePhoto: viewModel.takePhoto)
+                            onTakePhoto: viewModel.takePhoto,
+                            isEditing: viewModel.editingMessage != nil,
+                            onCancelEdit: viewModel.cancelEditing)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -598,6 +663,16 @@ private struct ConversationContent: View {
         .sheet(isPresented: $viewModel.showScoponePicker) {
             ScoponePlayerPicker(members: viewModel.groupMembers) { viewModel.inviteScopone(players: $0) }
         }
+        .confirmationDialog("Eliminare il messaggio per tutti?",
+                            isPresented: Binding(get: { viewModel.deleteTarget != nil },
+                                                 set: { if !$0 { viewModel.deleteTarget = nil } }),
+                            titleVisibility: .visible,
+                            presenting: viewModel.deleteTarget) { message in
+            Button("Elimina per tutti", role: .destructive) { viewModel.deleteForEveryone(message) }
+            Button("Annulla", role: .cancel) {}
+        } message: { _ in
+            Text("Il messaggio sparirà anche dai dispositivi degli altri partecipanti.")
+        }
         .sheet(isPresented: $viewModel.showPaywall) { PaywallView() }
         .sheet(item: $viewModel.reportTarget) { message in
             ReportSheet(message: message) { _, _ in
@@ -662,10 +737,27 @@ private struct MessageListView: View {
                                       onGameAction: { viewModel.handleGame($0, message: message) },
                                       onSaveImage: { viewModel.saveImage(message) },
                                       onOpenImage: { viewModel.viewedImage = ViewedImage(message: message) },
-                                      hidesMediaUntilTap: viewModel.hidesMedia(message))
+                                      hidesMediaUntilTap: viewModel.hidesMedia(message),
+                                      onDeleteForEveryone: viewModel.canDeleteForEveryone(message)
+                                          ? { Haptics.tap(); viewModel.deleteTarget = message } : nil)
                             .id(message.msgID)
                             .contextMenu {
-                                if !message.isOutgoing, message.contentType != .game {
+                                if viewModel.canEdit(message) {
+                                    Button {
+                                        viewModel.startEditing(message)
+                                    } label: {
+                                        Label("Modifica", systemImage: "pencil")
+                                    }
+                                }
+                                if viewModel.canDeleteForEveryone(message) {
+                                    Button(role: .destructive) {
+                                        Haptics.tap()
+                                        viewModel.deleteTarget = message
+                                    } label: {
+                                        Label("Elimina per tutti", systemImage: "trash")
+                                    }
+                                }
+                                if !message.isOutgoing, !message.isDeleted, message.contentType != .game {
                                     Button {
                                         Haptics.tap()
                                         viewModel.reportTarget = message

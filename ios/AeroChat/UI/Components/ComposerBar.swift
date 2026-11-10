@@ -16,6 +16,10 @@ struct ComposerBar: View {
     var availableGames: [GameKind] = [.ticTacToe, .battleship]
     /// Apre la fotocamera per scattare e inviare una foto; nil dove le foto non sono previste.
     var onTakePhoto: (() -> Void)? = nil
+    /// Modifica di un messaggio gia' inviato: striscia "Modifica messaggio" con la X per annullare,
+    /// niente allegati ne' microfono, l'invio manda la revisione.
+    var isEditing = false
+    var onCancelEdit: () -> Void = {}
 
     @FocusState private var focused: Bool
     @State private var showsLibrary = false
@@ -25,8 +29,47 @@ struct ComposerBar: View {
     private var canSend: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
+        VStack(spacing: 0) {
+            if isEditing {
+                editingStrip
+            }
+            inputRow
+        }
+        .background(AeroTheme.background)
+        .photosPicker(isPresented: $showsLibrary, selection: $photoItem, matching: .images, photoLibrary: .shared())
+        .onChange(of: isEditing) { _, editing in
+            if editing { focused = true }
+        }
+    }
+
+    private var editingStrip: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "pencil")
+                .foregroundStyle(AeroTheme.accentCyan)
+            Text("Modifica messaggio")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(AeroTheme.textPrimary)
+            Spacer()
+            Button {
+                Haptics.tap()
+                onCancelEdit()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(AeroTheme.textSecondary)
+                    .frame(width: 44, height: 32)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Annulla modifica")
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 4)
+        .padding(.top, 6)
+    }
+
+    private var inputRow: some View {
         HStack(spacing: 10) {
-            if showsAttachments && !isRecording {
+            if showsAttachments && !isRecording && !isEditing {
                 Menu {
                     ForEach(availableGames, id: \.rawValue) { kind in
                         Button { Haptics.tap(); onStartGame(kind) } label: { gameLabel(kind) }
@@ -85,12 +128,12 @@ struct ComposerBar: View {
 
             if canSend && !isRecording {
                 Button(action: onSend) {
-                    Image(systemName: "arrow.up.circle.fill")
+                    Image(systemName: isEditing ? "checkmark.circle.fill" : "arrow.up.circle.fill")
                         .font(.system(size: 38))
                         .foregroundStyle(AeroTheme.accentCyan)
                 }
-                .accessibilityLabel("Invia")
-            } else if showsAttachments {
+                .accessibilityLabel(isEditing ? Text("Salva modifica") : Text("Invia"))
+            } else if showsAttachments && !isEditing {
                 Button(action: onToggleRecording) {
                     Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
                         .font(.system(size: 38))
@@ -101,8 +144,6 @@ struct ComposerBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(AeroTheme.background)
-        .photosPicker(isPresented: $showsLibrary, selection: $photoItem, matching: .images, photoLibrary: .shared())
     }
 
     @ViewBuilder

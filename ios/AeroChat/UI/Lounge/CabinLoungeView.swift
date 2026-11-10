@@ -9,6 +9,10 @@ final class CabinLoungeViewModel {
     private(set) var blocked: Set<Data> = []
     var draft = ""
     var infoMessage: String?
+    /// Nostro messaggio in modifica (il testo e' nella barra di scrittura).
+    private(set) var editingMessage: MessageRecord?
+    /// Nostro messaggio da eliminare per tutti (in attesa della conferma).
+    var deleteTarget: MessageRecord?
     private var tasks: [Task<Void, Never>] = []
 
     func start(environment: AppEnvironment) {
@@ -60,6 +64,10 @@ final class CabinLoungeViewModel {
             Haptics.warning()
             return
         }
+        if let editingMessage {
+            commitEdit(of: editingMessage, text: text, environment: environment)
+            return
+        }
         draft = ""
         Task {
             do {
@@ -67,6 +75,55 @@ final class CabinLoungeViewModel {
                 Haptics.impact(.light)
             } catch {
                 infoMessage = String(localized: "Invio non riuscito: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MARK: Modifica e cancellazione per tutti
+
+    /// Voci del menu solo sui nostri messaggi entro 15 minuti e con la Cabina non ancora scaduta.
+    func canEdit(_ message: MessageRecord) -> Bool {
+        message.canBeEdited() && lounge?.isExpired() == false
+    }
+
+    func canDeleteForEveryone(_ message: MessageRecord) -> Bool {
+        message.canBeDeletedForEveryone() && lounge?.isExpired() == false
+    }
+
+    func startEditing(_ message: MessageRecord) {
+        guard canEdit(message) else { return }
+        Haptics.tap()
+        editingMessage = message
+        draft = message.text ?? ""
+    }
+
+    func cancelEditing() {
+        editingMessage = nil
+        draft = ""
+    }
+
+    private func commitEdit(of message: MessageRecord, text: String, environment: AppEnvironment) {
+        editingMessage = nil
+        draft = ""
+        guard text != message.text else { return }
+        Task {
+            do {
+                try await environment.editMessage(message, newText: text)
+                Haptics.impact(.light)
+            } catch {
+                infoMessage = AppEnvironment.revisionFailureText(error, isDelete: false)
+            }
+        }
+    }
+
+    func deleteForEveryone(_ message: MessageRecord, environment: AppEnvironment) {
+        if editingMessage?.msgID == message.msgID { cancelEditing() }
+        Task {
+            do {
+                try await environment.deleteMessageForEveryone(message)
+                Haptics.impact(.medium)
+            } catch {
+                infoMessage = AppEnvironment.revisionFailureText(error, isDelete: true)
             }
         }
     }
@@ -155,7 +212,22 @@ struct CabinLoungeView: View {
                                     MessageBubble(message: message, showSender: true, store: nil, player: nil, isPlaying: false, transferProgress: nil)
                                         .id(message.msgID)
                                         .contextMenu {
-                                            if !message.isOutgoing {
+                                            if viewModel.canEdit(message) {
+                                                Button {
+                                                    viewModel.startEditing(message)
+                                                } label: {
+                                                    Label("Modifica", systemImage: "pencil")
+                                                }
+                                            }
+                                            if viewModel.canDeleteForEveryone(message) {
+                                                Button(role: .destructive) {
+                                                    Haptics.tap()
+                                                    viewModel.deleteTarget = message
+                                                } label: {
+                                                    Label("Elimina per tutti", systemImage: "trash")
+                                                }
+                                            }
+                                            if !message.isOutgoing, !message.isDeleted {
                                                 Button {
                                                     Haptics.tap()
                                                     reportTarget = message
@@ -209,7 +281,9 @@ struct CabinLoungeView: View {
                                 showsAttachments: false,
                                 onSend: { viewModel.send(environment: environment) },
                                 onToggleRecording: {},
-                                onStartGame: { _ in })
+                                onStartGame: { _ in },
+                                isEditing: viewModel.editingMessage != nil,
+                                onCancelEdit: viewModel.cancelEditing)
                 }
             }
             .navigationTitle("Cabina Pubblica")
@@ -251,6 +325,16 @@ struct CabinLoungeView: View {
                     }
                     .accessibilityLabel("Altre azioni")
                 }
+            }
+            .confirmationDialog("Eliminare il messaggio per tutti?",
+                                isPresented: Binding(get: { viewModel.deleteTarget != nil },
+                                                     set: { if !$0 { viewModel.deleteTarget = nil } }),
+                                titleVisibility: .visible,
+                                presenting: viewModel.deleteTarget) { message in
+                Button("Elimina per tutti", role: .destructive) { viewModel.deleteForEveryone(message, environment: environment) }
+                Button("Annulla", role: .cancel) {}
+            } message: { _ in
+                Text("Il messaggio sparirà anche dai dispositivi degli altri partecipanti.")
             }
             .sheet(isPresented: $showQuiz) { CabinQuizSheet() }
             .sheet(isPresented: $showRadar) { RadarSheet() }

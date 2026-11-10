@@ -11,6 +11,7 @@ import com.example.aerochat.proto.GroupKeyGossip
 import com.example.aerochat.proto.GroupMember
 import com.example.aerochat.proto.InnerPayload
 import com.example.aerochat.proto.MeshEnvelope
+import com.example.aerochat.proto.MessageRevision
 import com.example.aerochat.proto.ProPassGrant
 import com.example.aerochat.proto.ProfileUpdate
 import com.example.aerochat.proto.QuizPacket
@@ -33,6 +34,10 @@ object MeshWire {
     fun serialize(audio: CallAudio): ByteArray = audio.toByteArray()
     fun serialize(quiz: QuizPacket): ByteArray = quiz.toByteArray()
     fun serialize(emergency: EmergencyBroadcast): ByteArray = emergency.toByteArray()
+    fun serialize(revision: MessageRevision): ByteArray = revision.toByteArray()
+
+    @Throws(InvalidProtocolBufferException::class)
+    fun parseMessageRevision(data: ByteArray): MessageRevision = MessageRevision.parseFrom(data)
 
     @Throws(InvalidProtocolBufferException::class)
     fun parseQuizPacket(data: ByteArray): QuizPacket = QuizPacket.parseFrom(data)

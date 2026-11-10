@@ -117,12 +117,42 @@ class DatabaseMigrationTests {
 
         val migrated = AppDatabase.makeFile(context, databaseName)
         try {
-            assertEquals(3, migrated.openHelper.readableDatabase.version)
+            assertEquals(AppDatabaseMigrations.schemaVersion, migrated.openHelper.readableDatabase.version)
             assertTrue(migrated.tableNames().contains("reports"))
             val existing = migrated.conversations.fetch(id = "g1")
             assertEquals("i gruppi esistenti restano, senza codice volo", null, existing?.flightCode)
             assertEquals(3, migrated.conversations.totalUnread())
             assertEquals(0, migrated.reports.count())
+        } finally {
+            migrated.close()
+        }
+    }
+
+    @Test
+    fun migrate3To4AddsRevisionColumns() = runBlocking {
+        val msgID = ByteArray(16) { (it + 1).toByte() }
+        createDatabase(3).use { db ->
+            db.execSQL(
+                "INSERT INTO conversations (id, type, title, recipient_id, created_at_ms, unread_count, is_pinned) " +
+                    "VALUES ('g1', 'group', 'Volo', ?, 1, 1, 0)",
+                arrayOf<Any>(ByteArray(8)),
+            )
+            db.execSQL(
+                "INSERT INTO messages (msg_id, conversation_id, sender_node_id, content_type, text, is_outgoing, " +
+                    "delivery_status, created_at_ms) VALUES (?, 'g1', ?, 'text', 'Ciao', 0, 'delivered_ack', 2)",
+                arrayOf<Any>(msgID, ByteArray(8)),
+            )
+        }
+
+        val migrated = AppDatabase.makeFile(context, databaseName)
+        try {
+            assertEquals(4, migrated.openHelper.readableDatabase.version)
+            val existing = migrated.messages.fetch(msgID)
+            assertEquals("Ciao", existing?.text)
+            assertEquals("mai modificato", null, existing?.editedAtMs)
+            assertEquals("non cancellato", false, existing?.isDeleted)
+            assertTrue(migrated.messages.applyEdit(msgID, newText = "Ciao a tutti", editedAtMs = 10))
+            assertEquals(10L, migrated.messages.fetch(msgID)?.editedAtMs)
         } finally {
             migrated.close()
         }

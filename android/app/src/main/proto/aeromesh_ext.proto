@@ -156,3 +156,18 @@ message EmergencyBroadcast {
   bool has_location = 5;
   int64 issued_at_ms = 6;
 }
+
+// Modifica e cancellazione per tutti (MESSAGE_REVISION, release 1.2): inviato nella stessa conversazione
+// del messaggio originale (stessa chiave e stesso recipient_id). Solo l'autore, entro 15 minuti.
+enum RevisionAction {
+  REVISION_ACTION_UNSPECIFIED = 0;
+  EDIT = 1;    // nuovo testo per un CHAT_TEXT / PUBLIC_LOUNGE
+  DELETE = 2;  // cancellazione per tutti (testo, foto, nota vocale)
+}
+
+message MessageRevision {
+  bytes target_msg_id = 1;   // 16 byte: msg_id del messaggio originale
+  RevisionAction action = 2;
+  string new_text = 3;       // solo EDIT, 1..4000 caratteri dopo trim
+  int64 revised_at_ms = 4;   // istante della modifica (Unix ms)
+}

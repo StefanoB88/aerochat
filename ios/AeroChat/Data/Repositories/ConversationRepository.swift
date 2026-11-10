@@ -78,10 +78,13 @@ struct ConversationRepository: Sendable {
         }
     }
 
-    /// Non letti totali (badge della Live Activity).
+    /// Non letti totali delle chat permanenti (badge dell'icona, del tab "Chat & Gruppi" e della Live
+    /// Activity). La Cabina Pubblica e' esclusa: e' una bacheca senza notifiche ne' contatore in lista,
+    /// e il suo `unread_count` non viene mai azzerato.
     func totalUnread() async throws -> Int {
         try await database.pool.read { db in
-            try Int.fetchOne(db, sql: "SELECT COALESCE(SUM(unread_count), 0) FROM conversations") ?? 0
+            try Int.fetchOne(db, sql: "SELECT COALESCE(SUM(unread_count), 0) FROM conversations WHERE type != ?",
+                             arguments: [ConversationType.cabinLounge.rawValue]) ?? 0
         }
     }
 

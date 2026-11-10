@@ -43,6 +43,10 @@ struct MessageRecord: Codable, Hashable, Sendable, Identifiable, FetchableRecord
     /// `hop_count` dell'envelope ricevuto: alimenta l'indicatore "Stato Radio".
     var hopCountReceived: Int?
     var createdAtMs: Int64
+    /// Istante dell'ultima modifica (`MESSAGE_REVISION` EDIT): la bolla mostra "modificato".
+    var editedAtMs: Int64?
+    /// Cancellato per tutti (`MESSAGE_REVISION` DELETE): la bolla mostra il segnaposto.
+    var isDeleted: Bool
 
     enum CodingKeys: String, CodingKey {
         case msgID = "msg_id"
@@ -61,6 +65,8 @@ struct MessageRecord: Codable, Hashable, Sendable, Identifiable, FetchableRecord
         case deliveryStatus = "delivery_status"
         case hopCountReceived = "hop_count_received"
         case createdAtMs = "created_at_ms"
+        case editedAtMs = "edited_at_ms"
+        case isDeleted = "is_deleted"
     }
 
     enum Columns {
@@ -73,6 +79,8 @@ struct MessageRecord: Codable, Hashable, Sendable, Identifiable, FetchableRecord
         static let deliveryStatus = Column(CodingKeys.deliveryStatus)
         static let hopCountReceived = Column(CodingKeys.hopCountReceived)
         static let createdAtMs = Column(CodingKeys.createdAtMs)
+        static let editedAtMs = Column(CodingKeys.editedAtMs)
+        static let isDeleted = Column(CodingKeys.isDeleted)
     }
 
     init(msgID: Data,
@@ -90,7 +98,9 @@ struct MessageRecord: Codable, Hashable, Sendable, Identifiable, FetchableRecord
          isOutgoing: Bool,
          deliveryStatus: DeliveryStatus,
          hopCountReceived: Int? = nil,
-         createdAtMs: Int64 = Date.nowUnixMilliseconds) {
+         createdAtMs: Int64 = Date.nowUnixMilliseconds,
+         editedAtMs: Int64? = nil,
+         isDeleted: Bool = false) {
         self.msgID = msgID
         self.conversationID = conversationID
         self.senderNodeID = senderNodeID
@@ -107,6 +117,8 @@ struct MessageRecord: Codable, Hashable, Sendable, Identifiable, FetchableRecord
         self.deliveryStatus = deliveryStatus
         self.hopCountReceived = hopCountReceived
         self.createdAtMs = createdAtMs
+        self.editedAtMs = editedAtMs
+        self.isDeleted = isDeleted
     }
 
     /// Messaggio testuale in uscita, accettato subito nella chat con stato `queued`.
@@ -121,6 +133,22 @@ struct MessageRecord: Codable, Hashable, Sendable, Identifiable, FetchableRecord
                       replyToMsgID: replyTo,
                       isOutgoing: true,
                       deliveryStatus: .queued)
+    }
+
+    /// Tipi che si possono cancellare per tutti (non le bolle di gioco ne' i messaggi di sistema).
+    var isRevisableContent: Bool {
+        contentType == .text || contentType == .image || contentType == .audio
+    }
+
+    /// Proprio messaggio ancora entro la finestra di 15 minuti per "Elimina per tutti".
+    func canBeDeletedForEveryone(now: Date = Date()) -> Bool {
+        isOutgoing && !isDeleted && isRevisableContent
+            && now.unixMilliseconds - createdAtMs <= MeshProtocol.revisionWindowMs
+    }
+
+    /// Proprio messaggio di testo ancora modificabile (stessa finestra).
+    func canBeEdited(now: Date = Date()) -> Bool {
+        contentType == .text && canBeDeletedForEveryone(now: now)
     }
 
     /// Elimina i messaggi della Cabina Pubblica piu' vecchi di 12 ore.

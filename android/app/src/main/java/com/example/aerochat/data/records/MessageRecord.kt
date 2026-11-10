@@ -89,6 +89,12 @@ data class MessageRecord(
     /** epoch ms. */
     @ColumnInfo(name = "created_at_ms")
     val createdAtMs: Long = System.currentTimeMillis(),
+    /** Ultima modifica dell'autore (`MESSAGE_REVISION` EDIT), epoch ms; `null` se mai modificato. */
+    @ColumnInfo(name = "edited_at_ms")
+    val editedAtMs: Long? = null,
+    /** Cancellato per tutti (`MESSAGE_REVISION` DELETE): testo e media azzerati, la bolla mostra il segnaposto. */
+    @ColumnInfo(name = "is_deleted", defaultValue = "0")
+    val isDeleted: Boolean = false,
 ) {
 
     override fun equals(other: Any?): Boolean {
@@ -109,7 +115,9 @@ data class MessageRecord(
             isOutgoing == other.isOutgoing &&
             deliveryStatus == other.deliveryStatus &&
             hopCountReceived == other.hopCountReceived &&
-            createdAtMs == other.createdAtMs
+            createdAtMs == other.createdAtMs &&
+            editedAtMs == other.editedAtMs &&
+            isDeleted == other.isDeleted
     }
 
     override fun hashCode(): Int {
@@ -129,6 +137,8 @@ data class MessageRecord(
         result = 31 * result + deliveryStatus.hashCode()
         result = 31 * result + (hopCountReceived ?: 0)
         result = 31 * result + createdAtMs.hashCode()
+        result = 31 * result + (editedAtMs?.hashCode() ?: 0)
+        result = 31 * result + isDeleted.hashCode()
         return result
     }
 
@@ -162,6 +172,22 @@ data class MessageRecord(
         }
     }
 }
+
+/** Testo, foto e note vocali si possono cancellare per tutti; giochi e messaggi di sistema no. */
+val MessageRecord.isRevisableContent: Boolean
+    get() = contentType == MessageContentType.text || contentType == MessageContentType.image ||
+        contentType == MessageContentType.audio
+
+/**
+ * `true` se l'utente puo' ancora modificare/cancellare per tutti questo messaggio: nostro, non cancellato,
+ * di un tipo ammesso ed entro [MeshProtocol.revisionWindow] dall'invio. `now` in epoch ms.
+ */
+fun MessageRecord.canBeRevised(now: Long = System.currentTimeMillis()): Boolean =
+    isOutgoing && !isDeleted && isRevisableContent && now - createdAtMs <= MeshProtocol.revisionWindow
+
+/** Solo i messaggi di testo si possono modificare. */
+fun MessageRecord.canBeEdited(now: Long = System.currentTimeMillis()): Boolean =
+    canBeRevised(now) && contentType == MessageContentType.text
 
 /**
  * Indice full-text `messages_fts` (external content su `messages`, sincronizzato da trigger generati da Room).

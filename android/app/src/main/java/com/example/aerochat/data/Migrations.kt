@@ -22,6 +22,7 @@ import com.example.aerochat.data.records.ReportReason
  * - `v5_message_reads`: tabella `message_reads` (lettori dei messaggi di gruppo) -> Room versione 2
  * - `v6_reports` + `v7_flight_lounge` (release 1.1): tabella `reports` (segnalazioni locali) e
  *   `conversations.flight_code` (Cabina del volo) -> Room versione 3
+ * - `v8_message_revisions` (release 1.2): `messages.edited_at_ms`, `messages.is_deleted` -> Room versione 4
  *
  * Su Android (installazione nuova) la catena e' collassata nella versione Room 1, che contiene lo
  * schema finale con gli stessi nomi di tabelle, colonne e indici (le entity in `data.records`).
@@ -31,7 +32,7 @@ import com.example.aerochat.data.records.ReportReason
 object AppDatabaseMigrations {
 
     /** Versione Room dello schema corrente. */
-    const val schemaVersion = 3
+    const val schemaVersion = 4
 
     /**
      * 1 -> 2 (iOS `v5_message_reads`): lettori dei nostri messaggi di gruppo. La spunta blu arriva solo
@@ -65,8 +66,19 @@ object AppDatabaseMigrations {
         }
     }
 
+    /**
+     * 3 -> 4 (release 1.2): modifica e cancellazione per tutti dei propri messaggi (`MESSAGE_REVISION`).
+     * `edited_at_ms` alimenta l'etichetta "modificato"; `is_deleted` il segnaposto "Messaggio eliminato".
+     */
+    val MIGRATION_3_4: androidx.room.migration.Migration = object : androidx.room.migration.Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `messages` ADD COLUMN `edited_at_ms` INTEGER")
+            db.execSQL("ALTER TABLE `messages` ADD COLUMN `is_deleted` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     /** Migrazioni Room successive alla versione 1, in ordine. */
-    val all: Array<androidx.room.migration.Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    val all: Array<androidx.room.migration.Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 
     /**
      * Configurazione della connessione: `synchronous = NORMAL` (con WAL: durabilita' a livello di

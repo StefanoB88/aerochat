@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.2: modifica e cancellazione per tutti dei propri messaggi, badge dei non letti. -->
+<resources>
+    <string name="revisions_edit">Rediger</string>
+    <string name="revisions_delete_for_everyone">Slett for alle</string>
+    <string name="revisions_editing_title">Rediger melding</string>
+    <string name="revisions_cancel_editing">Avbryt redigering</string>
+    <string name="revisions_edited">redigert</string>
+    <string name="revisions_deleted_message">Meldingen ble slettet</string>
+    <string name="revisions_deleted_by_you">Du slettet denne meldingen</string>
+    <string name="revisions_delete_confirm_title">Slette meldingen for alle?</string>
+    <string name="revisions_delete_confirm_body">Meldingen slettes også på telefonene til mottakerne som mottar den.</string>
+    <string name="revisions_cancel">Avbryt</string>
+    <string name="revisions_failed">Det mislyktes: %1$s</string>
+    <string name="revisions_window_expired">Det har gått mer enn 15 minutter: meldingen kan ikke lenger redigeres eller slettes.</string>
+    <plurals name="revisions_unread_badge">
+        <item quantity="one">%1$d ulest</item>
+        <item quantity="other">%1$d uleste</item>
+    </plurals>
+</resources>

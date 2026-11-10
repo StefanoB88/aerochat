@@ -112,6 +112,8 @@ import com.example.aerochat.data.records.ConversationType
 import com.example.aerochat.data.records.DeliveryStatus
 import com.example.aerochat.data.records.MessageRecord
 import com.example.aerochat.data.records.PeerRecord
+import com.example.aerochat.data.records.canBeEdited
+import com.example.aerochat.data.records.isRevisableContent
 import com.example.aerochat.proto.GameKind
 import com.example.aerochat.ui.AeroRoutes
 import com.example.aerochat.ui.AeroTheme
@@ -173,6 +175,11 @@ class ConversationViewModel(
     private val _reachability = MutableStateFlow<Reachability>(Reachability.OutOfRange)
     val reachability: StateFlow<Reachability> = _reachability.asStateFlow()
     val draft = MutableStateFlow("")
+    /** Proprio messaggio in modifica: la barra mostra "Modifica messaggio" e l'invio manda la revisione. */
+    private val _editingMessage = MutableStateFlow<MessageRecord?>(null)
+    val editingMessage: StateFlow<MessageRecord?> = _editingMessage.asStateFlow()
+    /** Bozza messa da parte all'inizio della modifica, ripristinata se la modifica viene annullata. */
+    private var draftBeforeEditing: String = ""
     val errorMessage = MutableStateFlow<String?>(null)
     val infoMessage = MutableStateFlow<String?>(null)
     val showPaywall = MutableStateFlow(false)
@@ -346,6 +353,10 @@ class ConversationViewModel(
     // MARK: Invio
 
     fun sendText() {
+        if (_editingMessage.value != null) {
+            sendEdit()
+            return
+        }
         val text = draft.value.trim()
         val router = environment.router.value
         if (text.isEmpty() || router == null) return
@@ -366,6 +377,75 @@ class ConversationViewModel(
             }
         }
     }
+
+    // MARK: Modifica e cancellazione per tutti
+
+    /** "Modifica": il testo torna nella barra di scrittura. */
+    fun startEditing(message: MessageRecord) {
+        if (!message.canBeEdited()) {
+            infoMessage.value = context.getString(R.string.revisions_window_expired)
+            return
+        }
+        if (_editingMessage.value == null) draftBeforeEditing = draft.value
+        _editingMessage.value = message
+        draft.value = message.text ?: ""
+    }
+
+    fun cancelEditing() {
+        if (_editingMessage.value == null) return
+        _editingMessage.value = null
+        draft.value = draftBeforeEditing
+        draftBeforeEditing = ""
+    }
+
+    private fun sendEdit() {
+        val message = _editingMessage.value ?: return
+        val text = draft.value.trim()
+        if (text.isEmpty()) return
+        val conversation = _conversation.value
+        if (conversation.type == ConversationType.cabinLounge && MeshRouterActor.containsLink(text)) {
+            infoMessage.value = context.getString(R.string.chat_lounge_no_links)
+            return
+        }
+        _editingMessage.value = null
+        draft.value = draftBeforeEditing
+        draftBeforeEditing = ""
+        // Testo invariato: niente revisione.
+        if (text == message.text?.trim()) return
+        scope.launch {
+            try {
+                environment.editMessage(message, newText = text, conversation = conversation)
+                Haptics.impact(Haptics.ImpactStyle.light)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorMessage.value = revisionErrorText(e)
+            }
+        }
+    }
+
+    /** "Elimina per tutti" (gia' confermato dalla bolla). */
+    fun deleteForEveryone(message: MessageRecord) {
+        if (_editingMessage.value?.msgID?.contentEquals(message.msgID) == true) cancelEditing()
+        val conversation = _conversation.value
+        scope.launch {
+            try {
+                environment.deleteMessageForEveryone(message, conversation = conversation)
+                Haptics.success()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorMessage.value = revisionErrorText(e)
+            }
+        }
+    }
+
+    private fun revisionErrorText(error: Exception): String =
+        if (error is RouterError.RevisionNotAllowed) {
+            context.getString(R.string.revisions_window_expired)
+        } else {
+            context.getString(R.string.revisions_failed, error.describe())
+        }
 
     fun sendPhoto(uri: Uri) {
         if (!allows(ProFeature.photo)) return
@@ -753,6 +833,7 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
     val reachability by viewModel.reachability.collectAsStateWithLifecycle()
     val peer by viewModel.peer.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
+    val editingMessage by viewModel.editingMessage.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val infoMessage by viewModel.infoMessage.collectAsStateWithLifecycle()
     val showPaywall by viewModel.showPaywall.collectAsStateWithLifecycle()
@@ -886,6 +967,8 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
                 ComposerBar(
                     text = draft,
                     onTextChange = { viewModel.draft.value = it },
+                    isEditing = editingMessage != null,
+                    onCancelEditing = viewModel::cancelEditing,
                     recorder = viewModel.recorder,
                     showsAttachments = viewModel.showsAttachments,
                     onSend = viewModel::sendText,
@@ -1069,8 +1152,10 @@ private fun MessageListView(viewModel: ConversationViewModel, modifier: Modifier
             val id = message.msgID.toHex()
             val isCurrent = playingMessageID == id
             val transferProgress by remember(id) { derivedStateOf { mediaProgressState.value[id] } }
-            val canModerate = !message.isOutgoing &&
+            val canModerate = !message.isOutgoing && !message.isDeleted &&
                 message.contentType != MessageContentType.game && message.contentType != MessageContentType.system
+            // Modifica / Elimina per tutti: propri messaggi in una chat non scaduta (la bolla verifica i 15 minuti).
+            val canRevise = message.isOutgoing && !message.isDeleted && message.isRevisableContent && !conversation.isExpired()
             MessageBubble(
                 message = message,
                 showSender = showSender,
@@ -1087,6 +1172,8 @@ private fun MessageListView(viewModel: ConversationViewModel, modifier: Modifier
                 onReport = if (canModerate) ({ viewModel.reportTarget.value = message }) else null,
                 onBlock = if (canModerate) ({ viewModel.block(sender = message) }) else null,
                 blockLabel = stringResource(R.string.safety_block_user, message.senderNickname ?: conversation.title),
+                onEdit = if (canRevise) ({ viewModel.startEditing(message) }) else null,
+                onDeleteForEveryone = if (canRevise) ({ viewModel.deleteForEveryone(message) }) else null,
             )
         }
         items(pendingPhotos, key = { it.toString() }) {

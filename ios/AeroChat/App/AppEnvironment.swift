@@ -48,6 +48,8 @@ final class AppEnvironment {
     private(set) var entitlementState = EntitlementState.free
     /// Avanzamento (0...1) dei media in trasferimento, per `msg_id` dell'header.
     private(set) var mediaProgress: [Data: Double] = [:]
+    /// Non letti delle chat permanenti (Cabina Pubblica esclusa): badge del tab "Chat & Gruppi" e dell'icona.
+    private(set) var unreadTotal = 0
 
     private let identityStore: IdentityStore
     private let databaseFactory: @Sendable () throws -> AppDatabase
@@ -182,6 +184,22 @@ final class AppEnvironment {
             await router.setProfile(localProfile, announce: false)
         }
 
+        // Non letti osservati dal DB: ogni messaggio ricevuto, chat letta, chat o messaggio eliminato
+        // aggiorna il badge del tab e quello dell'icona (anche con l'app tenuta viva in background dal BLE).
+        backgroundTasks.append(Task { [weak self] in
+            var isFirstValue = true
+            for await conversations in database.conversations.observePermanent() {
+                guard let self else { break }
+                let total = conversations.reduce(0) { $0 + max(0, $1.unreadCount) }
+                // Il primo valore riallinea sempre l'icona (badge rimasto da una sessione precedente).
+                guard total != self.unreadTotal || isFirstValue else { continue }
+                isFirstValue = false
+                self.unreadTotal = total
+                self.refreshLiveActivity()
+                await LocalNotificationCenter.setAppBadge(total)
+            }
+        })
+
         let routerEvents = await router.events()
         backgroundTasks.append(Task { [weak self] in
             for await event in routerEvents {
@@ -211,6 +229,7 @@ final class AppEnvironment {
 
         if let store = try? mediaStoreFactory() {
             mediaStore = store
+            await router.setMediaStore(store)
             let media = MediaTransferService(router: router, database: database, store: store,
                                              identity: identityKeys, nickname: nickname)
             self.media = media
@@ -315,6 +334,14 @@ final class AppEnvironment {
     /// Ritorno in primo piano: riprova subito i messaggi in attesa di conferma di consegna.
     func sceneDidBecomeActive() async {
         await router?.flushRelayQueue()
+    }
+
+    /// Passaggio in background: il badge dell'icona riparte dal totale reale dei non letti.
+    func sceneDidEnterBackground() async {
+        guard let database else { return }
+        let total = (try? await database.conversations.totalUnread()) ?? unreadTotal
+        unreadTotal = total
+        await LocalNotificationCenter.setAppBadge(total)
     }
 
     func stopMesh() async {
@@ -448,6 +475,41 @@ final class AppEnvironment {
             await blockUser(nodeID: message.senderNodeID, nickname: message.senderNickname)
         }
         return report
+    }
+
+    // MARK: - Modifica e cancellazione per tutti
+
+    /// Modifica il testo di un nostro messaggio entro 15 minuti dall'invio (revisione inviata a tutti).
+    func editMessage(_ message: MessageRecord, newText: String) async throws {
+        guard let router else { throw RouterError.notRunning }
+        guard message.canBeEdited() else { throw RouterError.revisionWindowExpired }
+        try await router.reviseMessage(message, action: .edit, newText: newText)
+    }
+
+    /// Cancella per tutti un nostro messaggio (testo, foto, nota vocale) entro 15 minuti dall'invio;
+    /// il file media locale viene rimosso subito.
+    func deleteMessageForEveryone(_ message: MessageRecord) async throws {
+        guard let router else { throw RouterError.notRunning }
+        guard message.canBeDeletedForEveryone() else { throw RouterError.revisionWindowExpired }
+        if let path = try await router.reviseMessage(message, action: .delete), let mediaStore {
+            mediaStore.remove(relativePath: path)
+        }
+    }
+
+    /// Testo da mostrare quando una modifica / cancellazione per tutti non va a buon fine.
+    static func revisionFailureText(_ error: Error, isDelete: Bool) -> String {
+        switch error as? RouterError {
+        case .revisionWindowExpired:
+            return String(localized: "Sono passati più di 15 minuti: il messaggio non si può più modificare né eliminare.")
+        case .linkNotAllowedInLounge:
+            return String(localized: "Niente link in Cabina Pubblica: solo chiacchiere tra passeggeri.")
+        case .languageNotAllowedInLounge:
+            return String(localized: "Linguaggio non ammesso in Cabina Pubblica: qui si chiacchiera con rispetto.")
+        default:
+            return isDelete
+                ? String(localized: "Eliminazione non riuscita: \(error.localizedDescription)")
+                : String(localized: "Modifica non riuscita: \(error.localizedDescription)")
+        }
     }
 
     func setPinned(_ pinned: Bool, conversation: ConversationRecord) async throws {

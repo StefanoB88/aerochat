@@ -40,12 +40,16 @@ import com.example.aerochat.data.records.MessageContentType
 import com.example.aerochat.data.records.MessageRecord
 import com.example.aerochat.data.records.PeerRecord
 import com.example.aerochat.data.records.RelayQueueRecord
+import com.example.aerochat.data.repositories.MessageDeletion
+import com.example.aerochat.data.records.isRevisableContent
 import com.example.aerochat.proto.CallAudio
 import com.example.aerochat.proto.GroupKeyGossip
 import com.example.aerochat.proto.InnerPayload
 import com.example.aerochat.proto.MeshEnvelope
+import com.example.aerochat.proto.MessageRevision
 import com.example.aerochat.proto.PacketType
 import com.example.aerochat.proto.ProfileUpdate
+import com.example.aerochat.proto.RevisionAction
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
@@ -132,6 +136,15 @@ class MeshRouterActor(
     }
 
     private class LastSeenWrite(val date: Long, val hops: Int?)
+
+    /** `MESSAGE_REVISION` verificato in attesa del messaggio originale. */
+    private class PendingRevision(
+        val senderNodeID: ByteArray,
+        val conversationID: String,
+        val isLounge: Boolean,
+        val revision: MessageRevision,
+        val receivedAtMs: Long,
+    )
     private class CallPeer(val peer: PeerRecord, val key: SymmetricKey)
 
     // MARK: - Stato (confinato su actorContext)
@@ -173,6 +186,11 @@ class MeshRouterActor(
     private val profileSentTo = HashSet<String>()
     /** `recipient_id` (hex) dei gruppi noti. */
     private val knownGroupRecipientIDs = HashSet<String>()
+    /**
+     * Revisioni arrivate prima del messaggio originale, per `msg_id` (hex) dell'originale, in ordine di
+     * arrivo (max [MeshProtocol.pendingRevisionCapacity], dimenticate dopo [MeshProtocol.revisionWindow]).
+     */
+    private val pendingRevisions = LinkedHashMap<String, MutableList<PendingRevision>>()
 
     @Volatile
     private var currentStats = RouterStats()
@@ -926,6 +944,7 @@ class MeshRouterActor(
                 type == PacketType.GROUP_KEY_GOSSIP && target is Target.Me -> handleGossip(envelope, hops)
                 type == PacketType.READ_RECEIPT && target is Target.Me -> handleReadReceipt(envelope)
                 type == PacketType.PROFILE_UPDATE && target is Target.Me -> handleProfileUpdate(envelope)
+                type == PacketType.MESSAGE_REVISION && target !is Target.Other -> handleRevision(envelope, target)
                 type == PacketType.CALL_SIGNAL && target is Target.Me -> {
                     // Solo dal vicino diretto: con un ponte di mezzo la chiamata non reggerebbe.
                     if (envelope.hopCount != 0) return
@@ -1018,6 +1037,7 @@ class MeshRouterActor(
         )
         if (database.messages.insert(message)) {
             emit(RouterEvent.MessageReceived(conversationID = lounge.id, msgID = message.msgID))
+            applyPendingRevisions(message.msgID)
         }
     }
 
@@ -1050,9 +1070,15 @@ class MeshRouterActor(
         }
         if (database.messages.insert(message)) {
             emit(RouterEvent.MessageReceived(conversationID = conversation.id, msgID = message.msgID))
-            if (notify) {
+            // Modifica o cancellazione arrivata prima del messaggio: si applica ora (e la notifica la rispetta).
+            val current = if (applyPendingRevisions(message.msgID)) {
+                attempt { database.messages.fetch(msgID = message.msgID) } ?: message
+            } else {
+                message
+            }
+            if (notify && !current.isDeleted) {
                 // Un errore della notifica non deve impedire l'ACK (il mittente ritrasmetterebbe all'infinito).
-                attempt { notifier.notify(message = message, conversation = conversation) }
+                attempt { notifier.notify(message = current, conversation = conversation) }
             }
         }
     }
@@ -1071,7 +1097,7 @@ class MeshRouterActor(
     private suspend fun reacknowledgeDuplicate(envelope: MeshEnvelope) {
         val recipientID = envelope.recipientId.toByteArray()
         val type = envelope.packetType
-        if ((type != PacketType.CHAT_TEXT && type != PacketType.GAME_MOVE) ||
+        if ((type != PacketType.CHAT_TEXT && type != PacketType.GAME_MOVE && type != PacketType.MESSAGE_REVISION) ||
             !(recipientID.contentEquals(myNodeID) || isGroupRecipient(recipientID.toHex()))
         ) return
         val msgID = envelope.msgId.toByteArray()
@@ -1088,6 +1114,8 @@ class MeshRouterActor(
             val stored = attempt { database.messages.fetch(msgID = msgID) } ?: return
             if (stored.isOutgoing || !stored.senderNodeID.contentEquals(senderID)) return
         }
+        // Revisioni: come le mosse, non hanno un messaggio proprio; il duplicato verificato una volta (msg_id
+        // gia' visto) da un peer noto viene riconfermato.
         // Mosse di gioco: non hanno un messaggio proprio (lo stato vive nella bolla dell'invito); il
         // duplicato di un msg_id gia' visto da un peer noto viene riconfermato cosi' smette di ritrasmettere.
         attempt { sendAck(envelope, peer) }
@@ -1098,6 +1126,197 @@ class MeshRouterActor(
         val msgID = payload.replyToMessageID ?: return
         database.messages.advanceDeliveryStatus(to = DeliveryStatus.deliveredAck, msgID = msgID)
         attempt { database.relayQueue.remove(msgID = msgID) }
+    }
+
+    // MARK: - Modifica e cancellazione per tutti (MESSAGE_REVISION)
+
+    /**
+     * Modifica ([RevisionAction.EDIT], solo testo) o cancella per tutti ([RevisionAction.DELETE]) un nostro
+     * messaggio entro [MeshProtocol.revisionWindow]: applica la revisione in locale e la invia nella stessa
+     * conversazione dell'originale (stessa chiave e `recipient_id`). Chat e gruppi: resta in coda fino al
+     * `DELIVERY_ACK`; Lounge: nessun ACK. Lancia [RouterError.RevisionNotAllowed] se non consentita.
+     * Ritorna l'esito della cancellazione (path del media da rimuovere) per DELETE, `null` per EDIT.
+     */
+    suspend fun sendRevision(
+        message: MessageRecord,
+        action: RevisionAction,
+        newText: String? = null,
+        conversation: ConversationRecord,
+        now: Long = nowUnixMilliseconds,
+    ): MessageDeletion? = withContext(actorContext) {
+        if (!isRunning) throw RouterError.NotRunning
+        val original = database.messages.fetch(msgID = message.msgID) ?: throw RouterError.RevisionNotAllowed
+        if (!original.isOutgoing || !original.senderNodeID.contentEquals(myNodeID) ||
+            original.conversationID != conversation.id || original.isDeleted ||
+            now - original.createdAtMs > MeshProtocol.revisionWindow ||
+            (conversation.expiresAtMs?.let { it <= now } == true)
+        ) throw RouterError.RevisionNotAllowed
+
+        val builder = MessageRevision.newBuilder()
+            .setTargetMsgId(original.msgID.toByteString())
+            .setAction(action)
+            .setRevisedAtMs(now)
+        var deletion: MessageDeletion? = null
+        when (action) {
+            RevisionAction.EDIT -> {
+                val text = newText?.trim().orEmpty()
+                if (original.contentType != MessageContentType.text || text.isEmpty() ||
+                    text.length > MeshProtocol.maxRevisionTextLength
+                ) throw RouterError.RevisionNotAllowed
+                if (conversation.type == ConversationType.cabinLounge && containsLink(text)) {
+                    throw RouterError.LinkNotAllowedInLounge
+                }
+                builder.setNewText(text)
+                if (!database.messages.applyEdit(msgID = original.msgID, newText = text, editedAtMs = now)) {
+                    throw RouterError.RevisionNotAllowed
+                }
+            }
+            RevisionAction.DELETE -> {
+                if (!original.isRevisableContent) throw RouterError.RevisionNotAllowed
+                deletion = database.messages.applyDelete(msgID = original.msgID) ?: throw RouterError.RevisionNotAllowed
+            }
+            RevisionAction.REVISION_ACTION_UNSPECIFIED, RevisionAction.UNRECOGNIZED -> throw RouterError.RevisionNotAllowed
+        }
+
+        val payload = InnerPayloadFactory.extra(MeshWire.serialize(builder.build()), identity = identity, nickname = nickname)
+        val envelope = makeEnvelope(PacketType.MESSAGE_REVISION, payload, conversation, msgID = CryptoEngine.randomMessageID())
+        attempt {
+            dispatch(
+                envelope, storeIfUnreachable = true,
+                retainUntilAck = conversation.type != ConversationType.cabinLounge,
+            )
+        }
+        deletion
+    }
+
+    /** Ricezione di un `MESSAGE_REVISION` (diretto, gruppo o Lounge): verifica, applica o mette in attesa. */
+    private suspend fun handleRevision(envelope: MeshEnvelope, target: Target) {
+        val payload: InnerPayload
+        val conversationID: String
+        var ackPeer: PeerRecord? = null
+        when (target) {
+            Target.Me -> {
+                val (opened, peer) = openDirect(envelope)
+                payload = opened
+                conversationID = database.conversations.ensureDirectConversation(with = peer).id
+                ackPeer = peer
+            }
+            is Target.Group -> {
+                val secret = target.conversation.groupSecretKey ?: throw RouterError.MissingGroupKey
+                val (opened, sender) = openShared(envelope, CryptoEngine.groupKey(fromSecret = secret))
+                payload = opened
+                conversationID = target.conversation.id
+                ackPeer = database.peers.upsert(sender)
+            }
+            is Target.Lounge -> {
+                payload = openShared(envelope, CryptoEngine.publicCabinKey).first
+                conversationID = target.conversation.id
+            }
+            Target.Other -> return
+        }
+        val revision = attempt { MeshWire.parseMessageRevision(payload.extraData.toByteArray()) }
+        if (revision != null) {
+            val pending = PendingRevision(
+                senderNodeID = envelope.senderNodeId.toByteArray(),
+                conversationID = conversationID,
+                isLounge = target is Target.Lounge,
+                revision = revision,
+                receivedAtMs = nowUnixMilliseconds,
+            )
+            applyIncomingRevision(pending, bufferIfMissing = true)
+        }
+        // Chat e gruppi: il mittente ritrasmette finche' non riceve l'ACK (anche se la revisione e' scartata).
+        ackPeer?.let { attempt { sendAck(envelope, it) } }
+    }
+
+    /**
+     * Applica una revisione ricevuta con tutte le verifiche del contratto. Se l'originale non c'e' ancora
+     * (e [bufferIfMissing]) la revisione resta in memoria. Ritorna `true` se il messaggio e' cambiato.
+     */
+    private suspend fun applyIncomingRevision(pending: PendingRevision, bufferIfMissing: Boolean): Boolean {
+        val revision = pending.revision
+        val targetID = revision.targetMsgId.toByteArray()
+        if (targetID.size != MeshProtocol.msgIDLength) return false
+        if (revision.action != RevisionAction.EDIT && revision.action != RevisionAction.DELETE) return false
+        val original = attempt { database.messages.fetch(msgID = targetID) }
+        if (original == null) {
+            if (bufferIfMissing) bufferPendingRevision(targetID.toHex(), pending)
+            return false
+        }
+        // Solo l'autore, nella stessa conversazione, entro la finestra (+ tolleranza per gli orologi).
+        if (original.isOutgoing || !original.senderNodeID.contentEquals(pending.senderNodeID) ||
+            original.conversationID != pending.conversationID || original.isDeleted ||
+            !original.isRevisableContent ||
+            revision.revisedAtMs - original.createdAtMs > MeshProtocol.revisionWindow + MeshProtocol.revisionClockTolerance
+        ) return false
+        when (revision.action) {
+            RevisionAction.EDIT -> {
+                if (original.contentType != MessageContentType.text) return false
+                val trimmed = revision.newText.trim()
+                if (trimmed.isEmpty() || trimmed.length > MeshProtocol.maxRevisionTextLength) return false
+                var text = trimmed
+                if (pending.isLounge) {
+                    if (containsLink(text)) return false
+                    if (AppSettings.isLanguageFilterEnabled) text = ContentFilter.masked(text)
+                }
+                val applied = attempt {
+                    database.messages.applyEdit(msgID = targetID, newText = text, editedAtMs = revision.revisedAtMs)
+                } == true
+                if (applied) {
+                    emit(RouterEvent.MessageRevised(original.conversationID, targetID, isDeleted = false, deletedMediaPath = null))
+                }
+                return applied
+            }
+            RevisionAction.DELETE -> {
+                val deletion = attempt { database.messages.applyDelete(msgID = targetID) } ?: return false
+                emit(
+                    RouterEvent.MessageRevised(
+                        original.conversationID, targetID, isDeleted = true, deletedMediaPath = deletion.mediaPath,
+                    ),
+                )
+                attempt { notifier.cancelMessage(msgID = targetID, conversationID = original.conversationID) }
+                return true
+            }
+            else -> return false
+        }
+    }
+
+    private fun bufferPendingRevision(key: String, pending: PendingRevision) {
+        purgePendingRevisions(nowUnixMilliseconds)
+        pendingRevisions.getOrPut(key) { ArrayList(2) }.add(pending)
+        // Capienza complessiva: si dimenticano le revisioni piu' vecchie.
+        var total = pendingRevisions.values.sumOf { it.size }
+        while (total > MeshProtocol.pendingRevisionCapacity) {
+            val oldestKey = pendingRevisions.keys.firstOrNull() ?: break
+            val list = pendingRevisions.getValue(oldestKey)
+            list.removeAt(0)
+            if (list.isEmpty()) pendingRevisions.remove(oldestKey)
+            total -= 1
+        }
+    }
+
+    private fun purgePendingRevisions(now: Long) {
+        val iterator = pendingRevisions.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            entry.value.removeAll { now - it.receivedAtMs > MeshProtocol.revisionWindow }
+            if (entry.value.isEmpty()) iterator.remove()
+        }
+    }
+
+    /**
+     * Il messaggio originale e' appena arrivato (testo qui, foto/nota vocale da [com.example.aerochat.core.media.MediaTransferService]):
+     * applica le revisioni in attesa, nell'ordine dell'istante di revisione. Ritorna `true` se il messaggio e' cambiato.
+     */
+    suspend fun applyPendingRevisions(msgID: ByteArray): Boolean = withContext(actorContext) {
+        val list = pendingRevisions.remove(msgID.toHex()) ?: return@withContext false
+        val now = nowUnixMilliseconds
+        var changed = false
+        for (pending in list.sortedBy { it.revision.revisedAtMs }) {
+            if (now - pending.receivedAtMs > MeshProtocol.revisionWindow) continue
+            if (applyIncomingRevision(pending, bufferIfMissing = false)) changed = true
+        }
+        changed
     }
 
     // MARK: - Conferme di lettura
@@ -1306,6 +1525,7 @@ class MeshRouterActor(
         lastAckSentAt.entries.removeAll { now - it.value >= throttle }
         val seenInterval = configuration.lastSeenWriteInterval
         lastSeenWrites.entries.removeAll { now - it.value.date >= seenInterval }
+        purgePendingRevisions(now)
         attempt { database.runMaintenance(now = now) }
         if (links.isNotEmpty()) {
             flushRelayQueue()

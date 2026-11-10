@@ -21,6 +21,8 @@ typealias QuizAction = Aeromesh_V1_QuizAction
 typealias QuizScore = Aeromesh_V1_QuizScore
 typealias EmergencyBroadcast = Aeromesh_V1_EmergencyBroadcast
 typealias EmergencyStatus = Aeromesh_V1_EmergencyStatus
+typealias MessageRevision = Aeromesh_V1_MessageRevision
+typealias RevisionAction = Aeromesh_V1_RevisionAction
 
 /// Punto unico di (de)serializzazione Protobuf, cosi' il resto dell'app (e i test)
 /// non dipendono direttamente dalle API di SwiftProtobuf.
@@ -64,6 +66,14 @@ enum MeshWire {
 
     static func serialize(_ emergency: EmergencyBroadcast) throws -> Data {
         try emergency.serializedBytes()
+    }
+
+    static func serialize(_ revision: MessageRevision) throws -> Data {
+        try revision.serializedBytes()
+    }
+
+    static func parseMessageRevision(_ data: Data) throws -> MessageRevision {
+        try MessageRevision(serializedBytes: data)
     }
 
     static func parseQuizPacket(_ data: Data) throws -> QuizPacket {

@@ -79,12 +79,14 @@ import com.example.aerochat.R
 import com.example.aerochat.app.AppEnvironment
 import com.example.aerochat.app.LocalAppEnvironment
 import com.example.aerochat.core.mesh.MeshRouterActor
+import com.example.aerochat.core.mesh.RouterError
 import com.example.aerochat.core.moderation.AppSettings
 import com.example.aerochat.core.moderation.ContentFilter
 import com.example.aerochat.core.protocol.toHex
 import com.example.aerochat.data.records.ConversationRecord
 import com.example.aerochat.data.records.MessageRecord
 import com.example.aerochat.data.records.ReportRecord
+import com.example.aerochat.data.records.canBeEdited
 import com.example.aerochat.ui.AeroTheme
 import com.example.aerochat.ui.chat.InfoBanner
 import com.example.aerochat.ui.components.ComposerBar
@@ -132,6 +134,10 @@ class CabinLoungeViewModel(context: Context) {
     private var blocked: Set<String> = emptySet()
     val draft = MutableStateFlow("")
     val infoMessage = MutableStateFlow<String?>(null)
+    /** Proprio messaggio in modifica: la barra mostra "Modifica messaggio" e l'invio manda la revisione. */
+    private val _editingMessage = MutableStateFlow<MessageRecord?>(null)
+    val editingMessage: StateFlow<MessageRecord?> = _editingMessage.asStateFlow()
+    private var draftBeforeEditing: String = ""
     private val tasks = mutableListOf<Job>()
 
     fun start(environment: AppEnvironment) {
@@ -187,6 +193,10 @@ class CabinLoungeViewModel(context: Context) {
     }
 
     fun send(environment: AppEnvironment) {
+        if (_editingMessage.value != null) {
+            sendEdit(environment)
+            return
+        }
         val text = draft.value.trim()
         val lounge = _lounge.value
         val router = environment.router.value
@@ -213,6 +223,79 @@ class CabinLoungeViewModel(context: Context) {
             }
         }
     }
+
+    // MARK: Modifica e cancellazione per tutti
+
+    fun startEditing(message: MessageRecord) {
+        if (!message.canBeEdited()) {
+            infoMessage.value = context.getString(R.string.revisions_window_expired)
+            return
+        }
+        if (_editingMessage.value == null) draftBeforeEditing = draft.value
+        _editingMessage.value = message
+        draft.value = message.text ?: ""
+    }
+
+    fun cancelEditing() {
+        if (_editingMessage.value == null) return
+        _editingMessage.value = null
+        draft.value = draftBeforeEditing
+        draftBeforeEditing = ""
+    }
+
+    /** Stesse regole dell'invio nella Cabina: niente link, niente parolacce (rifiuto in invio). */
+    private fun sendEdit(environment: AppEnvironment) {
+        val message = _editingMessage.value ?: return
+        val lounge = _lounge.value ?: return
+        val text = draft.value.trim()
+        if (text.isEmpty()) return
+        if (MeshRouterActor.containsLink(text)) {
+            infoMessage.value = context.getString(R.string.chat_lounge_links_blocked)
+            return
+        }
+        if (ContentFilter.containsProfanity(text)) {
+            infoMessage.value = context.getString(R.string.lounge11_profanity_blocked)
+            Haptics.warning()
+            return
+        }
+        _editingMessage.value = null
+        draft.value = draftBeforeEditing
+        draftBeforeEditing = ""
+        if (text == message.text?.trim()) return
+        scope.launch {
+            try {
+                environment.editMessage(message, newText = text, conversation = lounge)
+                Haptics.impact(Haptics.ImpactStyle.light)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                infoMessage.value = revisionErrorText(e)
+            }
+        }
+    }
+
+    fun deleteForEveryone(message: MessageRecord, environment: AppEnvironment) {
+        val lounge = _lounge.value ?: return
+        if (_editingMessage.value?.msgID?.contentEquals(message.msgID) == true) cancelEditing()
+        scope.launch {
+            try {
+                environment.deleteMessageForEveryone(message, conversation = lounge)
+                Haptics.success()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                infoMessage.value = revisionErrorText(e)
+            }
+        }
+    }
+
+    private fun revisionErrorText(error: Exception): String =
+        if (error is RouterError.RevisionNotAllowed) {
+            context.getString(R.string.revisions_window_expired)
+        } else {
+            val description = error.localizedMessage?.takeIf { it.isNotBlank() } ?: error.toString()
+            context.getString(R.string.revisions_failed, description)
+        }
 
     fun block(nodeID: ByteArray, environment: AppEnvironment) {
         val hex = nodeID.toHex()
@@ -278,6 +361,7 @@ fun CabinLoungeView() {
     val loaded by viewModel.loaded.collectAsStateWithLifecycle()
     val lounge by viewModel.lounge.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
+    val editingMessage by viewModel.editingMessage.collectAsStateWithLifecycle()
     val infoMessage by viewModel.infoMessage.collectAsStateWithLifecycle()
     val quizState by environment.quizState.collectAsStateWithLifecycle()
     val settings by AppSettings.state.collectAsStateWithLifecycle()
@@ -464,6 +548,8 @@ fun CabinLoungeView() {
                                 Haptics.tap()
                                 viewModel.block(message.senderNodeID, environment)
                             },
+                            onEdit = { viewModel.startEditing(message) },
+                            onDeleteForEveryone = { viewModel.deleteForEveryone(message, environment) },
                         )
                     }
                 }
@@ -475,6 +561,8 @@ fun CabinLoungeView() {
                     onSend = { viewModel.send(environment) },
                     onToggleRecording = {},
                     onStartGame = {},
+                    isEditing = editingMessage != null,
+                    onCancelEditing = viewModel::cancelEditing,
                 )
             }
             InfoBanner(
@@ -529,8 +617,16 @@ private fun QuizToolbarButton(state: QuizService.State?, onClick: () -> Unit) {
 /** Bolla della Lounge con il menu a pressione prolungata "Blocca / Silenzia" (Swift `.contextMenu`). */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun LoungeMessage(message: MessageRecord, onReport: () -> Unit, onBlock: () -> Unit) {
+private fun LoungeMessage(
+    message: MessageRecord,
+    onReport: () -> Unit,
+    onBlock: () -> Unit,
+    onEdit: () -> Unit,
+    onDeleteForEveryone: () -> Unit,
+) {
     var showMenu by remember { mutableStateOf(false) }
+    // Messaggio cancellato dal mittente: niente segnala / blocca su un segnaposto.
+    val hasSafetyMenu = !message.isOutgoing && !message.isDeleted
     Box {
         MessageBubble(
             message = message,
@@ -540,7 +636,10 @@ private fun LoungeMessage(message: MessageRecord, onReport: () -> Unit, onBlock:
             isPlaying = false,
             transferProgress = null,
             selectableText = message.isOutgoing,
-            modifier = if (message.isOutgoing) Modifier else Modifier.combinedClickable(
+            // Propri messaggi: "Modifica" ed "Elimina per tutti" entro 15 minuti (menu della bolla).
+            onEdit = if (message.isOutgoing) onEdit else null,
+            onDeleteForEveryone = if (message.isOutgoing) onDeleteForEveryone else null,
+            modifier = if (!hasSafetyMenu) Modifier else Modifier.combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = {},
@@ -550,7 +649,7 @@ private fun LoungeMessage(message: MessageRecord, onReport: () -> Unit, onBlock:
                 },
             ),
         )
-        if (!message.isOutgoing) {
+        if (hasSafetyMenu) {
             AeroDropdownMenu(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },

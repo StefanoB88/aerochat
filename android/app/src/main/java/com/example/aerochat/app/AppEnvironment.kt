@@ -42,6 +42,9 @@ import com.example.aerochat.data.records.MessageRecord
 import com.example.aerochat.data.records.PeerRecord
 import com.example.aerochat.data.records.ReportReason
 import com.example.aerochat.data.records.ReportRecord
+import com.example.aerochat.data.records.canBeEdited
+import com.example.aerochat.data.records.canBeRevised
+import com.example.aerochat.proto.RevisionAction
 import com.example.aerochat.BuildConfig
 import com.example.aerochat.ui.AppNavigator
 import com.example.aerochat.ui.components.Haptics
@@ -162,6 +165,11 @@ class AppEnvironment(
     private val _relayQueueCount = MutableStateFlow(0)
     val relayQueueCount: StateFlow<Int> = _relayQueueCount.asStateFlow()
 
+    /** Non letti totali (badge della scheda "Chat & Gruppi"), osservati dal database. */
+    private val _totalUnread = MutableStateFlow(0)
+    val totalUnread: StateFlow<Int> = _totalUnread.asStateFlow()
+    private var totalUnreadTask: Job? = null
+
     /** `msg_id` dell'ultimo messaggio ricevuto (ogni ricezione e' un nuovo array → nuova emissione). */
     private val _lastReceivedMessageID = MutableStateFlow<ByteArray?>(null)
     val lastReceivedMessageID: StateFlow<ByteArray?> = _lastReceivedMessageID.asStateFlow()
@@ -238,6 +246,7 @@ class AppEnvironment(
             _database.value = db
             _identityKeys.value = keys
             _identityRecord.value = record
+            observeTotalUnread(db)
             _phase.value = Phase.Ready
             if (record != null) {
                 startMesh()
@@ -306,7 +315,50 @@ class AppEnvironment(
         } else {
             runCatching { _database.value?.messages?.markIncomingRead(conversationID = conversation.id) }
         }
+        // Le notifiche della chat letta spariscono: il badge sull'icona scende.
+        runCatching { notifier.cancelConversation(conversationID = conversation.id) }
         refreshLiveStatus()
+    }
+
+    /**
+     * Badge in-app e sull'icona: la somma dei non letti viene osservata dal database; il numero delle
+     * notifiche dei messaggi (`setNumber`) la legge al momento della pubblicazione.
+     */
+    private fun observeTotalUnread(database: AppDatabase) {
+        (notifier as? LocalNotificationCenter)?.unreadCountProvider = { database.conversations.totalUnread() }
+        totalUnreadTask?.cancel()
+        totalUnreadTask = scope.launch {
+            runCatching { database.conversations.observeTotalUnread().collect { _totalUnread.value = it } }
+        }
+    }
+
+    // MARK: - Modifica e cancellazione per tutti
+
+    /**
+     * Modifica un nostro messaggio di testo entro 15 minuti: il nuovo testo sostituisce il vecchio anche sui
+     * telefoni dei destinatari (`MESSAGE_REVISION` EDIT). Lancia [RouterError.RevisionNotAllowed] fuori finestra.
+     */
+    suspend fun editMessage(message: MessageRecord, newText: String, conversation: ConversationRecord) {
+        val router = _router.value ?: throw RouterError.NotRunning
+        if (!message.canBeEdited()) throw RouterError.RevisionNotAllowed
+        router.sendRevision(message, action = RevisionAction.EDIT, newText = newText, conversation = conversation)
+    }
+
+    /**
+     * Cancella per tutti un nostro messaggio (testo, foto, nota vocale) entro 15 minuti e rimuove il suo
+     * file media dal disco. Lancia [RouterError.RevisionNotAllowed] fuori finestra.
+     */
+    suspend fun deleteMessageForEveryone(message: MessageRecord, conversation: ConversationRecord) {
+        val router = _router.value ?: throw RouterError.NotRunning
+        if (!message.canBeRevised()) throw RouterError.RevisionNotAllowed
+        val deletion = router.sendRevision(message, action = RevisionAction.DELETE, conversation = conversation)
+        removeMedia(deletion?.mediaPath)
+    }
+
+    private suspend fun removeMedia(relativePath: String?) {
+        val path = relativePath ?: return
+        val store = _mediaStore.value ?: return
+        withContext(Dispatchers.IO) { runCatching { store.remove(relativePath = path) } }
     }
 
     /** Avvia trasporto BLE, router e servizi (idempotente). */
@@ -659,6 +711,7 @@ class AppEnvironment(
         val paths = runCatching { database.messages.mediaPaths(conversationID = conversation.id) }.getOrNull()
             ?: emptyList()
         database.conversations.delete(conversationID = conversation.id)
+        runCatching { notifier.cancelConversation(conversationID = conversation.id) }
         val store = _mediaStore.value ?: return
         withContext(Dispatchers.IO) { paths.forEach { store.remove(relativePath = it) } }
     }
@@ -696,6 +749,11 @@ class AppEnvironment(
                 refreshLiveStatus()
             }
             is RouterEvent.RelayQueueChanged -> _relayQueueCount.value = event.count
+            // Cancellato per tutti dal mittente: via il file della foto / nota vocale.
+            is RouterEvent.MessageRevised -> {
+                removeMedia(event.deletedMediaPath)
+                if (event.isDeleted) refreshLiveStatus()
+            }
             is RouterEvent.GroupMembersChanged -> {
                 // Nuovi membri nel gruppo: se siamo Pro, il pass li raggiunge subito.
                 if (!isPro) return

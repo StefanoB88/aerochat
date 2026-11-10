@@ -20,6 +20,7 @@ enum PacketType {
   CALL_AUDIO = 11;    // audio della chiamata, solo link diretto (ttl 1), mai in coda: extra_data = CallAudio
   QUIZ = 12;          // quiz di cabina: recipient = Lounge (8 zeri), chiave della Lounge, mai in coda: extra_data = QuizPacket
   EMERGENCY = 13;     // avviso di emergenza: recipient = Lounge, chiave della Lounge, ttl massimo, in coda: extra_data = EmergencyBroadcast
+  MESSAGE_REVISION = 14; // modifica/cancellazione per tutti del proprio messaggio, stessa conversazione dell'originale: extra_data = MessageRevision
 }
 
 message MeshEnvelope {

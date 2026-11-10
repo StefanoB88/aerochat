@@ -18,6 +18,8 @@ struct MessageBubble: View {
     var onOpenImage: () -> Void = {}
     /// Foto da un mittente non verificato: resta sfocata finche' l'utente non la tocca (anti AirDrop-molesto).
     var hidesMediaUntilTap = false
+    /// "Elimina per tutti" nel menu della foto (il menu della foto copre quello della bolla); nil = non disponibile.
+    var onDeleteForEveryone: (() -> Void)? = nil
 
     @State private var isRevealed = false
 
@@ -60,6 +62,28 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var content: some View {
+        if message.isDeleted {
+            deletedPlaceholder
+        } else {
+            liveContent
+        }
+    }
+
+    /// Messaggio cancellato per tutti: segnaposto in corsivo, niente media ne' azioni.
+    private var deletedPlaceholder: some View {
+        Label {
+            (isOutgoing ? Text("Hai eliminato questo messaggio") : Text("Messaggio eliminato"))
+                .italic()
+        } icon: {
+            Image(systemName: "nosign")
+        }
+        .font(.body)
+        .foregroundStyle(AeroTheme.textSecondary)
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var liveContent: some View {
         switch message.contentType {
         case .text, .system:
             Text(message.text ?? "")
@@ -109,6 +133,11 @@ struct MessageBubble: View {
                     if message.mediaLocalPath != nil, !isBlurred {
                         Button { onSaveImage() } label: { Label("Salva nelle Foto", systemImage: "square.and.arrow.down") }
                     }
+                    if let onDeleteForEveryone {
+                        Button(role: .destructive) { onDeleteForEveryone() } label: {
+                            Label("Elimina per tutti", systemImage: "trash")
+                        }
+                    }
                 }
         case .audio:
             HStack(spacing: 10) {
@@ -142,6 +171,11 @@ struct MessageBubble: View {
 
     private var footer: some View {
         HStack(spacing: 4) {
+            if message.editedAtMs != nil, !message.isDeleted {
+                Text("modificato")
+                    .font(.caption2)
+                    .foregroundStyle(AeroTheme.textSecondary)
+            }
             Text(Date(unixMilliseconds: message.createdAtMs), style: .time)
                 .font(.caption2)
                 .foregroundStyle(AeroTheme.textSecondary)

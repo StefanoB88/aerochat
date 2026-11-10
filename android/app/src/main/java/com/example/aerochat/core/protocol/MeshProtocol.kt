@@ -96,6 +96,17 @@ object MeshProtocol {
     /** Durata del Flight Group Pass propagato via `PRO_PASS_GRANT` (ms). */
     const val proPassDuration: Long = 72 * 3_600_000L
 
+    // MARK: - Modifica e cancellazione (MESSAGE_REVISION)
+
+    /** Finestra entro cui l'autore puo' modificare o cancellare per tutti un proprio messaggio (ms). */
+    const val revisionWindow: Long = 15 * 60_000L
+    /** Tolleranza in ricezione per orologi non allineati, oltre a [revisionWindow] (ms). */
+    const val revisionClockTolerance: Long = 2 * 60_000L
+    /** Lunghezza massima del nuovo testo di un EDIT (caratteri, dopo il trim). */
+    const val maxRevisionTextLength = 4_000
+    /** Revisioni arrivate prima del messaggio originale tenute in memoria. */
+    const val pendingRevisionCapacity = 64
+
     /** `recipient_id` della Lounge Pubblica: 8 byte a zero. Restituisce sempre una copia nuova. */
     val loungeRecipientID: ByteArray get() = ByteArray(nodeIDLength)
     /** `sender_node_id` per relay anonimo: 8 byte a zero. Restituisce sempre una copia nuova. */

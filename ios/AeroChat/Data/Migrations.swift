@@ -184,6 +184,14 @@ extension AppDatabase {
             }
         }
 
+        // Modifica e cancellazione per tutti dei propri messaggi (`MESSAGE_REVISION`, release 1.2).
+        migrator.registerMigration("v8_message_revisions") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "edited_at_ms", .integer)
+                t.add(column: "is_deleted", .boolean).notNull().defaults(to: false)
+            }
+        }
+
         return migrator
     }
 }

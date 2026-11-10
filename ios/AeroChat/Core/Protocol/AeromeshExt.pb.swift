@@ -505,6 +505,58 @@ nonisolated struct Aeromesh_V1_EmergencyBroadcast: Sendable {
   init() {}
 }
 
+nonisolated enum Aeromesh_V1_RevisionAction: SwiftProtobuf.Enum, Swift.CaseIterable {
+  typealias RawValue = Int
+  case unspecified // = 0
+  case edit // = 1
+  case delete // = 2
+  case UNRECOGNIZED(Int)
+
+  init() {
+    self = .unspecified
+  }
+
+  init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .edit
+    case 2: self = .delete
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .edit: return 1
+    case .delete: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  static let allCases: [Aeromesh_V1_RevisionAction] = [
+    .unspecified,
+    .edit,
+    .delete,
+  ]
+
+}
+
+nonisolated struct Aeromesh_V1_MessageRevision: Sendable {
+  var targetMsgID: Data = Data()
+
+  var action: Aeromesh_V1_RevisionAction = .unspecified
+
+  var newText: String = String()
+
+  var revisedAtMs: Int64 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "aeromesh.v1"
@@ -1073,6 +1125,61 @@ nonisolated extension Aeromesh_V1_EmergencyBroadcast: SwiftProtobuf.Message, Swi
     if lhs.longitude != rhs.longitude {return false}
     if lhs.hasLocation_p != rhs.hasLocation_p {return false}
     if lhs.issuedAtMs != rhs.issuedAtMs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_RevisionAction: SwiftProtobuf._ProtoNameProviding {
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "REVISION_ACTION_UNSPECIFIED"),
+    1: .same(proto: "EDIT"),
+    2: .same(proto: "DELETE"),
+  ]
+}
+
+nonisolated extension Aeromesh_V1_MessageRevision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".MessageRevision"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "target_msg_id"),
+    2: .same(proto: "action"),
+    3: .standard(proto: "new_text"),
+    4: .standard(proto: "revised_at_ms"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.targetMsgID) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.action) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.newText) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.revisedAtMs) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.targetMsgID.isEmpty {
+      try visitor.visitSingularBytesField(value: self.targetMsgID, fieldNumber: 1)
+    }
+    if self.action != .unspecified {
+      try visitor.visitSingularEnumField(value: self.action, fieldNumber: 2)
+    }
+    if !self.newText.isEmpty {
+      try visitor.visitSingularStringField(value: self.newText, fieldNumber: 3)
+    }
+    if self.revisedAtMs != 0 {
+      try visitor.visitSingularInt64Field(value: self.revisedAtMs, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_MessageRevision, rhs: Aeromesh_V1_MessageRevision) -> Bool {
+    if lhs.targetMsgID != rhs.targetMsgID {return false}
+    if lhs.action != rhs.action {return false}
+    if lhs.newText != rhs.newText {return false}
+    if lhs.revisedAtMs != rhs.revisedAtMs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

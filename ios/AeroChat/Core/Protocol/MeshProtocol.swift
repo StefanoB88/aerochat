@@ -87,6 +87,17 @@ enum MeshProtocol {
     static let relayQueueLifetime: TimeInterval = 6 * 3_600
     static let seenPacketLifetime: TimeInterval = 6 * 3_600
 
+    // MARK: - Modifica / cancellazione (MESSAGE_REVISION)
+
+    /// Finestra per modificare o cancellare per tutti un proprio messaggio (15 minuti dall'invio).
+    static let revisionWindowMs: Int64 = 15 * 60 * 1_000
+    /// Tolleranza in ricezione per orologi non allineati (+2 minuti).
+    static let revisionClockToleranceMs: Int64 = 2 * 60 * 1_000
+    /// Lunghezza massima del nuovo testo di un EDIT (dopo il trim).
+    static let maxRevisionTextLength = 4_000
+    /// Revisioni arrivate prima del messaggio originale tenute in memoria.
+    static let maxPendingRevisions = 64
+
     // MARK: - Prodotto
 
     /// Durata della Cabina Pubblica e dei suoi messaggi.

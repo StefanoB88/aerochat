@@ -67,6 +67,13 @@ actor MeshRouterActor {
     /// Profilo da annunciare e nodi a cui e' gia' stato inviato da quando il link e' aperto.
     private var profile: LocalProfile?
     private var profileSentTo: Set<Data> = []
+    /// Revisioni (`MESSAGE_REVISION`) arrivate prima del messaggio originale: applicate quando arriva.
+    private var pendingRevisions: [PendingRevision] = []
+    /// `msg_id` delle nostre revisioni 1-a-1/gruppo ancora senza `DELIVERY_ACK` (non hanno un messaggio
+    /// proprio in `messages`, quindi `awaitingAckIDs` non le vede).
+    private var awaitingRevisionAcks: Set<Data> = []
+    /// File media da rimuovere quando un messaggio viene cancellato per tutti (impostato dall'app).
+    private var mediaStore: MediaStore?
     private(set) var stats = RouterStats()
     private(set) var radioState: RadioState = .unknown
 
@@ -147,6 +154,11 @@ actor MeshRouterActor {
 
     func setNickname(_ nickname: String) {
         self.nickname = nickname
+    }
+
+    /// Archivio dei media: serve a rimuovere il file di una foto / nota vocale cancellata per tutti.
+    func setMediaStore(_ store: MediaStore) {
+        mediaStore = store
     }
 
     /// Imposta il profilo pubblico; con `announce` lo invia subito a tutti i contatti non bloccati.
@@ -373,6 +385,70 @@ actor MeshRouterActor {
         return message
     }
 
+    // MARK: Modifica / cancellazione per tutti
+
+    /// Modifica (EDIT, solo testo) o cancella per tutti (DELETE: testo, foto, nota vocale) un nostro
+    /// messaggio entro 15 minuti dall'invio: applica la revisione in locale e la invia nella stessa
+    /// conversazione dell'originale (in coda fino al `DELIVERY_ACK` in 1-a-1 e gruppi).
+    /// Ritorna il path del media rimosso dal messaggio (DELETE di foto / nota vocale): il chiamante
+    /// cancella il file con `MediaStore`.
+    @discardableResult
+    func reviseMessage(_ message: MessageRecord, action: RevisionAction, newText: String = "", now: Date = Date()) async throws -> String? {
+        guard isRunning else { throw RouterError.notRunning }
+        guard let current = try await database.messages.fetch(msgID: message.msgID),
+              current.isOutgoing, current.senderNodeID == identity.nodeID, !current.isDeleted, current.isRevisableContent,
+              let conversation = try await database.conversations.fetch(id: current.conversationID),
+              !conversation.isExpired(now: now) else { throw RouterError.revisionNotAllowed }
+        guard now.unixMilliseconds - current.createdAtMs <= MeshProtocol.revisionWindowMs else { throw RouterError.revisionWindowExpired }
+
+        var revision = MessageRevision()
+        revision.targetMsgID = current.msgID
+        revision.action = action
+        revision.revisedAtMs = now.unixMilliseconds
+        var removedMediaPath: String?
+        switch action {
+        case .edit:
+            let text = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard current.contentType == .text, !text.isEmpty, text.count <= MeshProtocol.maxRevisionTextLength else {
+                throw RouterError.revisionNotAllowed
+            }
+            if conversation.type == .cabinLounge {
+                guard !Self.containsLink(text) else { throw RouterError.linkNotAllowedInLounge }
+                guard !ContentFilter.containsProfanity(text) else { throw RouterError.languageNotAllowedInLounge }
+            }
+            guard text != current.text else { return nil }
+            revision.newText = text
+            guard try await database.messages.applyEdit(msgID: current.msgID, text: text, editedAtMs: revision.revisedAtMs) else {
+                throw RouterError.revisionNotAllowed
+            }
+        case .delete:
+            let result = try await database.messages.applyDeleteForEveryone(msgID: current.msgID)
+            guard result.deleted else { throw RouterError.revisionNotAllowed }
+            removedMediaPath = result.mediaPath
+        default:
+            throw RouterError.revisionNotAllowed
+        }
+        try await sendRevisionPacket(revision, in: conversation)
+        return removedMediaPath
+    }
+
+    /// Invia una `MESSAGE_REVISION` gia' costruita, senza le verifiche lato UI (usata da
+    /// `reviseMessage` e dai test per simulare revisioni non valide). Ritorna il `msg_id` del pacchetto.
+    @discardableResult
+    func sendRevisionPacket(_ revision: MessageRevision, in conversation: ConversationRecord) async throws -> Data {
+        guard isRunning else { throw RouterError.notRunning }
+        let payload = InnerPayload.extra(try MeshWire.serialize(revision), identity: identity, nickname: nickname)
+        let msgID = CryptoEngine.randomMessageID()
+        let envelope = try await makeEnvelope(type: .messageRevision, payload: payload, conversation: conversation, msgID: msgID)
+        // Come i testi: 1-a-1 e gruppi restano in coda fino all'ACK, la Lounge no.
+        let retainUntilAck = conversation.type != .cabinLounge
+        if retainUntilAck {
+            awaitingRevisionAcks.insert(msgID)
+        }
+        _ = await dispatch(envelope, storeIfUnreachable: true, retainUntilAck: retainUntilAck)
+        return msgID
+    }
+
     /// Invio generico (media, giochi, Pro Pass). Ritorna il `msg_id` e se almeno un vicino e' stato raggiunto.
     @discardableResult
     func sendPacket(type: PacketType,
@@ -597,7 +673,8 @@ actor MeshRouterActor {
         guard !sentIDs.isEmpty else { return }
         try? await database.messages.markSentMesh(msgIDs: sentIDs)
         // I nostri messaggi restano in coda finche' il destinatario non conferma con l'ACK.
-        let awaiting = (try? await database.messages.awaitingAckIDs(among: sentIDs)) ?? Set(sentIDs)
+        let awaiting = ((try? await database.messages.awaitingAckIDs(among: sentIDs)) ?? Set(sentIDs))
+            .union(awaitingRevisionAcks.intersection(sentIDs))
         let flushed = sentIDs.filter { !awaiting.contains($0) }
         if !flushed.isEmpty {
             try? await database.relayQueue.remove(msgIDs: flushed)
@@ -613,7 +690,8 @@ actor MeshRouterActor {
         let neighborIDs = Set(neighbors().map(\.nodeID))
         let candidates = pending.filter { neighborIDs.contains($0.recipientID) || isGroupRecipient($0.recipientID) }
         guard !candidates.isEmpty,
-              let awaiting = try? await database.messages.awaitingAckIDs(among: candidates.map(\.msgID)) else { return }
+              let stored = try? await database.messages.awaitingAckIDs(among: candidates.map(\.msgID)) else { return }
+        let awaiting = stored.union(awaitingRevisionAcks)
         for record in candidates where awaiting.contains(record.msgID) {
             let isGroup = isGroupRecipient(record.recipientID)
             if isGroup {
@@ -761,7 +839,13 @@ actor MeshRouterActor {
                 // Solo dal vicino diretto: con un ponte di mezzo la chiamata non reggerebbe.
                 guard envelope.hopCount == 0 else { return }
                 try await forwardToSubsystems(envelope, hops: hops, target: target)
-            case (.mediaHeader, _), (.mediaChunk, _), (.proPassGrant, _), (.gameMove, _):
+            case (.messageRevision, .me), (.messageRevision, .group), (.messageRevision, .lounge):
+                try await handleRevision(envelope, target: target, hops: hops, via: link)
+            case (.mediaHeader, _):
+                // Foto / nota vocale gia' cancellata per tutti dall'autore prima che arrivasse l'header.
+                if consumePendingDelete(for: envelope) { return }
+                try await forwardToSubsystems(envelope, hops: hops, target: target)
+            case (.mediaChunk, _), (.proPassGrant, _), (.gameMove, _):
                 try await forwardToSubsystems(envelope, hops: hops, target: target)
             // Quiz ed emergenze viaggiano sulla Lounge (chiave pubblica) e vengono gestiti dai loro servizi.
             case (.quiz, .lounge), (.emergency, .lounge):
@@ -837,6 +921,7 @@ actor MeshRouterActor {
                                     createdAtMs: envelope.createdAtMs)
         if try await database.messages.insert(message) {
             emit(.messageReceived(conversationID: lounge.id, msgID: message.msgID))
+            await applyPendingRevisions(for: message)
         }
     }
 
@@ -862,8 +947,11 @@ actor MeshRouterActor {
         }
         if try await database.messages.insert(message) {
             emit(.messageReceived(conversationID: conversation.id, msgID: message.msgID))
+            // Revisione arrivata prima dell'originale: se lo cancella, niente notifica.
+            if await applyPendingRevisions(for: message) == .deleted { return }
             if notify {
-                await notifier.notify(message: message, conversation: conversation)
+                let badge = try? await database.conversations.totalUnread()
+                await notifier.notify(message: message, conversation: conversation, badgeCount: badge)
             }
         }
     }
@@ -877,7 +965,7 @@ actor MeshRouterActor {
     /// Rimanda l'ACK per un testo gia' consegnato e salvato (mai per pacchetti non verificati),
     /// al massimo una volta ogni `reackThrottle` per non rispondere a ogni copia del flooding.
     private func reacknowledgeDuplicate(_ envelope: MeshEnvelope) async {
-        guard envelope.packetType == .chatText || envelope.packetType == .gameMove,
+        guard envelope.packetType == .chatText || envelope.packetType == .gameMove || envelope.packetType == .messageRevision,
               envelope.recipientID == identity.nodeID || isGroupRecipient(envelope.recipientID) else { return }
         let now = Date()
         if let last = lastAckSentAt[envelope.msgID], now.timeIntervalSince(last) < configuration.reackThrottle { return }
@@ -889,7 +977,7 @@ actor MeshRouterActor {
             guard let stored = try? await database.messages.fetch(msgID: envelope.msgID),
                   !stored.isOutgoing, stored.senderNodeID == envelope.senderNodeID else { return }
         }
-        // Mosse di gioco: non hanno un messaggio proprio (lo stato vive nella bolla dell'invito); il
+        // Mosse di gioco e revisioni: non hanno un messaggio proprio (lo stato vive nella bolla dell'invito); il
         // duplicato di un msg_id gia' visto da un peer noto viene riconfermato cosi' smette di ritrasmettere.
         try? await sendAck(for: envelope, to: peer)
     }
@@ -898,7 +986,162 @@ actor MeshRouterActor {
         let (payload, _) = try await openDirect(envelope)
         guard let msgID = payload.replyToMessageID else { return }
         try await database.messages.advanceDeliveryStatus(to: .deliveredAck, msgID: msgID)
+        awaitingRevisionAcks.remove(msgID)
         _ = try? await database.relayQueue.remove(msgID: msgID)
+    }
+
+    // MARK: - Revisioni ricevute (MESSAGE_REVISION)
+
+    private struct PendingRevision {
+        let revision: MessageRevision
+        let senderNodeID: Data
+        let conversationID: String
+        let receivedAt: Date
+    }
+
+    enum RevisionResult: Equatable {
+        case none
+        case edited
+        case deleted
+    }
+
+    /// Revisione ricevuta nella stessa conversazione dell'originale: verificata, applicata (o tenuta in
+    /// memoria se l'originale non e' ancora arrivato) e confermata con l'ACK in 1-a-1 e gruppi.
+    private func handleRevision(_ envelope: MeshEnvelope, target: Target, hops: Int, via link: LinkID) async throws {
+        let payload: InnerPayload
+        let sender: PeerRecord
+        let conversation: ConversationRecord
+        switch target {
+        case .me:
+            (payload, sender) = try await openDirect(envelope)
+            conversation = try await database.conversations.ensureDirectConversation(with: sender)
+        case .group(let group):
+            guard let secret = group.groupSecretKey else { throw RouterError.missingGroupKey }
+            let (opened, declared) = try await openShared(envelope, key: try CryptoEngine.groupKey(fromSecret: secret))
+            payload = opened
+            sender = try await database.peers.upsert(declared)
+            conversation = group
+        case .lounge(let lounge):
+            (payload, sender) = try await openShared(envelope, key: CryptoEngine.publicCabinKey)
+            conversation = lounge
+        case .other:
+            return
+        }
+        let parsed = try MeshWire.parseMessageRevision(payload.extraData)
+        await markSeenThrottled(nodeID: sender.nodeID, hopCount: hops, rssi: links[link]?.rssi)
+        if let revision = Self.normalizedRevision(parsed, isLounge: conversation.type == .cabinLounge) {
+            if let original = try await database.messages.fetch(msgID: revision.targetMsgID) {
+                _ = await applyRevision(revision, from: sender.nodeID, conversationID: conversation.id, to: original)
+            } else {
+                bufferPendingRevision(PendingRevision(revision: revision, senderNodeID: sender.nodeID,
+                                                      conversationID: conversation.id, receivedAt: Date()))
+            }
+        }
+        // Pacchetto autentico: confermato anche se scartato, cosi' il mittente smette di ritrasmetterlo.
+        if conversation.type != .cabinLounge {
+            try await sendAck(for: envelope, to: sender)
+        }
+    }
+
+    /// Forma del pacchetto: `msg_id` di 16 byte, azione nota, testo dell'EDIT 1..4000 caratteri dopo il
+    /// trim. Nella Lounge niente link e parolacce mascherate (come per i testi).
+    static func normalizedRevision(_ revision: MessageRevision, isLounge: Bool) -> MessageRevision? {
+        guard revision.targetMsgID.count == MeshProtocol.msgIDLength, revision.revisedAtMs > 0 else { return nil }
+        var normalized = revision
+        switch revision.action {
+        case .edit:
+            var text = revision.newText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty, text.count <= MeshProtocol.maxRevisionTextLength else { return nil }
+            if isLounge {
+                guard !containsLink(text) else { return nil }
+                if AppSettings.isLanguageFilterEnabled { text = ContentFilter.masked(text) }
+            }
+            normalized.newText = text
+        case .delete:
+            normalized.newText = ""
+        default:
+            return nil
+        }
+        return normalized
+    }
+
+    /// Regole comuni (identiche su iOS e Android): stessa conversazione, solo l'autore, entro 15 minuti
+    /// (+2 di tolleranza), EDIT solo su testi non cancellati, DELETE definitivo su testo / foto / vocale.
+    @discardableResult
+    private func applyRevision(_ revision: MessageRevision, from senderNodeID: Data, conversationID: String,
+                               to original: MessageRecord) async -> RevisionResult {
+        guard original.conversationID == conversationID,
+              original.senderNodeID == senderNodeID,
+              !original.isOutgoing,
+              !blocked.contains(senderNodeID) else { return .none }
+        let elapsed = revision.revisedAtMs - original.createdAtMs
+        guard elapsed >= -MeshProtocol.revisionClockToleranceMs,
+              elapsed <= MeshProtocol.revisionWindowMs + MeshProtocol.revisionClockToleranceMs else { return .none }
+        switch revision.action {
+        case .edit:
+            let applied = (try? await database.messages.applyEdit(msgID: original.msgID, text: revision.newText,
+                                                                   editedAtMs: revision.revisedAtMs)) ?? false
+            return applied ? .edited : .none
+        case .delete:
+            guard let result = try? await database.messages.applyDeleteForEveryone(msgID: original.msgID),
+                  result.deleted else { return .none }
+            if let path = result.mediaPath {
+                mediaStore?.remove(relativePath: path)
+            }
+            // Il testo cancellato non deve restare nel Centro Notifiche.
+            await notifier.removeNotification(msgID: original.msgID)
+            return .deleted
+        default:
+            return .none
+        }
+    }
+
+    private func bufferPendingRevision(_ pending: PendingRevision) {
+        purgeExpiredPendingRevisions()
+        if pendingRevisions.count >= MeshProtocol.maxPendingRevisions {
+            pendingRevisions.removeFirst(pendingRevisions.count - MeshProtocol.maxPendingRevisions + 1)
+        }
+        pendingRevisions.append(pending)
+    }
+
+    private func purgeExpiredPendingRevisions(now: Date = Date()) {
+        let lifetime = TimeInterval(MeshProtocol.revisionWindowMs / 1_000)
+        pendingRevisions.removeAll { now.timeIntervalSince($0.receivedAt) > lifetime }
+    }
+
+    /// L'originale e' appena stato salvato: applica le revisioni arrivate prima (in ordine di `revised_at_ms`).
+    @discardableResult
+    private func applyPendingRevisions(for message: MessageRecord) async -> RevisionResult {
+        guard !pendingRevisions.isEmpty else { return .none }
+        purgeExpiredPendingRevisions()
+        let matching = pendingRevisions
+            .filter { $0.revision.targetMsgID == message.msgID }
+            .sorted { $0.revision.revisedAtMs < $1.revision.revisedAtMs }
+        guard !matching.isEmpty else { return .none }
+        pendingRevisions.removeAll { $0.revision.targetMsgID == message.msgID }
+        var outcome = RevisionResult.none
+        for pending in matching {
+            guard let current = try? await database.messages.fetch(msgID: message.msgID) else { break }
+            let result = await applyRevision(pending.revision, from: pending.senderNodeID,
+                                             conversationID: pending.conversationID, to: current)
+            if result == .deleted { outcome = .deleted } else if result == .edited, outcome == .none { outcome = .edited }
+        }
+        return outcome
+    }
+
+    /// Header di una foto / nota vocale gia' cancellata per tutti dal suo autore: il media non viene
+    /// nemmeno ricostruito (i chunk orfani scadono da soli).
+    private func consumePendingDelete(for envelope: MeshEnvelope) -> Bool {
+        guard !pendingRevisions.isEmpty else { return false }
+        purgeExpiredPendingRevisions()
+        let window = MeshProtocol.revisionWindowMs + MeshProtocol.revisionClockToleranceMs
+        guard pendingRevisions.contains(where: {
+            $0.revision.targetMsgID == envelope.msgID && $0.revision.action == .delete && $0.senderNodeID == envelope.senderNodeID
+                && $0.revision.revisedAtMs - envelope.createdAtMs <= window
+                && $0.revision.revisedAtMs - envelope.createdAtMs >= -MeshProtocol.revisionClockToleranceMs
+        }) else { return false }
+        pendingRevisions.removeAll { $0.revision.targetMsgID == envelope.msgID }
+        return true
     }
 
     // MARK: - Conferme di lettura
@@ -1090,6 +1333,7 @@ actor MeshRouterActor {
         lastAckSentAt = lastAckSentAt.filter { now.timeIntervalSince($0.value) < throttle }
         let seenInterval = configuration.lastSeenWriteInterval
         lastSeenWrites = lastSeenWrites.filter { now.timeIntervalSince($0.value.date) < seenInterval }
+        purgeExpiredPendingRevisions(now: now)
         try? await database.runMaintenance(now: now)
         if !links.isEmpty {
             await flushRelayQueue()

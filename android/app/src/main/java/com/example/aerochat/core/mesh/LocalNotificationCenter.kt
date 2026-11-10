@@ -80,6 +80,13 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
     private val context: Context = context.applicationContext
 
     /**
+     * Totale dei messaggi non letti (impostato da `AppEnvironment` all'apertura del database): diventa il
+     * numero della notifica, che i launcher mostrano come badge sull'icona.
+     */
+    @Volatile
+    var unreadCountProvider: (suspend () -> Int)? = null
+
+    /**
      * Prepara i canali e ritorna `true` se l'app puo' pubblicare notifiche. Su Android il dialogo
      * del permesso richiede un'Activity: lo mostra la UI (`ActivityResultContracts.RequestPermission`).
      */
@@ -143,6 +150,10 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
             .setAutoCancel(true)
             .setGroup(conversationID) // threadIdentifier
             .setContentIntent(pendingIntent)
+            .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
+        // Badge sull'icona dell'app: il launcher usa il numero della notifica (somma dei non letti).
+        val unread = runCatching { unreadCountProvider?.invoke() }.getOrNull()
+        if (unread != null && unread > 0) builder.setNumber(unread)
         if (conversation.type == ConversationType.group) {
             message.senderNickname?.let { builder.setSubText(it) } // subtitle
         }
@@ -197,6 +208,32 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
         }
     }
 
+    override suspend fun cancelMessage(msgID: ByteArray, conversationID: String) {
+        try {
+            NotificationManagerCompat.from(context).cancel(msgID.toHex(), notificationID)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("AeroMesh.Notify", "notifica non rimossa: $e")
+        }
+    }
+
+    /** Rimuove le notifiche dei messaggi della conversazione (raggruppate per `conversation_id`). */
+    override suspend fun cancelConversation(conversationID: String) {
+        try {
+            val manager = context.getSystemService(NotificationManager::class.java) ?: return
+            for (notification in manager.activeNotifications) {
+                if (notification.id != notificationID) continue
+                if (notification.notification.group != conversationID) continue
+                manager.cancel(notification.tag, notification.id)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("AeroMesh.Notify", "notifiche non rimosse: $e")
+        }
+    }
+
     private fun canPostNotifications(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -208,6 +245,8 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
         val channel = NotificationChannel(messagesChannelID, messagesChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
             description = messagesChannelDescription
             enableVibration(true)
+            // Il badge sull'icona dell'app nasce dalle notifiche di questo canale.
+            setShowBadge(true)
         }
         NotificationManagerCompat.from(context).createNotificationChannel(channel)
         val emergency = NotificationChannel(

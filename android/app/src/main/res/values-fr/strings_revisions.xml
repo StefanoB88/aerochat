@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.2: modifica e cancellazione per tutti dei propri messaggi, badge dei non letti. -->
+<resources>
+    <string name="revisions_edit">Modifier</string>
+    <string name="revisions_delete_for_everyone">Supprimer pour tous</string>
+    <string name="revisions_editing_title">Modifier le message</string>
+    <string name="revisions_cancel_editing">Annuler la modification</string>
+    <string name="revisions_edited">modifié</string>
+    <string name="revisions_deleted_message">Message supprimé</string>
+    <string name="revisions_deleted_by_you">Vous avez supprimé ce message</string>
+    <string name="revisions_delete_confirm_title">Supprimer le message pour tous ?</string>
+    <string name="revisions_delete_confirm_body">Le message sera aussi supprimé sur les téléphones des destinataires qui le reçoivent.</string>
+    <string name="revisions_cancel">Annuler</string>
+    <string name="revisions_failed">Opération impossible : %1$s</string>
+    <string name="revisions_window_expired">Plus de 15 minutes se sont écoulées : le message ne peut plus être modifié ni supprimé.</string>
+    <plurals name="revisions_unread_badge">
+        <item quantity="one">%1$d non lu</item>
+        <item quantity="many">%1$d non lus</item>
+        <item quantity="other">%1$d non lus</item>
+    </plurals>
+</resources>

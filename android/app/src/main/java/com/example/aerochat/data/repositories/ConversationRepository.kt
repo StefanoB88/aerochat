@@ -74,6 +74,9 @@ class ConversationRepository(val database: AppDatabase) {
     /** Non letti totali (badge della notifica / widget). */
     suspend fun totalUnread(): Int = dao.totalUnread()
 
+    /** Stream dei non letti totali (badge della scheda "Chat & Gruppi"). */
+    fun observeTotalUnread(): Flow<Int> = dao.observeTotalUnread().distinctUntilChanged()
+
     /** Cabine del volo attive (per la cartolina e il badge "a bordo"), piu' recenti per prime. `now` in epoch ms. */
     suspend fun activeFlightLounges(now: Long = System.currentTimeMillis()): List<ConversationRecord> =
         dao.activeFlightLounges(now)
@@ -172,8 +175,16 @@ interface ConversationDao {
     @Update
     suspend fun update(record: ConversationRecord)
 
-    @Query("SELECT COALESCE(SUM(unread_count), 0) FROM conversations")
+    /** Come iOS: la Cabina Pubblica (mai segnata letta, nessuna notifica) non conta nei badge. */
+    @Query("SELECT COALESCE(SUM(unread_count), 0) FROM conversations WHERE type != 'cabin_lounge'")
     suspend fun totalUnread(): Int
+
+    @Query("SELECT COALESCE(SUM(unread_count), 0) FROM conversations WHERE type != 'cabin_lounge'")
+    fun observeTotalUnread(): Flow<Int>
+
+    /** Un messaggio non letto e' stato cancellato per tutti dal mittente. */
+    @Query("UPDATE conversations SET unread_count = unread_count - 1 WHERE id = :id AND unread_count > 0")
+    suspend fun decrementUnread(id: String): Int
 
     @Query(
         "SELECT * FROM conversations WHERE flight_code IS NOT NULL AND (expires_at_ms IS NULL OR expires_at_ms > :nowMs) " +

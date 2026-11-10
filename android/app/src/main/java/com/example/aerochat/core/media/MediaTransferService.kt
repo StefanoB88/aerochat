@@ -277,7 +277,9 @@ class MediaTransferService(
             hopCountReceived = packet.hopCount,
             createdAtMs = packet.envelope.createdAtMs,
         )
-        attempt { database.messages.insert(placeholder) }
+        val inserted = attempt { database.messages.insert(placeholder) } == true
+        // Una cancellazione per tutti arrivata prima dell'header viene applicata adesso.
+        if (inserted) attempt { router.applyPendingRevisions(msgID = headerMsgID) }
 
         val assembly = Assembly(
             mediaID = payload.mediaId,
@@ -352,7 +354,10 @@ class MediaTransferService(
         }
         try {
             val path = store.write(data, mediaID = mediaID, kind = assembly.kind)
-            database.messages.updateMedia(localPath = path, msgID = assembly.headerMsgID)
+            if (!database.messages.updateMedia(localPath = path, msgID = assembly.headerMsgID)) {
+                // Cancellato per tutti mentre arrivavano i chunk: il file non deve restare sul disco.
+                attempt { store.remove(relativePath = path) }
+            }
             // ACK sul msg_id dell'header: il mittente passa a delivered_ack.
             val ack = InnerPayloadFactory.deliveryAck(assembly.headerMsgID, identity = identity, nickname = nickname)
             attempt {

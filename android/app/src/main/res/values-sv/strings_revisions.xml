@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.2: modifica e cancellazione per tutti dei propri messaggi, badge dei non letti. -->
+<resources>
+    <string name="revisions_edit">Redigera</string>
+    <string name="revisions_delete_for_everyone">Radera för alla</string>
+    <string name="revisions_editing_title">Redigera meddelande</string>
+    <string name="revisions_cancel_editing">Avbryt redigering</string>
+    <string name="revisions_edited">redigerat</string>
+    <string name="revisions_deleted_message">Meddelandet raderades</string>
+    <string name="revisions_deleted_by_you">Du raderade det här meddelandet</string>
+    <string name="revisions_delete_confirm_title">Radera meddelandet för alla?</string>
+    <string name="revisions_delete_confirm_body">Meddelandet raderas även på telefonerna hos mottagarna som tar emot det.</string>
+    <string name="revisions_cancel">Avbryt</string>
+    <string name="revisions_failed">Det gick inte: %1$s</string>
+    <string name="revisions_window_expired">Det har gått mer än 15 minuter: meddelandet kan inte längre redigeras eller raderas.</string>
+    <plurals name="revisions_unread_badge">
+        <item quantity="one">%1$d oläst</item>
+        <item quantity="other">%1$d olästa</item>
+    </plurals>
+</resources>

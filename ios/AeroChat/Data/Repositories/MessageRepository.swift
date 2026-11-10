@@ -50,9 +50,59 @@ struct MessageRepository: Sendable {
     }
 
     /// Collega il file media ricostruito al messaggio placeholder (BlurHash/forma d'onda gia' mostrati).
-    func updateMedia(localPath: String, msgID: Data) async throws {
-        _ = try await database.pool.write { db in
-            try MessageRecord.filter(key: msgID).updateAll(db, Column("media_local_path").set(to: localPath))
+    /// Ritorna `false` se il messaggio non c'e' piu' o e' stato cancellato per tutti nel frattempo
+    /// (il chiamante rimuove il file appena scritto).
+    @discardableResult
+    func updateMedia(localPath: String, msgID: Data) async throws -> Bool {
+        try await database.pool.write { db in
+            try MessageRecord
+                .filter(key: msgID)
+                .filter(MessageRecord.Columns.isDeleted == false)
+                .updateAll(db, Column("media_local_path").set(to: localPath)) > 0
+        }
+    }
+
+    // MARK: Modifica / cancellazione per tutti (MESSAGE_REVISION)
+
+    /// EDIT: sostituisce il testo di un messaggio testuale non cancellato. Tra piu' modifiche vince quella
+    /// con `editedAtMs` maggiore (una piu' vecchia arrivata dopo viene ignorata). Ritorna `true` se applicata.
+    @discardableResult
+    func applyEdit(msgID: Data, text: String, editedAtMs: Int64) async throws -> Bool {
+        try await database.pool.write { db in
+            guard var message = try MessageRecord.fetchOne(db, key: msgID),
+                  message.contentType == .text, !message.isDeleted else { return false }
+            if let previous = message.editedAtMs, previous >= editedAtMs { return false }
+            message.text = text
+            message.editedAtMs = editedAtMs
+            try message.update(db)
+            return true
+        }
+    }
+
+    /// DELETE (definitivo): azzera testo e media del messaggio e lo segna cancellato. Un messaggio ricevuto
+    /// e non ancora letto smette di contare nei non letti. Ritorna se e' stato applicato e il path del media
+    /// da rimuovere dal disco (lo fa il chiamante tramite `MediaStore`).
+    @discardableResult
+    func applyDeleteForEveryone(msgID: Data) async throws -> (deleted: Bool, mediaPath: String?) {
+        try await database.pool.write { db in
+            guard var message = try MessageRecord.fetchOne(db, key: msgID),
+                  !message.isDeleted, message.isRevisableContent else { return (false, nil) }
+            let mediaPath = message.mediaLocalPath
+            let wasUnread = !message.isOutgoing && message.deliveryStatus != .read
+            message.isDeleted = true
+            message.text = nil
+            message.mediaLocalPath = nil
+            message.blurhash = nil
+            message.audioWaveform = nil
+            if wasUnread {
+                message.deliveryStatus = .read
+            }
+            try message.update(db)
+            if wasUnread {
+                try db.execute(sql: "UPDATE conversations SET unread_count = unread_count - 1 WHERE id = ? AND unread_count > 0",
+                               arguments: [message.conversationID])
+            }
+            return (true, mediaPath)
         }
     }
 

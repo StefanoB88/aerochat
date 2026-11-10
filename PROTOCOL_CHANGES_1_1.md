@@ -98,3 +98,15 @@ group_uuid       = UUID(uuid_bytes) ; recipient_id = SHA256(uuid_bytes)[0..8] (c
 
 - iOS ora legge l'RSSI dei link aperti ogni 4 s (`readRSSI`) per il radar di prossimita'. Nessun wire.
   Android: `BluetoothGatt.readRemoteRssi()` con la stessa cadenza, opzionale.
+
+## 1.2 — Modifica e cancellazione dei messaggi (`MESSAGE_REVISION = 14`)
+
+Contratto completo in `MESSAGE_REVISIONS_SPEC.md`. In sintesi:
+- `extra_data = MessageRevision { target_msg_id, action (EDIT=1 | DELETE=2), new_text, revised_at_ms }`.
+- Viaggia nella stessa conversazione dell'originale (diretto, gruppo, Lounge), store-and-forward;
+  ACK + retry in diretto e gruppo, niente ACK in Lounge.
+- Accettata solo dall'autore e entro 15 minuti dall'invio (+2 min di tolleranza in ricezione);
+  l'EDIT piu' recente vince, il DELETE e' definitivo; revisioni in anticipo sull'originale tenute
+  in un buffer di 64 voci.
+- DB: `messages.edited_at_ms`, `messages.is_deleted` (iOS migrazione `v8_message_revisions`, Android Room v4).
+- Il badge dei non letti (icona app e tab "Chat & Gruppi") esclude la Cabina Pubblica.
