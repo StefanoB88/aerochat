@@ -39,8 +39,6 @@ import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -88,6 +86,8 @@ import com.example.aerochat.ui.AeroRoutes
 import com.example.aerochat.ui.AeroTheme
 import com.example.aerochat.ui.LocalNavController
 import com.example.aerochat.ui.components.AvatarView
+import com.example.aerochat.ui.components.AeroDropdownMenu
+import com.example.aerochat.ui.components.AeroMenuItem
 import com.example.aerochat.ui.components.Haptics
 import com.example.aerochat.ui.components.RadioStatusView
 import com.example.aerochat.ui.components.hapticOnTap
@@ -310,45 +310,36 @@ fun ChatListView() {
                         IconButton(onClick = { showAddMenu = true }, modifier = Modifier.hapticOnTap()) {
                             Icon(Icons.Filled.AddCircle, contentDescription = null)
                         }
-                        DropdownMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.flight_menu_boarding)) },
-                                leadingIcon = { Icon(Icons.Outlined.FlightTakeoff, contentDescription = null) },
-                                onClick = {
+                        AeroDropdownMenu(
+                            expanded = showAddMenu,
+                            onDismissRequest = { showAddMenu = false },
+                            items = listOf(
+                                AeroMenuItem(stringResource(R.string.flight_menu_boarding), Icons.Outlined.FlightTakeoff) {
                                     Haptics.tap()
                                     showAddMenu = false
                                     showBoardingPass = true
                                 },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_new_travel_group)) },
-                                leadingIcon = { Icon(Icons.Outlined.Groups, contentDescription = null) },
-                                onClick = {
+                                AeroMenuItem(stringResource(R.string.chat_new_travel_group), Icons.Outlined.Groups) {
                                     Haptics.tap()
                                     showAddMenu = false
                                     showNewGroup = true
                                 },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_share_app_gate)) },
-                                leadingIcon = { Icon(Icons.Outlined.GetApp, contentDescription = null) },
-                                onClick = {
+                                AeroMenuItem(stringResource(R.string.chat_share_app_gate), Icons.Outlined.GetApp) {
                                     Haptics.tap()
                                     showAddMenu = false
                                     showStoreQR = true
                                 },
-                            )
-                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.flight_card_title)) },
-                                leadingIcon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
-                                onClick = {
+                                AeroMenuItem(
+                                    stringResource(R.string.flight_card_title),
+                                    Icons.Outlined.AutoAwesome,
+                                    dividerBefore = true,
+                                ) {
                                     Haptics.tap()
                                     showAddMenu = false
                                     showFlightCard = true
                                 },
-                            )
-                        }
+                            ),
+                        )
                     }
                 },
             )
@@ -575,25 +566,21 @@ private fun ConversationRow(
                     }
                 }
             }
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                val (pinIcon, pinLabel) = pinAction(conversation)
-                DropdownMenuItem(
-                    text = { Text(stringResource(pinLabel)) },
-                    leadingIcon = { Icon(pinIcon, contentDescription = null, tint = AeroTheme.accentCyan) },
-                    onClick = {
+            val (pinIcon, pinLabel) = pinAction(conversation)
+            AeroDropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+                items = listOf(
+                    AeroMenuItem(stringResource(pinLabel), pinIcon, iconTint = AeroTheme.accentCyan) {
                         showMenu = false
                         onTogglePin()
                     },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.chat_delete), color = Color.Red) },
-                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = Color.Red) },
-                    onClick = {
+                    AeroMenuItem(stringResource(R.string.chat_delete), Icons.Filled.Delete, destructive = true) {
                         showMenu = false
                         onDelete()
                     },
-                )
-            }
+                ),
+            )
         }
     }
 }

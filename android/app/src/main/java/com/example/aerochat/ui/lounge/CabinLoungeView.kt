@@ -44,10 +44,7 @@ import androidx.compose.material.icons.outlined.Quiz
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.outlined.Forum
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -91,6 +88,8 @@ import com.example.aerochat.data.records.ReportRecord
 import com.example.aerochat.ui.AeroTheme
 import com.example.aerochat.ui.chat.InfoBanner
 import com.example.aerochat.ui.components.ComposerBar
+import com.example.aerochat.ui.components.AeroDropdownMenu
+import com.example.aerochat.ui.components.AeroMenuItem
 import com.example.aerochat.ui.components.Haptics
 import com.example.aerochat.ui.components.MessageBubble
 import com.example.aerochat.ui.components.hapticOnTap
@@ -394,21 +393,23 @@ fun CabinLoungeView() {
                                 tint = AeroTheme.accentCyan,
                             )
                         }
-                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.lounge11_emergency_title)) },
-                                leadingIcon = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
-                                onClick = { showMenu = false; showEmergency = true },
-                                modifier = Modifier.hapticOnTap(),
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.lounge11_rules_menu)) },
-                                leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
-                                onClick = { showMenu = false; showRules = true },
-                                modifier = Modifier.hapticOnTap(),
-                            )
-                        }
+                        AeroDropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                            items = listOf(
+                                AeroMenuItem(
+                                    stringResource(R.string.lounge11_emergency_title),
+                                    Icons.Outlined.WarningAmber,
+                                    hapticOnTap = true,
+                                ) { showMenu = false; showEmergency = true },
+                                AeroMenuItem(
+                                    stringResource(R.string.lounge11_rules_menu),
+                                    Icons.Outlined.Info,
+                                    dividerBefore = true,
+                                    hapticOnTap = true,
+                                ) { showMenu = false; showRules = true },
+                            ),
+                        )
                     }
                 },
             )
@@ -550,29 +551,24 @@ private fun LoungeMessage(message: MessageRecord, onReport: () -> Unit, onBlock:
             ),
         )
         if (!message.isOutgoing) {
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.lounge11_report_message)) },
-                    leadingIcon = { Icon(Icons.Outlined.Flag, contentDescription = null) },
-                    onClick = {
+            AeroDropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+                items = listOf(
+                    AeroMenuItem(stringResource(R.string.lounge11_report_message), Icons.Outlined.Flag) {
                         showMenu = false
                         onReport()
                     },
-                )
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            stringResource(R.string.chat_block_mute, message.senderNickname ?: "utente"),
-                            color = Color.Red,
-                        )
-                    },
-                    leadingIcon = { Icon(Icons.Filled.PanTool, contentDescription = null, tint = Color.Red) },
-                    onClick = {
+                    AeroMenuItem(
+                        stringResource(R.string.chat_block_mute, message.senderNickname ?: "utente"),
+                        Icons.Filled.PanTool,
+                        destructive = true,
+                    ) {
                         showMenu = false
                         onBlock()
                     },
-                )
-            }
+                ),
+            )
         }
     }
 }

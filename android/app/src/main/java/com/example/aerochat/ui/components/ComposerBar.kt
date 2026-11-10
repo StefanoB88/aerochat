@@ -39,8 +39,6 @@ import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Style
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -154,19 +152,17 @@ fun ComposerBar(
                 ) {
                     Icon(Icons.Outlined.SportsEsports, contentDescription = null, modifier = Modifier.size(28.dp))
                 }
-                DropdownMenu(expanded = showGames, onDismissRequest = { showGames = false }) {
-                    for (kind in games) {
-                        DropdownMenuItem(
-                            text = { Text(gameMenuTitle(kind)) },
-                            leadingIcon = { Icon(gameMenuIcon(kind), contentDescription = null) },
-                            modifier = Modifier.hapticOnTap(),
-                            onClick = {
-                                showGames = false
-                                onStartGame(kind)
-                            },
-                        )
-                    }
-                }
+                // Ordine di dichiarazione = `availableGames` di iOS: aprendosi verso l'alto il primo gioco sta sopra il pulsante.
+                AeroDropdownMenu(
+                    expanded = showGames,
+                    onDismissRequest = { showGames = false },
+                    items = games.map { kind ->
+                        AeroMenuItem(gameMenuTitle(kind), gameMenuIcon(kind), hapticOnTap = true) {
+                            showGames = false
+                            onStartGame(kind)
+                        }
+                    },
+                )
             }
             val photoDescription = stringResource(R.string.chat_send_photo)
             Box {
@@ -180,34 +176,30 @@ fun ComposerBar(
                 ) {
                     Icon(Icons.Outlined.Photo, contentDescription = null, modifier = Modifier.size(28.dp))
                 }
-                DropdownMenu(expanded = showPhotoMenu, onDismissRequest = { showPhotoMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.chat_take_photo)) },
-                        leadingIcon = { Icon(Icons.Outlined.PhotoCamera, contentDescription = null) },
-                        modifier = Modifier.hapticOnTap(),
-                        onClick = {
+                // Come iOS: Scatta foto, Scegli dalla libreria (verso l'alto lo scatto resta sopra il pulsante).
+                AeroDropdownMenu(
+                    expanded = showPhotoMenu,
+                    onDismissRequest = { showPhotoMenu = false },
+                    items = listOf(
+                        AeroMenuItem(stringResource(R.string.chat_take_photo), Icons.Outlined.PhotoCamera, hapticOnTap = true) {
                             showPhotoMenu = false
                             // Come iOS: niente scatto se le foto non possono partire (serve link diretto).
-                            if (!canTakePhoto()) return@DropdownMenuItem
-                            // Il manifest dichiara CAMERA (scanner QR): senza permesso concesso
-                            // ACTION_IMAGE_CAPTURE lancerebbe SecurityException.
-                            if (AppPermissions.isGranted(context, Manifest.permission.CAMERA)) {
-                                launchCamera()
-                            } else {
-                                cameraPermission.launch(Manifest.permission.CAMERA)
+                            if (canTakePhoto()) {
+                                // Il manifest dichiara CAMERA (scanner QR): senza permesso concesso
+                                // ACTION_IMAGE_CAPTURE lancerebbe SecurityException.
+                                if (AppPermissions.isGranted(context, Manifest.permission.CAMERA)) {
+                                    launchCamera()
+                                } else {
+                                    cameraPermission.launch(Manifest.permission.CAMERA)
+                                }
                             }
                         },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.chat_choose_from_gallery)) },
-                        leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, contentDescription = null) },
-                        modifier = Modifier.hapticOnTap(),
-                        onClick = {
+                        AeroMenuItem(stringResource(R.string.chat_choose_from_gallery), Icons.Outlined.PhotoLibrary, hapticOnTap = true) {
                             showPhotoMenu = false
                             launchGallery()
                         },
-                    )
-                }
+                    ),
+                )
             }
         }
 

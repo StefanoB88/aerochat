@@ -27,8 +27,6 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Report
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -207,29 +205,25 @@ private class BubbleMenu(
 
 /** Voci "Segnala messaggio" e "Blocca …" (rosso) in coda al menu a pressione prolungata. */
 @Composable
-private fun SafetyMenuItems(menu: BubbleMenu, close: () -> Unit) {
-    menu.onReport?.let { report ->
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.safety_report_message)) },
-            leadingIcon = { Icon(Icons.Outlined.Report, contentDescription = null) },
-            onClick = {
+private fun safetyMenuItems(menu: BubbleMenu, close: () -> Unit): List<AeroMenuItem> {
+    val reportLabel = stringResource(R.string.safety_report_message)
+    val blockLabel = menu.blockLabel ?: stringResource(R.string.safety_block_user, stringResource(R.string.safety_user))
+    return listOfNotNull(
+        menu.onReport?.let { report ->
+            AeroMenuItem(reportLabel, Icons.Outlined.Report) {
                 close()
                 Haptics.tap()
                 report()
-            },
-        )
-    }
-    menu.onBlock?.let { block ->
-        DropdownMenuItem(
-            text = { Text(menu.blockLabel ?: stringResource(R.string.safety_block_user, stringResource(R.string.safety_user)), color = Color.Red) },
-            leadingIcon = { Icon(Icons.Filled.PanTool, contentDescription = null, tint = Color.Red) },
-            onClick = {
+            }
+        },
+        menu.onBlock?.let { block ->
+            AeroMenuItem(blockLabel, Icons.Filled.PanTool, destructive = true) {
                 close()
                 Haptics.tap()
                 block()
-            },
-        )
-    }
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -274,20 +268,24 @@ private fun BubbleContent(
                             },
                         ),
                     )
-                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        if (selectableText) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(android.R.string.copy)) },
-                                leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },
-                                onClick = {
-                                    showMenu = false
-                                    clipboard.setText(AnnotatedString(content))
-                                    Haptics.tap()
-                                },
-                            )
-                        }
-                        if (safety) SafetyMenuItems(menu) { showMenu = false }
-                    }
+                    val copyLabel = stringResource(android.R.string.copy)
+                    val safetyItems = if (safety) safetyMenuItems(menu) { showMenu = false } else emptyList()
+                    AeroDropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        items = buildList {
+                            if (selectableText) {
+                                add(
+                                    AeroMenuItem(copyLabel, Icons.Outlined.ContentCopy) {
+                                        showMenu = false
+                                        clipboard.setText(AnnotatedString(content))
+                                        Haptics.tap()
+                                    },
+                                )
+                            }
+                            addAll(safetyItems)
+                        },
+                    )
                 }
             } else {
                 Text(content, style = AeroTheme.body, color = AeroTheme.textPrimary)
@@ -342,19 +340,23 @@ private fun BubbleContent(
                     )
                     if (isBlurred) BlurredMediaOverlay()
                 }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    if (canSave) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_save_to_photos)) },
-                            leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
-                            onClick = {
-                                showMenu = false
-                                onSaveImage()
-                            },
-                        )
-                    }
-                    SafetyMenuItems(menu) { showMenu = false }
-                }
+                val saveLabel = stringResource(R.string.chat_save_to_photos)
+                val safetyItems = safetyMenuItems(menu) { showMenu = false }
+                AeroDropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    items = buildList {
+                        if (canSave) {
+                            add(
+                                AeroMenuItem(saveLabel, Icons.Outlined.Download) {
+                                    showMenu = false
+                                    onSaveImage()
+                                },
+                            )
+                        }
+                        addAll(safetyItems)
+                    },
+                )
             }
         }
         MessageContentType.audio -> {
@@ -407,9 +409,11 @@ private fun BubbleContent(
                 )
             }
             if (menu.hasSafetyItems) {
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    SafetyMenuItems(menu) { showMenu = false }
-                }
+                AeroDropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    items = safetyMenuItems(menu) { showMenu = false },
+                )
             }
             }
         }
