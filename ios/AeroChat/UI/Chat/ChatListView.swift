@@ -88,6 +88,8 @@ struct ChatListView: View {
                         showProfile = true
                     } label: {
                         AvatarView(imageData: environment.avatarImage, colorHex: environment.avatarColorHex, size: 34)
+                            // Margine dentro la capsula della barra: avatar e Pass non stanno piu' schiacciati.
+                            .padding(.horizontal, 6)
                     }
                     .accessibilityLabel("Impostazioni e profilo")
                 }
@@ -95,10 +97,14 @@ struct ChatListView: View {
                     Button {
                         showPaywall = true
                     } label: {
-                        Label(environment.isPro ? String(localized: "Pro") : String(localized: "Pass"), systemImage: environment.isPro ? "ticket.fill" : "ticket")
-                            .labelStyle(.titleAndIcon)
-                            .foregroundStyle(environment.isPro ? AeroTheme.accentEmerald : AeroTheme.accentCyan)
-                            .toolbarLabel()
+                        HStack(spacing: 6) {
+                            Image(systemName: environment.isPro ? "ticket.fill" : "ticket")
+                            Text(environment.isPro ? String(localized: "Pro") : String(localized: "Pass"))
+                                .font(.body.weight(.semibold))
+                        }
+                        .foregroundStyle(environment.isPro ? AeroTheme.accentEmerald : AeroTheme.accentCyan)
+                        .padding(.horizontal, 10)
+                        .toolbarLabel()
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
