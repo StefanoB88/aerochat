@@ -215,6 +215,17 @@ struct CabinLoungeView: View {
             .navigationTitle("Cabina Pubblica")
             .toolbarBackground(AeroTheme.background, for: .navigationBar)
             .toolbar {
+                // Radar sempre a portata di tocco: e' il modo piu' rapido per ritrovare un compagno in cabina.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Haptics.tap()
+                        showRadar = true
+                    } label: {
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .foregroundStyle(AeroTheme.accentCyan)
+                    }
+                    .accessibilityLabel("Radar di prossimità")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Haptics.tap()
@@ -228,7 +239,6 @@ struct CabinLoungeView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button { Haptics.tap(); showRadar = true } label: { Label("Radar di prossimità", systemImage: "dot.radiowaves.left.and.right") }
                         if CabinAssistant.isAvailable {
                             Button { Haptics.tap(); showSummary = true } label: { Label("Riassunto della Cabina", systemImage: "sparkles") }
                         }

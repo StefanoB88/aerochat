@@ -374,6 +374,14 @@ fun CabinLoungeView() {
                 ),
                 title = { Text(stringResource(R.string.chat_lounge_title), style = AeroTheme.title(28f)) },
                 actions = {
+                    // Radar sempre a portata di tocco: e' il modo piu' rapido per ritrovare un compagno in cabina.
+                    IconButton(onClick = { Haptics.tap(); showRadar = true }) {
+                        Icon(
+                            Icons.Filled.Radar,
+                            contentDescription = stringResource(R.string.lounge11_radar_menu),
+                            tint = AeroTheme.accentCyan,
+                        )
+                    }
                     QuizToolbarButton(state = quizState, onClick = {
                         Haptics.tap()
                         showQuiz = true
@@ -387,12 +395,6 @@ fun CabinLoungeView() {
                             )
                         }
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.lounge11_radar_menu)) },
-                                leadingIcon = { Icon(Icons.Filled.Radar, contentDescription = null) },
-                                onClick = { showMenu = false; showRadar = true },
-                                modifier = Modifier.hapticOnTap(),
-                            )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.lounge11_emergency_title)) },
                                 leadingIcon = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
