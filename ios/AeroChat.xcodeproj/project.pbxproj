@@ -7,12 +7,22 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7B5CEF1630A3512D0023CC78 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7B5CEF1530A3512D0023CC78 /* WidgetKit.framework */; };
+		7B5CEF1830A3512D0023CC78 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7B5CEF1730A3512D0023CC78 /* SwiftUI.framework */; };
+		7B5CEF2330A3512F0023CC78 /* AeroChatWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7B5CEF1330A3512D0023CC78 /* AeroChatWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AE4000000000000000000021 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = AE4000000000000000000011 /* GRDB */; };
 		AE4000000000000000000022 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = AE4000000000000000000012 /* SwiftProtobuf */; };
 		AE4000000000000000000023 /* libwebp in Frameworks */ = {isa = PBXBuildFile; productRef = AE4000000000000000000013 /* libwebp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		7B5CEF2130A3512F0023CC78 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7B5CEF1230A3512D0023CC78;
+			remoteInfo = AeroChatWidgetsExtension;
+		};
 		AE4000000000000000000031 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 000000000000000000000000 /* Project object */;
@@ -22,12 +32,34 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		7B5CEF2830A3512F0023CC78 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				7B5CEF2330A3512F0023CC78 /* AeroChatWidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* AeroChat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AeroChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7B5CEF1330A3512D0023CC78 /* AeroChatWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AeroChatWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7B5CEF1530A3512D0023CC78 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = /System/Library/Frameworks/WidgetKit.framework; sourceTree = "<absolute>"; };
+		7B5CEF1730A3512D0023CC78 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = /System/Library/Frameworks/SwiftUI.framework; sourceTree = "<absolute>"; };
 		7BAE4FF43093AD6500768C47 /* AeroMeshTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AeroMeshTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7B5CEF2730A3512F0023CC78 /* Exceptions for "AeroChatWidgets" folder in "AeroChatWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7B5CEF1230A3512D0023CC78 /* AeroChatWidgetsExtension */;
+		};
 		7BAE4FFC3093ADAA00768C47 /* Exceptions for "AeroChat" folder in "AeroChat" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -46,6 +78,14 @@
 			path = AeroChat;
 			sourceTree = "<group>";
 		};
+		7B5CEF1930A3512D0023CC78 /* AeroChatWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7B5CEF2730A3512F0023CC78 /* Exceptions for "AeroChatWidgets" folder in "AeroChatWidgetsExtension" target */,
+			);
+			path = AeroChatWidgets;
+			sourceTree = "<group>";
+		};
 		7BAE4FF53093AD6500768C47 /* AeroMeshTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = AeroMeshTests;
@@ -62,6 +102,13 @@
 				AE4000000000000000000023 /* libwebp in Frameworks */,
 			);
 		};
+		7B5CEF1030A3512D0023CC78 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				7B5CEF1830A3512D0023CC78 /* SwiftUI.framework in Frameworks */,
+				7B5CEF1630A3512D0023CC78 /* WidgetKit.framework in Frameworks */,
+			);
+		};
 		7BAE4FF13093AD6500768C47 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
@@ -75,6 +122,8 @@
 			children = (
 				000000000000000000000010 /* AeroChat */,
 				7BAE4FF53093AD6500768C47 /* AeroMeshTests */,
+				7B5CEF1930A3512D0023CC78 /* AeroChatWidgets */,
+				7B5CEF1430A3512D0023CC78 /* Frameworks */,
 				000000000000000000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -84,8 +133,18 @@
 			children = (
 				000000000000000000000120 /* AeroChat.app */,
 				7BAE4FF43093AD6500768C47 /* AeroMeshTests.xctest */,
+				7B5CEF1330A3512D0023CC78 /* AeroChatWidgetsExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		7B5CEF1430A3512D0023CC78 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7B5CEF1530A3512D0023CC78 /* WidgetKit.framework */,
+				7B5CEF1730A3512D0023CC78 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -98,8 +157,12 @@
 				000000000000000120000000 /* Sources */,
 				000000000000000130000000 /* Frameworks */,
 				000000000000000140000000 /* Resources */,
+				7B5CEF2830A3512F0023CC78 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
+			);
+			dependencies = (
+				7B5CEF2230A3512F0023CC78 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				000000000000000000000010 /* AeroChat */,
@@ -113,6 +176,24 @@
 			productName = AeroChat;
 			productReference = 000000000000000000000120 /* AeroChat.app */;
 			productType = "com.apple.product-type.application";
+		};
+		7B5CEF1230A3512D0023CC78 /* AeroChatWidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7B5CEF2430A3512F0023CC78 /* Build configuration list for PBXNativeTarget "AeroChatWidgetsExtension" */;
+			buildPhases = (
+				7B5CEF0F30A3512D0023CC78 /* Sources */,
+				7B5CEF1030A3512D0023CC78 /* Frameworks */,
+				7B5CEF1130A3512D0023CC78 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				7B5CEF1930A3512D0023CC78 /* AeroChatWidgets */,
+			);
+			name = AeroChatWidgetsExtension;
+			productName = AeroChatWidgetsExtension;
+			productReference = 7B5CEF1330A3512D0023CC78 /* AeroChatWidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		7BAE4FF33093AD6500768C47 /* AeroMeshTests */ = {
 			isa = PBXNativeTarget;
@@ -142,11 +223,14 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2710;
+				LastSwiftUpdateCheck = 2720;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					000000000000000100000000 = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					7B5CEF1230A3512D0023CC78 = {
+						CreatedOnToolsVersion = 27.2;
 					};
 					7BAE4FF33093AD6500768C47 = {
 						CreatedOnToolsVersion = 27.1;
@@ -184,12 +268,18 @@
 			targets = (
 				000000000000000100000000 /* AeroChat */,
 				7BAE4FF33093AD6500768C47 /* AeroMeshTests */,
+				7B5CEF1230A3512D0023CC78 /* AeroChatWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		000000000000000140000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		7B5CEF1130A3512D0023CC78 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -207,6 +297,11 @@
 			files = (
 			);
 		};
+		7B5CEF0F30A3512D0023CC78 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 		7BAE4FF03093AD6500768C47 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -215,6 +310,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		7B5CEF2230A3512F0023CC78 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7B5CEF1230A3512D0023CC78 /* AeroChatWidgetsExtension */;
+			targetProxy = 7B5CEF2130A3512F0023CC78 /* PBXContainerItemProxy */;
+		};
 		AE4000000000000000000032 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 000000000000000100000000 /* AeroChat */;
@@ -363,16 +463,18 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = T2H6F3HDY6;
-				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AeroChat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = AeroChat;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "AeroChat usa il Bluetooth per scambiare messaggi cifrati con i compagni di volo vicini, anche senza Wi-Fi o rete cellulare.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AeroChat usa la fotocamera per inquadrare il QR Code dei compagni di volo e per scattare le foto da inviare.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AeroChat usa la posizione solo quando lo chiedi tu, per allegarla a un messaggio di emergenza ai telefoni vicini. Non viene mai inviata a server.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AeroChat usa il microfono per registrare le note vocali da inviare ai compagni di volo.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "AeroChat salva nel rullino le foto ricevute in chat quando lo chiedi tu.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AeroChat accede alle foto che scegli di condividere con i compagni di volo.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -416,16 +518,18 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = T2H6F3HDY6;
-				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AeroChat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = AeroChat;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "AeroChat usa il Bluetooth per scambiare messaggi cifrati con i compagni di volo vicini, anche senza Wi-Fi o rete cellulare.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AeroChat usa la fotocamera per inquadrare il QR Code dei compagni di volo e per scattare le foto da inviare.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AeroChat usa la posizione solo quando lo chiedi tu, per allegarla a un messaggio di emergenza ai telefoni vicini. Non viene mai inviata a server.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AeroChat usa il microfono per registrare le note vocali da inviare ai compagni di volo.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "AeroChat salva nel rullino le foto ricevute in chat quando lo chiedi tu.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AeroChat accede alle foto che scegli di condividere con i compagni di volo.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -461,6 +565,86 @@
 			};
 			name = Release;
 		};
+		7B5CEF2530A3512F0023CC78 /* Debug configuration for PBXNativeTarget "AeroChatWidgetsExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T2H6F3HDY6;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AeroChatWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AeroChat;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 27.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stefanobrandipersonalteam.AeroChat.AeroChatWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 27.2;
+			};
+			name = Debug;
+		};
+		7B5CEF2630A3512F0023CC78 /* Release configuration for PBXNativeTarget "AeroChatWidgetsExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T2H6F3HDY6;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AeroChatWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AeroChat;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 27.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stefanobrandipersonalteam.AeroChat.AeroChatWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 27.2;
+			};
+			name = Release;
+		};
 		7BAE4FF93093AD6500768C47 /* Debug configuration for PBXNativeTarget "AeroMeshTests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -471,7 +655,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.AeroMeshTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stefanobrandipersonalteam.AeroChat.AeroMeshTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -497,7 +681,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.AeroMeshTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stefanobrandipersonalteam.AeroChat.AeroMeshTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -529,6 +713,14 @@
 			buildConfigurations = (
 				000000000000000111000000 /* Debug configuration for PBXNativeTarget "AeroChat" */,
 				000000000000000112000000 /* Release configuration for PBXNativeTarget "AeroChat" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		7B5CEF2430A3512F0023CC78 /* Build configuration list for PBXNativeTarget "AeroChatWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7B5CEF2530A3512F0023CC78 /* Debug configuration for PBXNativeTarget "AeroChatWidgetsExtension" */,
+				7B5CEF2630A3512F0023CC78 /* Release configuration for PBXNativeTarget "AeroChatWidgetsExtension" */,
 			);
 			defaultConfigurationName = Release;
 		};

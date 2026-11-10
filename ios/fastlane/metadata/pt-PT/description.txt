@@ -1,0 +1,41 @@
+Conversa a 10 000 metros de altitude. Sem Wi‑Fi.
+
+O AeroChat é o mensageiro que funciona quando mais nada funciona: no avião, num cruzeiro, no comboio, num festival, na montanha ou durante um apagão. Não precisa de internet, de Wi‑Fi, de conta nem de número de telefone. Escolhe um nome, liga o Bluetooth e começa a conversar com quem está por perto, mesmo em modo de voo.
+
+✈️ CABINE DO VOO
+Lê o código de barras do teu cartão de embarque (ou escreve o número do voo e a data) e entra numa sala encriptada e privada com todos os passageiros do mesmo voo. Só são lidos a companhia aérea, o número do voo e a data; nada sai do telemóvel.
+
+🔒 ENCRIPTAÇÃO PONTA A PONTA, SEM SERVIDORES
+X25519, Ed25519 e ChaCha20‑Poly1305. Não existem servidores: nós não vemos nem guardamos nada. As mensagens saltam de telemóvel em telemóvel numa rede mesh (até 7 saltos) e, com o store‑and‑forward, são entregues mais tarde, quando o destinatário voltar a estar ao alcance.
+
+📱 iPhone E ANDROID
+O mesmo protocolo em ambas as plataformas: conversa com todos, seja qual for o telemóvel.
+
+💬 CONVERSAS E GRUPOS
+Chats a dois e grupos de viagem (emparelha por código QR ou link de convite), confirmações de leitura e foto de perfil. Fotos, notas de voz e chamadas de voz entre telemóveis próximos.
+
+🌐 CABINE PÚBLICA
+Um mural público e anónimo de 12 horas para os passageiros ao alcance, com regras claras, denúncia e bloqueio, e filtro de linguagem.
+
+🎮 JOGOS E QUIZ
+Jogo do galo, Batalha naval, Scopa, Scopone e Briscola. E ainda o Quiz da Cabine: trivia em direto para todo o avião, com tabela de classificação.
+
+🧠 INTELIGÊNCIA NO DISPOSITIVO
+Tradução offline das mensagens recebidas (iOS 18 ou posterior, com os idiomas da Tradução da Apple descarregados). Com Apple Intelligence (iOS 26 ou posterior, em dispositivos compatíveis): resumo «o que perdi» da Cabine Pública e sugestões de resposta rápida. Tudo é processado no telemóvel.
+
+📡 RADAR DE PROXIMIDADE
+Encontra o lugar ou a fila do teu amigo pela intensidade do sinal Bluetooth.
+
+🆘 ALERTA DE EMERGÊNCIA
+Envia «Estou bem», «Preciso de ajuda» ou «Tudo em ordem», com posição GPS opcional, a todos os telemóveis ao alcance: quem recebe tem um alerta prioritário. Útil em festivais e apagões. Ajuda, mas não substitui os números de emergência.
+
+🎟️ CARTÃO DO VOO E LIVE ACTIVITY
+Partilha uma imagem no formato Stories com os números da tua viagem (mensagens, pessoas conhecidas, jogos ganhos). No ecrã bloqueado e na Dynamic Island vês quantos telemóveis estão ao alcance e as mensagens por ler.
+
+💶 GRÁTIS PARA SEMPRE
+Texto a dois, Cabine Pública, texto na Cabine do Voo e store‑and‑forward: tudo grátis, sem limites. O Flight Group Pass (compra única, sem subscrição) desbloqueia fotos, notas de voz, chamadas e jogos para todo o grupo: Single Flight Pass de 24 horas, Travel Pass de 72 horas ou Lifetime. Um paga, todos usam, incluindo os amigos com Android e a app gratuita.
+
+🛡️ PRIVACIDADE
+Sem rastreio, sem análises, sem publicidade.
+
+AeroChat: o mensageiro que funciona quando mais nada funciona.

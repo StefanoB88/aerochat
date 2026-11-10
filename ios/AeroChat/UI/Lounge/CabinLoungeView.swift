@@ -55,6 +55,11 @@ final class CabinLoungeViewModel {
             infoMessage = String(localized: "Niente link in Cabina Pubblica: solo chiacchiere tra passeggeri.")
             return
         }
+        guard !ContentFilter.containsProfanity(text) else {
+            infoMessage = String(localized: "Linguaggio non ammesso in Cabina Pubblica: qui si chiacchiera con rispetto.")
+            Haptics.warning()
+            return
+        }
         draft = ""
         Task {
             do {
@@ -67,24 +72,21 @@ final class CabinLoungeViewModel {
     }
 
     func block(_ nodeID: Data, environment: AppEnvironment) {
-        guard let database = environment.database else { return }
         blocked.insert(nodeID)
-        // Va letto prima di rimuovere i messaggi, altrimenti il blocco non verrebbe mai salvato.
-        let sample = messages.first { $0.senderNodeID == nodeID }
+        // Va letto prima di rimuovere i messaggi, altrimenti il nickname andrebbe perso.
+        let nickname = messages.first { $0.senderNodeID == nodeID }?.senderNickname
         messages.removeAll { $0.senderNodeID == nodeID }
         Task {
-            // Il mittente potrebbe non essere ancora tra i peer (Lounge anonima): lo registriamo come bloccato.
-            // Chiave segnaposto unica per nodo (la colonna x25519_pub e' UNIQUE).
-            if (try? await database.peers.fetch(nodeID: nodeID)) == nil, let sample {
-                let placeholderKey = nodeID + Data(repeating: 0, count: MeshProtocol.publicKeyLength - nodeID.count)
-                _ = try? await database.peers.upsert(PeerRecord(nodeID: nodeID, x25519Pub: placeholderKey,
-                                                                ed25519Pub: Data(repeating: 0, count: 32),
-                                                                nickname: sample.senderNickname ?? String(localized: "Passeggero")))
-            }
-            try? await database.peers.setBlocked(true, nodeID: nodeID)
-            await environment.router?.refreshBlockedPeers()
+            await environment.blockUser(nodeID: nodeID, nickname: nickname)
             Haptics.warning()
         }
+    }
+
+    /// Dopo una segnalazione con blocco i messaggi del mittente spariscono subito dalla bacheca.
+    func didReport(_ report: ReportRecord, blocked didBlock: Bool) {
+        guard didBlock else { return }
+        blocked.insert(report.reportedNodeID)
+        messages.removeAll { $0.senderNodeID == report.reportedNodeID }
     }
 }
 
@@ -124,6 +126,17 @@ struct CabinLoungeView: View {
     @State private var isNearBottom = true
     /// La posizione salvata (o il fondo) e' gia' stata applicata a questo caricamento.
     @State private var didRestorePosition = false
+    /// Regole della Cabina accettate (versione): finche' non lo sono, la bacheca e' coperta dal foglio delle regole.
+    @AppStorage(AppSettings.Key.loungeRulesAcceptedVersion) private var rulesAcceptedVersion = 0
+    @State private var showRules = false
+    @State private var showQuiz = false
+    @State private var showRadar = false
+    @State private var showSummary = false
+    @State private var showEmergency = false
+    /// Messaggio in corso di segnalazione.
+    @State private var reportTarget: MessageRecord?
+
+    private var hasAcceptedRules: Bool { rulesAcceptedVersion >= AppSettings.loungeRulesVersion }
 
     var body: some View {
         NavigationStack {
@@ -143,6 +156,12 @@ struct CabinLoungeView: View {
                                         .id(message.msgID)
                                         .contextMenu {
                                             if !message.isOutgoing {
+                                                Button {
+                                                    Haptics.tap()
+                                                    reportTarget = message
+                                                } label: {
+                                                    Label("Segnala messaggio", systemImage: "exclamationmark.bubble")
+                                                }
                                                 Button(role: .destructive) {
                                                     Haptics.tap()
                                                     viewModel.block(message.senderNodeID, environment: environment)
@@ -195,6 +214,51 @@ struct CabinLoungeView: View {
             }
             .navigationTitle("Cabina Pubblica")
             .toolbarBackground(AeroTheme.background, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Haptics.tap()
+                        showQuiz = true
+                    } label: {
+                        Image(systemName: environment.quizState == nil ? "questionmark.circle" : "questionmark.circle.fill")
+                            .foregroundStyle(environment.quizState == nil ? AeroTheme.accentCyan : AeroTheme.accentEmerald)
+                            .symbolEffect(.pulse, isActive: environment.quizState?.phase == .question)
+                    }
+                    .accessibilityLabel("Quiz di cabina")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { Haptics.tap(); showRadar = true } label: { Label("Radar di prossimità", systemImage: "dot.radiowaves.left.and.right") }
+                        if CabinAssistant.isAvailable {
+                            Button { Haptics.tap(); showSummary = true } label: { Label("Riassunto della Cabina", systemImage: "sparkles") }
+                        }
+                        Button { Haptics.tap(); showEmergency = true } label: { Label("Avviso di emergenza", systemImage: "exclamationmark.triangle") }
+                        Divider()
+                        Button { Haptics.tap(); showRules = true } label: { Label("Regole della Cabina", systemImage: "info.circle") }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .foregroundStyle(AeroTheme.accentCyan)
+                    }
+                    .accessibilityLabel("Altre azioni")
+                }
+            }
+            .sheet(isPresented: $showQuiz) { CabinQuizSheet() }
+            .sheet(isPresented: $showRadar) { RadarSheet() }
+            .sheet(isPresented: $showSummary) { LoungeSummarySheet(messages: viewModel.messages) }
+            .sheet(isPresented: $showEmergency) { EmergencySheet() }
+            // Prima visita: regole della bacheca da accettare prima di leggere o scrivere.
+            .sheet(isPresented: $showRules) {
+                LoungeRulesSheet(requiresAcceptance: !hasAcceptedRules) {
+                    rulesAcceptedVersion = AppSettings.loungeRulesVersion
+                }
+                .interactiveDismissDisabled(!hasAcceptedRules)
+            }
+            .sheet(item: $reportTarget) { message in
+                ReportSheet(message: message) { report, didBlock in
+                    viewModel.didReport(report, blocked: didBlock)
+                    viewModel.infoMessage = String(localized: "Grazie: segnalazione registrata.")
+                }
+            }
             .overlay(alignment: .top) {
                 if let info = viewModel.infoMessage {
                     Text(info)
@@ -209,7 +273,10 @@ struct CabinLoungeView: View {
                 }
             }
         }
-        .onAppear { viewModel.start(environment: environment) }
+        .onAppear {
+            viewModel.start(environment: environment)
+            if !hasAcceptedRules { showRules = true }
+        }
         .onDisappear { viewModel.stop() }
     }
 
@@ -233,7 +300,13 @@ struct CabinLoungeView: View {
 
     private var header: some View {
         HStack {
-            Label("\(environment.neighbors.count) passeggeri a portata", systemImage: "dot.radiowaves.left.and.right")
+            Button {
+                Haptics.tap()
+                showRadar = true
+            } label: {
+                Label("\(environment.neighbors.count) passeggeri a portata", systemImage: "dot.radiowaves.left.and.right")
+            }
+            .accessibilityHint("Apre il radar di prossimità")
             Spacer()
             Text(viewModel.expiryText)
         }

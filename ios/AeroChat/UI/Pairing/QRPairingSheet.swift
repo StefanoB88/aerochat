@@ -93,7 +93,28 @@ struct QRPairingSheet: View {
             .foregroundStyle(AeroTheme.textSecondary)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 32)
+
+            // Invito via AirDrop / Messaggi: link allo store + link di pairing, il compagno e' gia' collegato al primo avvio.
+            if let payload {
+                ShareLink(item: Self.inviteText(payload: payload, group: group)) {
+                    Label(group == nil ? "Invita un compagno (AirDrop, Messaggi…)" : "Invita nel gruppo (AirDrop, Messaggi…)", systemImage: "square.and.arrow.up")
+                        .font(.body.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .tint(AeroTheme.accentCyan)
+            }
         }
+    }
+
+    /// Testo dell'invito: finche' c'e' rete scarica l'app, poi il link `aeromesh://` apre AeroChat e collega i due telefoni.
+    static func inviteText(payload: PairingPayload, group: ConversationRecord?) -> String {
+        let intro = group.map { String(localized: "Entra nel mio gruppo AeroChat “\($0.title)”: chat via Bluetooth, anche in aereo senza Wi-Fi.") }
+            ?? String(localized: "Chattiamo con AeroChat: via Bluetooth, anche in aereo senza Wi-Fi.")
+        return """
+        \(intro)
+        1) \(String(localized: "Scarica l'app")): \(QRCodeGenerator.storeLandingURL)
+        2) \(String(localized: "Poi apri questo link per collegarti a me")): \(payload.uriString)
+        """
     }
 
     private var scanSection: some View {

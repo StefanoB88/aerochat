@@ -1,0 +1,41 @@
+Czatuj na wysokości 10 000 metrów. Bez Wi‑Fi.
+
+AeroChat to komunikator, który działa, gdy nic innego nie działa: w samolocie, na statku wycieczkowym, w pociągu, na festiwalu, w górach albo podczas awarii prądu. Nie potrzebujesz internetu, Wi‑Fi, konta ani numeru telefonu. Wybierz pseudonim, włącz Bluetooth i rozmawiaj z ludźmi w pobliżu, nawet w trybie samolotowym.
+
+✈️ KABINA LOTU
+Zeskanuj kod kreskowy karty pokładowej (albo wpisz numer lotu i datę), aby dołączyć do prywatnego, szyfrowanego pokoju ze wszystkimi pasażerami tego samego lotu. Odczytywane są tylko linia lotnicza, numer lotu i data; nic nie opuszcza telefonu.
+
+🔒 SZYFROWANIE END-TO-END, ZERO SERWERÓW
+X25519, Ed25519 i ChaCha20‑Poly1305. Nie ma żadnych serwerów: niczego nie widzimy ani nie przechowujemy. Wiadomości przeskakują z telefonu na telefon w sieci mesh (do 7 przeskoków), a dzięki store-and-forward docierają później, gdy odbiorca znajdzie się w zasięgu.
+
+📱 iPhone I ANDROID
+Ten sam protokół na obu platformach: rozmawiaj ze wszystkimi, niezależnie od telefonu.
+
+💬 ROZMOWY I GRUPY
+Czaty 1 na 1 i grupy podróżne (parowanie kodem QR lub linkiem z zaproszeniem), potwierdzenia odczytu i zdjęcie profilowe. Zdjęcia, notatki głosowe i rozmowy głosowe między telefonami w pobliżu.
+
+🌐 KABINA PUBLICZNA
+Anonimowa, publiczna tablica na 12 godzin dla pasażerów w zasięgu, z jasnymi zasadami, zgłaszaniem i blokowaniem oraz filtrem języka.
+
+🎮 GRY I QUIZ
+Kółko i krzyżyk, Statki, Scopa, Scopone i Briscola. Do tego Quiz Kabiny: trivia na żywo dla całego samolotu, z tabelą wyników.
+
+🧠 INTELIGENCJA NA URZĄDZENIU
+Tłumaczenie offline odebranych wiadomości (iOS 18 lub nowszy, z pobranymi językami Tłumacza Apple). Z Apple Intelligence (iOS 26 lub nowszy, na zgodnych urządzeniach): podsumowanie „co mnie ominęło” z Kabiny Publicznej i podpowiedzi szybkich odpowiedzi. Wszystko przetwarzane jest na telefonie.
+
+📡 RADAR BLISKOŚCI
+Znajdź miejsce lub rząd znajomego po sile sygnału Bluetooth.
+
+🆘 ALARM AWARYJNY
+Wyślij „Jestem OK”, „Potrzebuję pomocy” lub „Wszystko w porządku”, opcjonalnie z pozycją GPS, do wszystkich telefonów w zasięgu: odbiorcy otrzymają alert priorytetowy. Przydatne na festiwalach i podczas awarii prądu. Pomaga, ale nie zastępuje numerów alarmowych.
+
+🎟️ KARTA LOTU I LIVE ACTIVITY
+Udostępnij obraz w formacie Stories z liczbami z Twojej podróży (wiadomości, poznane osoby, wygrane gry). Na ekranie blokady i w Dynamic Island widzisz, ile telefonów jest w zasięgu i ile masz nieprzeczytanych wiadomości.
+
+💶 ZA DARMO NA ZAWSZE
+Tekst 1 na 1, Kabina Publiczna, tekst w Kabinie Lotu i store-and-forward: wszystko za darmo, bez limitów. Flight Group Pass (zakup jednorazowy, bez subskrypcji) odblokowuje zdjęcia, notatki głosowe, rozmowy i gry dla całej grupy: 24-godzinny Single Flight Pass, 72-godzinny Travel Pass lub Lifetime. Jedna osoba płaci, wszyscy korzystają, także znajomi z Androidem i darmową aplikacją.
+
+🛡️ PRYWATNOŚĆ
+Bez śledzenia, bez analityki, bez reklam.
+
+AeroChat: komunikator, który działa, gdy nic innego nie działa.

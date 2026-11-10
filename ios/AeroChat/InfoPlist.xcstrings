@@ -289,6 +289,78 @@
         }
       }
     },
+    "NSLocationWhenInUseUsageDescription" : {
+      "comment" : "Privacy - Location When In Use Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat bruger kun din lokalitet, når du selv beder om det, for at vedhæfte den til en nødbesked til telefoner i nærheden. Den sendes aldrig til servere."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat verwendet deinen Standort nur, wenn du es ausdrücklich möchtest, um ihn an eine Notfallnachricht an Telefone in der Nähe anzuhängen. Er wird nie an Server gesendet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat uses your location only when you ask it to, to attach it to an emergency message for nearby phones. It’s never sent to a server."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat usa la ubicación solo cuando tú lo pides, para adjuntarla a un mensaje de emergencia dirigido a los teléfonos cercanos. Nunca se envía a ningún servidor."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat n’utilise ta position que lorsque tu le demandes, pour la joindre à un message d’urgence destiné aux téléphones à proximité. Elle n’est jamais envoyée à un serveur."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AeroChat usa la posizione solo quando lo chiedi tu, per allegarla a un messaggio di emergenza ai telefoni vicini. Non viene mai inviata a server."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat bruker posisjonen din bare når du ber om det, for å legge den ved en nødmelding til telefoner i nærheten. Den sendes aldri til servere."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat gebruikt je locatie alleen wanneer jij daarom vraagt, om die toe te voegen aan een noodbericht voor telefoons in de buurt. Ze wordt nooit naar een server gestuurd."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat używa lokalizacji tylko wtedy, gdy o to poprosisz, aby dołączyć ją do wiadomości alarmowej wysyłanej do pobliskich telefonów. Nigdy nie jest wysyłana na serwery."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "O AeroChat usa a localização apenas quando tu o pedes, para a anexar a uma mensagem de emergência para os telemóveis próximos. Nunca é enviada para servidores."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "machine_translated",
+            "value" : "AeroChat använder din position bara när du själv ber om det, för att bifoga den till ett nödmeddelande till telefoner i närheten. Den skickas aldrig till någon server."
+          }
+        }
+      }
+    },
     "NSMicrophoneUsageDescription" : {
       "comment" : "Privacy - Microphone Usage Description",
       "extractionState" : "extracted_with_value",

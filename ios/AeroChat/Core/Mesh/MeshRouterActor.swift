@@ -299,6 +299,15 @@ actor MeshRouterActor {
         return group
     }
 
+    /// Cabina del volo: gruppo derivato dalla carta d'imbarco, nessun invito necessario. I membri si
+    /// scoprono dai messaggi (ogni testo di gruppo registra il mittente tra i membri).
+    func joinFlightLounge(_ pass: BoardingPass) async throws -> ConversationRecord {
+        let lounge = try await database.conversations.joinFlightLounge(pass)
+        knownGroupRecipientIDs.insert(lounge.recipientID)
+        emit(.groupMembersChanged(conversationID: lounge.id))
+        return lounge
+    }
+
     /// Entra nel gruppo descritto dal QR e annuncia la propria adesione all'invitante (Group Key Gossip).
     func joinGroup(from payload: PairingPayload, inviter: PeerRecord) async throws -> ConversationRecord {
         guard let groupID = payload.groupID, let key = payload.groupSecretKey else { throw RouterError.invalidGossip("QR senza gruppo") }
@@ -509,10 +518,14 @@ actor MeshRouterActor {
         case .advertisingChanged:
             break
         case .peerDiscovered(let deviceID, let rssi):
+            // RSSI dalla scansione o dal polling periodico (radar): la UI si aggiorna solo se cambia davvero.
+            var changed = false
             for (id, var link) in links where id.deviceID == deviceID {
+                if abs((link.rssi ?? Int.min) - rssi) >= 2 { changed = true }
                 link.rssi = rssi
                 links[id] = link
             }
+            if changed { emit(.neighborsChanged(neighbors())) }
         case .linkOpened(let link):
             links[link.id] = link
             if let nodeID = link.nodeID {
@@ -677,6 +690,8 @@ actor MeshRouterActor {
     private func relayIfAllowed(_ envelope: MeshEnvelope, from link: LinkID, target: Target) async {
         guard configuration.relayEnabled, envelope.ttl > 1 else { return }
         guard envelope.encryptedPayload.count <= MeshProtocol.maxRelayPayloadBytes else { return }
+        // Un utente bloccato non viene nemmeno ritrasmesso: niente ponte per chi molesta.
+        guard !blocked.contains(envelope.senderNodeID) else { return }
         if envelope.packetType.isMedia {
             guard envelope.hopCount == 0, case .group = target else { return }
         }
@@ -745,6 +760,9 @@ actor MeshRouterActor {
                 try await forwardToSubsystems(envelope, hops: hops, target: target)
             case (.mediaHeader, _), (.mediaChunk, _), (.proPassGrant, _), (.gameMove, _):
                 try await forwardToSubsystems(envelope, hops: hops, target: target)
+            // Quiz ed emergenze viaggiano sulla Lounge (chiave pubblica) e vengono gestiti dai loro servizi.
+            case (.quiz, .lounge), (.emergency, .lounge):
+                try await forwardToSubsystems(envelope, hops: hops, target: target)
             default:
                 return
             }
@@ -802,12 +820,14 @@ actor MeshRouterActor {
         let (payload, sender) = try await openShared(envelope, key: CryptoEngine.publicCabinKey)
         // Cabina Pubblica: solo testo, niente link.
         guard !Self.containsLink(payload.text), !payload.text.isEmpty else { throw RouterError.linkNotAllowedInLounge }
+        // Bacheca tra sconosciuti: le parolacce vengono mascherate (impostazione dell'utente).
+        let text = AppSettings.isLanguageFilterEnabled ? ContentFilter.masked(payload.text) : payload.text
         let message = MessageRecord(msgID: envelope.msgID,
                                     conversationID: lounge.id,
                                     senderNodeID: sender.nodeID,
                                     senderNickname: sender.nickname,
                                     contentType: .text,
-                                    text: payload.text,
+                                    text: text,
                                     isOutgoing: false,
                                     deliveryStatus: .deliveredAck,
                                     hopCountReceived: hops,
@@ -955,7 +975,11 @@ actor MeshRouterActor {
             let (payload, sender) = try await openShared(envelope, key: try CryptoEngine.groupKey(fromSecret: secret))
             let peer = try await database.peers.upsert(sender)
             packet = InboundPacket(envelope: envelope, payload: payload, conversation: group, sender: peer, hopCount: hops)
-        case .lounge, .other:
+        case .lounge(let lounge):
+            // Lounge anonima: il mittente non viene registrato tra i peer (resta un record temporaneo).
+            let (payload, sender) = try await openShared(envelope, key: CryptoEngine.publicCabinKey)
+            packet = InboundPacket(envelope: envelope, payload: payload, conversation: lounge, sender: sender, hopCount: hops)
+        case .other:
             return
         }
         await markSeenThrottled(nodeID: packet.sender.nodeID, hopCount: hops, rssi: nil)

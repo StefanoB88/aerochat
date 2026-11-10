@@ -1,0 +1,12 @@
+Bem-vindo ao AeroChat 1.0, o mensageiro que funciona sem internet.
+
+• Chat offline por Bluetooth Low Energy, em modo de voo, entre iPhone e Android
+• Encriptação ponta a ponta e rede mesh até 7 saltos, com store‑and‑forward
+• Cabine do Voo: lê o cartão de embarque e conversa com todo o avião
+• Cabine Pública anónima de 12 horas, com denúncia, bloqueio e filtro de linguagem
+• Chats a dois e grupos de viagem por código QR ou link
+• Fotos, notas de voz, chamadas de voz e mini jogos: Jogo do galo, Batalha naval, Scopa, Scopone, Briscola
+• Quiz da Cabine com tabela de classificação
+• Tradução offline (iOS 18+) e Apple Intelligence no dispositivo (iOS 26+)
+• Radar de proximidade, alerta de emergência, cartão do voo e Live Activity
+• Flight Group Pass: compra única, um paga, todos usam

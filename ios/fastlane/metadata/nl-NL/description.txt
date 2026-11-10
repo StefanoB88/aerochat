@@ -1,0 +1,41 @@
+Chatten op 10 kilometer hoogte. Zonder wifi.
+
+AeroChat is de messenger die werkt als niets anders het doet: in het vliegtuig, op een cruise, in de trein, op een festival, in de bergen of tijdens een stroomstoring. Geen internet, geen wifi, geen account en geen telefoonnummer nodig. Kies een nickname, zet Bluetooth aan en chat met iedereen in de buurt, ook in de vliegtuigmodus.
+
+✈️ FLIGHT CABIN
+Scan de barcode van je instapkaart (of typ vluchtnummer en datum) en stap in een privé, versleutelde chatroom met iedereen op dezelfde vlucht. Alleen de maatschappij, het vluchtnummer en de datum worden gelezen; niets verlaat je telefoon.
+
+🔒 END-TO-END VERSLEUTELD, GEEN SERVERS
+X25519, Ed25519 en ChaCha20‑Poly1305. Er zijn geen servers: wij zien en bewaren niets. Berichten springen van telefoon naar telefoon via een mesh-netwerk (tot 7 hops) en dankzij store-and-forward worden ze later alsnog bezorgd zodra de ontvanger weer binnen bereik komt.
+
+📱 iPhone ÉN ANDROID
+Hetzelfde protocol op beide platforms: chat met iedereen, welke telefoon ze ook hebben.
+
+💬 GESPREKKEN EN GROEPEN
+1-op-1 chats en reisgroepen (koppel via QR-code of uitnodigingslink), leesbevestigingen en profielfoto. Foto's, spraakberichten en spraakoproepen tussen telefoons in de buurt.
+
+🌐 PUBLIC CABIN
+Een anoniem, openbaar prikbord van 12 uur voor passagiers binnen bereik, met duidelijke regels, rapporteren en blokkeren, en een taalfilter.
+
+🎮 GAMES EN QUIZ
+Boter-kaas-en-eieren, Zeeslag, Scopa, Scopone en Briscola. Plus de Cabin Quiz: live trivia voor de hele cabine, met scorebord.
+
+🧠 SLIM, OP JE TOESTEL
+Offline vertaling van ontvangen berichten (iOS 18 of nieuwer, met gedownloade talen van Apple Vertalen). Met Apple Intelligence (iOS 26 of nieuwer, op compatibele toestellen): een "wat heb ik gemist"-samenvatting van de Public Cabin en suggesties voor snelle antwoorden. Alles wordt op het toestel verwerkt.
+
+📡 NABIJHEIDSRADAR
+Vind de stoel of rij van je vriend aan de hand van de Bluetooth-signaalsterkte.
+
+🆘 NOODBERICHT
+Stuur "Ik ben oké", "Ik heb hulp nodig" of "Alles veilig", eventueel met GPS-positie, naar alle telefoons binnen bereik: ontvangers krijgen een prioriteitsmelding. Handig op festivals en bij stroomstoringen. Het helpt, maar vervangt de hulpdiensten niet.
+
+🎟️ FLIGHT CARD EN LIVE ACTIVITY
+Deel een afbeelding in Stories-formaat met de cijfers van je reis (berichten, ontmoete mensen, gewonnen spellen). Op het toegangsscherm en in het Dynamic Island zie je hoeveel telefoons binnen bereik zijn en hoeveel ongelezen berichten je hebt.
+
+💶 VOOR ALTIJD GRATIS
+1-op-1 tekst, Public Cabin, tekst in de Flight Cabin en store-and-forward: allemaal gratis, zonder limieten. De Flight Group Pass (eenmalige aankoop, geen abonnement) ontgrendelt foto's, spraakberichten, oproepen en games voor de hele groep: Single Flight Pass van 24 uur, Travel Pass van 72 uur of Lifetime. Eén betaalt, iedereen gebruikt het, ook je Android-vrienden met de gratis app.
+
+🛡️ PRIVACY
+Geen tracking, geen analytics, geen advertenties.
+
+AeroChat: de messenger die werkt als niets anders het doet.

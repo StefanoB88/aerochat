@@ -58,6 +58,44 @@ struct ConversationRepository: Sendable {
         }
     }
 
+    /// Entra (o rientra) nella Cabina del volo della carta d'imbarco; idempotente.
+    @discardableResult
+    func joinFlightLounge(_ pass: BoardingPass) async throws -> ConversationRecord {
+        try await database.pool.write { db in
+            let record = ConversationRecord.flightLounge(pass)
+            if var existing = try ConversationRecord.fetchOne(db, key: record.id) {
+                // Gruppo arrivato prima via gossip (senza codice volo): ora sappiamo che e' la Cabina del volo.
+                if existing.flightCode == nil {
+                    existing.flightCode = record.flightCode
+                    existing.title = record.title
+                    existing.expiresAtMs = record.expiresAtMs
+                    try existing.update(db)
+                }
+                return existing
+            }
+            try record.insert(db)
+            return record
+        }
+    }
+
+    /// Non letti totali (badge della Live Activity).
+    func totalUnread() async throws -> Int {
+        try await database.pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT COALESCE(SUM(unread_count), 0) FROM conversations") ?? 0
+        }
+    }
+
+    /// Cabine del volo attive (per la cartolina e il badge "a bordo").
+    func activeFlightLounges(now: Date = Date()) async throws -> [ConversationRecord] {
+        try await database.pool.read { db in
+            try ConversationRecord
+                .filter(ConversationRecord.Columns.flightCode != nil)
+                .filter(ConversationRecord.Columns.expiresAtMs == nil || ConversationRecord.Columns.expiresAtMs > now.unixMilliseconds)
+                .order(ConversationRecord.Columns.createdAtMs.desc)
+                .fetchAll(db)
+        }
+    }
+
     func addGroupMember(_ peer: PeerRecord, to conversationID: String) async throws {
         try await database.pool.write { db in
             try GroupMemberRecord(conversationID: conversationID, peer: peer).save(db)

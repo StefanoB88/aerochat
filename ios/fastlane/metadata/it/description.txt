@@ -1,0 +1,42 @@
+AeroChat è il messenger che funziona quando tutto il resto si ferma. Niente internet, niente Wi-Fi, niente account, niente numero di telefono. Scegli un nickname, accendi il Bluetooth e inizia a chattare con chi ti sta intorno, anche in modalità aereo.
+
+I messaggi viaggiano da telefono a telefono su una rete mesh Bluetooth Low Energy. Se la persona a cui scrivi è fuori portata, i telefoni vicini fanno da ponte (fino a 7 salti) oppure conservano il messaggio e lo consegnano più tardi, appena vi ritrovate vicini. Tutto è cifrato end-to-end con X25519, Ed25519 e ChaCha20-Poly1305. Non esistono server: noi non vediamo e non conserviamo nulla.
+
+DOVE DÀ IL MEGLIO
+✈️ In aereo, dall'imbarco all'atterraggio
+🚢 Crociere, treni, traghetti e pullman
+🎪 Festival e stadi, dove la rete va in tilt
+⛰️ Montagna, campeggi e spiagge isolate
+🔦 Blackout e tutte le volte in cui la rete non c'è
+
+CABINA DI VOLO
+Inquadra il codice a barre della carta d'imbarco (oppure digita numero di volo e data) per entrare in una stanza privata e cifrata con tutti i passeggeri del tuo volo. Vengono letti solo compagnia, numero di volo e data, e nulla esce dal telefono.
+
+CABINA PUBBLICA
+Una bacheca pubblica e anonima per i passeggeri in portata, che si azzera ogni 12 ore. Regole chiare, segnalazione e blocco, filtro del linguaggio.
+
+CHATTA COME VUOI
+💬 Chat 1 a 1 e gruppi di viaggio: ci si collega con un QR code o un link di invito
+✅ Conferme di lettura e foto profilo
+📷 Foto, note vocali e chiamate vocali tra telefoni vicini
+🎮 Mini giochi: Tris, Battaglia navale, Scopa, Scopone e Briscola
+🧠 Quiz di cabina: trivia dal vivo per tutta la cabina, con classifica
+📡 Radar di prossimità: trova la fila del tuo amico grazie alla potenza del segnale Bluetooth
+🌍 Traduzione offline dei messaggi ricevuti (iOS 18 o successivo, con le lingue di Traduci di Apple scaricate)
+✨ Apple Intelligence sul dispositivo (iOS 26 o successivo, dispositivi compatibili): riassunto "cosa mi sono perso" della Cabina pubblica e suggerimenti di risposta rapida. Tutto gira sul tuo iPhone.
+
+AL SICURO, INSIEME
+L'avviso di emergenza invia "Sto bene", "Ho bisogno di aiuto" o "Tutto a posto", con la posizione GPS se lo desideri, a tutti i telefoni in portata, che ricevono un avviso prioritario. Utile ai festival e durante i blackout: ti aiuta a raggiungere chi ti è vicino, ma non sostituisce i numeri di emergenza.
+
+E ANCORA
+🔒 Attività in tempo reale su schermo di blocco e Dynamic Island: telefoni in portata e messaggi non letti
+🖼️ Flight card: un'immagine in formato Storie da condividere con i numeri del tuo viaggio (messaggi, persone conosciute, partite vinte)
+🤝 Funziona tra iPhone e Android, stesso protocollo
+
+GRATIS PER SEMPRE
+Chat 1 a 1 testuali, Cabina pubblica, Cabina di volo testuale e consegna differita sono gratuite. Niente pubblicità, niente tracciamento, niente analytics.
+
+FLIGHT GROUP PASS
+Acquisti una tantum, nessun abbonamento: Single Flight Pass da 24 ore, Travel Pass da 72 ore o Lifetime Pass. Un solo Pass sblocca foto, note vocali, chiamate e giochi per tutto il gruppo. Paga uno, usano tutti, anche gli amici con Android e l'app gratuita.
+
+Chatta a 10.000 metri. Senza Wi-Fi.

@@ -8,11 +8,14 @@ struct QRScannerView: UIViewControllerRepresentable {
 
     let onCode: @MainActor (String) -> Void
     var onError: (@MainActor (QRScannerError) -> Void)?
+    /// Simbologie riconosciute: QR per il pairing; PDF417/Aztec per le carte d'imbarco (IATA BCBP).
+    var metadataTypes: [AVMetadataObject.ObjectType] = [.qr]
 
     func makeUIViewController(context: Context) -> QRScannerViewController {
         let controller = QRScannerViewController()
         controller.onCode = onCode
         controller.onError = onError
+        controller.metadataTypes = metadataTypes
         return controller
     }
 
@@ -28,6 +31,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 
     var onCode: (@MainActor (String) -> Void)?
     var onError: (@MainActor (QRScannerError) -> Void)?
+    var metadataTypes: [AVMetadataObject.ObjectType] = [.qr]
 
     private let session = AVCaptureSession()
     private let sessionQueue = DispatchQueue(label: "AeroMesh.QRScanner")
@@ -85,7 +89,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         session.addInput(input)
         session.addOutput(output)
         output.setMetadataObjectsDelegate(self, queue: .main)
-        output.metadataObjectTypes = [.qr]
+        output.metadataObjectTypes = metadataTypes.filter { output.availableMetadataObjectTypes.contains($0) }
         session.commitConfiguration()
 
         let layer = AVCaptureVideoPreviewLayer(session: session)
@@ -103,7 +107,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
                         didOutput metadataObjects: [AVMetadataObject],
                         from connection: AVCaptureConnection) {
         guard let object = metadataObjects.compactMap({ $0 as? AVMetadataMachineReadableCodeObject }).first,
-              object.type == .qr,
+              metadataTypes.contains(object.type),
               let value = object.stringValue else { return }
         // Debounce: lo stesso codice non viene riconsegnato per 2 secondi.
         if value == lastCode, Date().timeIntervalSince(lastCodeAt) < 2 { return }

@@ -96,6 +96,9 @@ struct GroupInfoSheet: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: GroupInfoViewModel?
+    @State private var showPaywall = false
+    @State private var isGifting = false
+    @State private var giftMessage: String?
     let group: ConversationRecord
     /// Apre la chat 1-a-1 scelta con "Scrivi" (la scheda si chiude da sola).
     var onOpenDirectChat: (ConversationRecord) -> Void = { _ in }
@@ -143,6 +146,8 @@ struct GroupInfoSheet: View {
             }
             .listRowBackground(Color.clear)
 
+            passSection
+
             Section("Partecipanti") {
                 ownRow
                 ForEach(viewModel.sortedMembers, id: \.nodeID) { member in
@@ -152,6 +157,54 @@ struct GroupInfoSheet: View {
             .listRowBackground(AeroTheme.surface)
         }
         .scrollContentBackground(.hidden)
+        .sheet(isPresented: $showPaywall) { PaywallView() }
+    }
+
+    /// "1 paga, tutti usano": regala il Pass al gruppo (o compra il tuo per farlo).
+    private var passSection: some View {
+        Section {
+            if group.isProUnlocked() {
+                Label("Pass attivo per tutto il gruppo", systemImage: "ticket.fill")
+                    .foregroundStyle(AeroTheme.accentEmerald)
+                if let until = group.proUnlockedUntilMs {
+                    Text("Foto, vocali e giochi sbloccati fino a \(Date(unixMilliseconds: until).formatted(date: .abbreviated, time: .shortened)).")
+                        .font(.footnote)
+                        .foregroundStyle(AeroTheme.textSecondary)
+                }
+            } else {
+                Button {
+                    Haptics.tap()
+                    Task { await giftPass() }
+                } label: {
+                    HStack {
+                        Label(environment.isPro ? "Regala il Pass a tutto il gruppo" : "Sblocca il gruppo con un Pass", systemImage: "gift.fill")
+                            .foregroundStyle(AeroTheme.textPrimary)
+                        Spacer()
+                        if isGifting { ProgressView().tint(AeroTheme.accentCyan) }
+                    }
+                }
+                .disabled(isGifting)
+            }
+            if let giftMessage {
+                Text(giftMessage).font(.footnote).foregroundStyle(AeroTheme.accentEmerald)
+            }
+        } footer: {
+            Text("Basta un Pass nel gruppo: chi lo possiede lo condivide con tutti i membri, anche Android e con app gratuita.")
+        }
+        .listRowBackground(AeroTheme.surface)
+    }
+
+    private func giftPass() async {
+        guard environment.isPro, let proPass = environment.proPass else {
+            showPaywall = true
+            return
+        }
+        isGifting = true
+        defer { isGifting = false }
+        if (try? await proPass.broadcastGrantIfEntitled(for: group)) == true {
+            Haptics.success()
+            giftMessage = String(localized: "Pass inviato ai membri a portata; gli altri lo ricevono appena si collegano.")
+        }
     }
 
     private var ownRow: some View {

@@ -1,0 +1,42 @@
+AeroChat is the messenger that works when nothing else does. No internet, no Wi-Fi, no account, no phone number. Pick a nickname, turn on Bluetooth and start chatting with the people around you, even in airplane mode.
+
+Your messages travel phone to phone over a Bluetooth Low Energy mesh. If the person you are writing to is out of range, nearby phones relay the message (up to 7 hops) or hold it and deliver it later, when you are close again. Everything is end-to-end encrypted with X25519, Ed25519 and ChaCha20-Poly1305. There are no servers: nothing is stored or seen by us.
+
+WHERE IT SHINES
+✈️ On planes, from boarding to landing
+🚢 Cruises, trains, ferries and buses
+🎪 Festivals and stadiums where the network collapses
+⛰️ Mountains, campsites and remote beaches
+🔦 Blackouts and other times the grid is down
+
+FLIGHT CABIN
+Scan your boarding pass barcode (or type the flight number and date) to join a private, encrypted chat room with everyone on your flight. Only the airline, flight number and date are read, and nothing ever leaves your phone.
+
+PUBLIC CABIN
+An anonymous public board for passengers in range that resets every 12 hours. Simple rules, report and block, and a language filter keep it friendly.
+
+CHAT YOUR WAY
+💬 1-to-1 chats and travel groups: pair by QR code or invite link
+✅ Read receipts and profile photos
+📷 Photos, voice notes and voice calls between nearby phones
+🎮 Mini games: Tic-tac-toe, Battleship, Scopa, Scopone and Briscola
+🧠 Cabin Quiz: live trivia for the whole cabin, with a leaderboard
+📡 Proximity radar: find your friend's row by Bluetooth signal strength
+🌍 Offline translation of received messages (iOS 18 or later, with Apple Translation languages downloaded)
+✨ Apple Intelligence on device (iOS 26 or later, compatible devices): a "what did I miss" summary of the Public Cabin and quick-reply suggestions. Everything runs on your iPhone.
+
+STAY SAFE TOGETHER
+Emergency broadcast sends "I'm OK", "I need help" or "All clear", with your GPS position if you choose, to every phone in range. Recipients get a priority alert. Handy at festivals and during blackouts: it helps you reach the people nearby, but it does not replace emergency numbers.
+
+MORE
+🔒 Live Activity on the Lock Screen and Dynamic Island: phones in range and unread messages
+🖼️ Flight card: a shareable, Stories-size image with your trip numbers (messages, people met, games won)
+🤝 Works between iPhone and Android, same protocol
+
+FREE FOREVER
+1-to-1 text, Public Cabin, Flight Cabin text and store-and-forward delivery are free. No ads, no tracking, no analytics.
+
+FLIGHT GROUP PASS
+One-time purchases, no subscription: a 24-hour Single Flight Pass, a 72-hour Travel Pass or a Lifetime Pass. One Pass unlocks photos, voice notes, calls and games for your whole group. One person pays, everyone uses it, including Android friends on the free app.
+
+Chat at 35,000 feet. No Wi-Fi needed.

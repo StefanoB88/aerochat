@@ -4,8 +4,13 @@ import GRDB
 /// Livello Pro cache-ato localmente (verificato offline tramite ricevuta JWS di StoreKit 2).
 enum ProTier: String, Codable, Sendable, DatabaseValueConvertible {
     case free
+    /// Pass Volo Singolo (24 ore).
+    case pass24h = "pass_24h"
     case pass72h = "pass_72h"
     case lifetime
+
+    /// Pass a tempo (scade), a differenza del lifetime.
+    var isTimeLimited: Bool { self == .pass24h || self == .pass72h }
 }
 
 /// Riga unica (`id = 1`) con l'identita' locale.
@@ -73,7 +78,7 @@ struct IdentityRecord: Codable, Hashable, Sendable, FetchableRecord, Persistable
     func isPro(now: Date = Date()) -> Bool {
         switch proTier {
         case .lifetime: return true
-        case .pass72h: return (proValidUntilMs ?? 0) > now.unixMilliseconds
+        case .pass24h, .pass72h: return (proValidUntilMs ?? 0) > now.unixMilliseconds
         case .free: return false
         }
     }

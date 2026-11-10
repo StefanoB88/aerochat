@@ -62,6 +62,7 @@ final class AppDatabase: Sendable {
     var messages: MessageRepository { MessageRepository(database: self) }
     var seenPackets: SeenPacketStore { SeenPacketStore(database: self) }
     var relayQueue: RelayQueueStore { RelayQueueStore(database: self) }
+    var reports: ReportRepository { ReportRepository(database: self) }
 
     // MARK: - Diagnostica
 

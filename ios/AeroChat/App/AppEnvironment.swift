@@ -27,6 +27,18 @@ final class AppEnvironment {
     private(set) var mediaStore: MediaStore?
     /// Chiamate vocali in tempo reale (osservato dalla schermata di chiamata).
     private(set) var calls: CallService?
+    /// Compagno simulato (App Review / prova con un solo iPhone), attivo solo se abilitato nelle Impostazioni.
+    private var demoPeer: DemoPeerService?
+    /// Quiz di cabina e avvisi di emergenza (entrambi sulla Lounge pubblica).
+    private(set) var quiz: QuizService?
+    private(set) var emergency: EmergencyService?
+    /// Stato del quiz in corso (nil = nessuno), osservato dal foglio del quiz e dal badge in Cabina.
+    private(set) var quizState: QuizService.State?
+    /// Ultimo avviso di emergenza ricevuto, mostrato come banner finche' l'utente non lo chiude.
+    var activeEmergency: EmergencyAlert?
+    /// Live Activity "A bordo" (Lock Screen / Dynamic Island).
+    private let liveActivity = LiveActivityController()
+    private var liveActivityRefresh: Task<Void, Never>?
 
     // Stato osservabile dalla UI.
     private(set) var radioState: RadioState = .unknown
@@ -141,6 +153,8 @@ final class AppEnvironment {
         await media?.setNickname(trimmed)
         await games?.setNickname(trimmed)
         await proPass?.setNickname(trimmed)
+        await quiz?.setNickname(trimmed)
+        await emergency?.setNickname(trimmed)
         calls?.setNickname(trimmed)
         if let router, let localProfile {
             await router.setProfile(localProfile, announce: true)
@@ -154,6 +168,7 @@ final class AppEnvironment {
         } else {
             _ = try? await database?.messages.markIncomingRead(conversationID: conversation.id)
         }
+        refreshLiveActivity()
     }
 
     /// Avvia trasporto BLE, router e servizi (idempotente).
@@ -227,10 +242,73 @@ final class AppEnvironment {
         self.calls = calls
         await calls.start()
 
+        let quiz = QuizService(router: router, database: database, identity: identityKeys, nickname: nickname)
+        self.quiz = quiz
+        let quizEvents = await quiz.events()
+        backgroundTasks.append(Task { [weak self] in
+            for await event in quizEvents {
+                guard let self else { break }
+                if case .updated(let state) = event, state != self.quizState { self.quizState = state }
+            }
+        })
+        await quiz.start()
+
+        let emergency = EmergencyService(router: router, database: database, identity: identityKeys,
+                                         nickname: nickname, notifier: notifier)
+        self.emergency = emergency
+        let emergencyEvents = await emergency.events()
+        backgroundTasks.append(Task { [weak self] in
+            for await event in emergencyEvents {
+                guard let self else { break }
+                if case .received(let alert) = event {
+                    self.activeEmergency = alert
+                    Haptics.warning()
+                }
+            }
+        })
+        await emergency.start()
+
         // Notifiche gratuite per tutti: anche chi ha completato l'onboarding senza rispondere al
         // prompt deve poter ricevere i banner dei messaggi arrivati a schermo spento.
         if let localNotifier = notifier as? LocalNotificationCenter {
             await localNotifier.requestAuthorizationIfNeeded()
+        }
+
+        if AppSettings.isDemoModeEnabled {
+            await setDemoMode(true)
+        }
+
+        if let pending = pendingPairingURI {
+            pendingPairingURI = nil
+            await pair(fromLink: pending)
+        }
+
+        await liveActivity.cleanUpStale()
+        refreshLiveActivity()
+    }
+
+    /// Aggiorna la Live Activity con vicini, non letti e Cabina del volo (coalescenza di 1 s).
+    private func refreshLiveActivity() {
+        liveActivityRefresh?.cancel()
+        liveActivityRefresh = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, let self, let database = self.database, self.router != nil else { return }
+            let unread = (try? await database.conversations.totalUnread()) ?? 0
+            let flight = (try? await database.conversations.activeFlightLounges())?.first?.title
+            await self.liveActivity.update(nickname: self.nickname, neighborCount: self.neighbors.count,
+                                           unreadCount: unread, flightTitle: flight, yourTurnIn: nil)
+        }
+    }
+
+    /// Attiva/disattiva il compagno di volo simulato (Impostazioni › Informazioni, dopo 5 tocchi sulla versione).
+    func setDemoMode(_ enabled: Bool) async {
+        guard let database else { return }
+        if enabled {
+            if demoPeer == nil { demoPeer = DemoPeerService(database: database) }
+            await demoPeer?.enable()
+        } else {
+            await demoPeer?.disable()
+            demoPeer = nil
         }
     }
 
@@ -242,8 +320,15 @@ final class AppEnvironment {
     func stopMesh() async {
         backgroundTasks.forEach { $0.cancel() }
         backgroundTasks.removeAll()
+        liveActivityRefresh?.cancel()
+        await liveActivity.end()
         calls?.stop()
         calls = nil
+        await quiz?.stop()
+        await emergency?.stop()
+        quiz = nil
+        emergency = nil
+        quizState = nil
         await games?.stop()
         await media?.stop()
         await proPass?.stop()
@@ -271,6 +356,34 @@ final class AppEnvironment {
         await proPass?.broadcastGrantsForAllGroups()
     }
 
+    /// Esito dell'ultimo link `aeromesh://` aperto (da Messaggi, AirDrop…), mostrato come avviso.
+    var incomingLinkMessage: String?
+    private var pendingPairingURI: String?
+
+    /// Link `aeromesh://v1?...` aperto dall'esterno: pairing immediato, o rinviato a mesh avviata.
+    func handleIncomingURL(_ url: URL) {
+        let uri = url.absoluteString
+        guard url.scheme?.lowercased() == MeshProtocol.qrScheme else { return }
+        guard router != nil else {
+            pendingPairingURI = uri
+            return
+        }
+        Task { await pair(fromLink: uri) }
+    }
+
+    private func pair(fromLink uri: String) async {
+        do {
+            let conversation = try await pair(uriString: uri)
+            Haptics.success()
+            incomingLinkMessage = conversation.type == .group
+                ? String(localized: "Sei nel gruppo \(conversation.title)!")
+                : String(localized: "Aggiunto \(conversation.title)! Vi troverete via Bluetooth.")
+        } catch {
+            Haptics.error()
+            incomingLinkMessage = String(localized: "Link di invito non valido.")
+        }
+    }
+
     /// Pairing da QR scansionato (persona o gruppo).
     @discardableResult
     func pair(uriString: String) async throws -> ConversationRecord {
@@ -283,6 +396,15 @@ final class AppEnvironment {
         return conversation
     }
 
+    /// Entra nella Cabina del volo della carta d'imbarco (gruppo derivato, nessun QR).
+    @discardableResult
+    func joinFlightLounge(_ pass: BoardingPass) async throws -> ConversationRecord {
+        guard let router else { throw RouterError.notRunning }
+        let lounge = try await router.joinFlightLounge(pass)
+        _ = try? await proPass?.broadcastGrantIfEntitled(for: lounge)
+        return lounge
+    }
+
     /// Crea un gruppo con i compagni selezionati e, se Pro, lo sblocca per tutti.
     func createGroup(title: String, members: [PeerRecord]) async throws -> ConversationRecord {
         guard let router else { throw RouterError.notRunning }
@@ -292,6 +414,40 @@ final class AppEnvironment {
         }
         _ = try? await proPass?.broadcastGrantIfEntitled(for: group)
         return group
+    }
+
+    // MARK: - Sicurezza (blocco e segnalazioni)
+
+    /// Blocca un utente: i suoi pacchetti vengono ignorati e non piu' ritrasmessi. Il mittente della
+    /// Cabina Pubblica puo' non essere ancora tra i peer: viene registrato con una chiave segnaposto.
+    func blockUser(nodeID: Data, nickname: String?) async {
+        guard let database else { return }
+        if (try? await database.peers.fetch(nodeID: nodeID)) == nil {
+            // Chiave segnaposto unica per nodo (la colonna x25519_pub e' UNIQUE).
+            let placeholderKey = nodeID + Data(repeating: 0, count: MeshProtocol.publicKeyLength - nodeID.count)
+            _ = try? await database.peers.upsert(PeerRecord(nodeID: nodeID, x25519Pub: placeholderKey,
+                                                            ed25519Pub: Data(repeating: 0, count: MeshProtocol.publicKeyLength),
+                                                            nickname: nickname ?? String(localized: "Passeggero")))
+        }
+        try? await database.peers.setBlocked(true, nodeID: nodeID)
+        await router?.refreshBlockedPeers()
+    }
+
+    func unblockUser(nodeID: Data) async {
+        guard let database else { return }
+        try? await database.peers.setBlocked(false, nodeID: nodeID)
+        await router?.refreshBlockedPeers()
+    }
+
+    /// Segnala un messaggio: salva il rapporto in locale e, se richiesto, blocca subito il mittente.
+    @discardableResult
+    func report(message: MessageRecord, reason: ReportReason, details: String?, blockSender: Bool) async throws -> ReportRecord {
+        guard let database else { throw RouterError.notRunning }
+        let report = try await database.reports.insert(ReportRecord(message: message, reason: reason, details: details))
+        if blockSender {
+            await blockUser(nodeID: message.senderNodeID, nickname: message.senderNickname)
+        }
+        return report
     }
 
     func setPinned(_ pinned: Bool, conversation: ConversationRecord) async throws {
@@ -315,9 +471,14 @@ final class AppEnvironment {
         case .radioStateChanged(let state):
             if state != radioState { radioState = state }
         case .neighborsChanged(let list):
-            if list != neighbors { neighbors = list }
+            if list != neighbors {
+                let countChanged = list.count != neighbors.count
+                neighbors = list
+                if countChanged { refreshLiveActivity() }
+            }
         case .messageReceived(_, let msgID):
             lastReceivedMessageID = msgID
+            refreshLiveActivity()
         case .relayQueueChanged(let count):
             if count != relayQueueCount { relayQueueCount = count }
         case .groupMembersChanged(let conversationID):

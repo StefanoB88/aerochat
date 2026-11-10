@@ -18,8 +18,37 @@ struct EntitlementState: Sendable, Equatable {
     func isPro(now: Date = Date()) -> Bool {
         switch tier {
         case .lifetime: return true
-        case .pass72h: return (validUntilMs ?? 0) > now.unixMilliseconds
+        case .pass24h, .pass72h: return (validUntilMs ?? 0) > now.unixMilliseconds
         case .free: return false
+        }
+    }
+}
+
+extension ProTier {
+    /// Durata del pass a tempo (nil per free e lifetime).
+    var passDuration: TimeInterval? {
+        switch self {
+        case .pass24h: return MeshProtocol.singleFlightPassDuration
+        case .pass72h: return MeshProtocol.proPassDuration
+        case .free, .lifetime: return nil
+        }
+    }
+
+    init?(productID: String) {
+        switch productID {
+        case MeshProtocol.ProductID.pass24h: self = .pass24h
+        case MeshProtocol.ProductID.pass72h: self = .pass72h
+        case MeshProtocol.ProductID.lifetime: self = .lifetime
+        default: return nil
+        }
+    }
+
+    var productID: String? {
+        switch self {
+        case .pass24h: return MeshProtocol.ProductID.pass24h
+        case .pass72h: return MeshProtocol.ProductID.pass72h
+        case .lifetime: return MeshProtocol.ProductID.lifetime
+        case .free: return nil
         }
     }
 }
@@ -35,7 +64,7 @@ actor EntitlementManager {
         case unverified
     }
 
-    static let productIDs = [MeshProtocol.ProductID.pass72h, MeshProtocol.ProductID.lifetime]
+    static let productIDs = [MeshProtocol.ProductID.pass24h, MeshProtocol.ProductID.pass72h, MeshProtocol.ProductID.lifetime]
 
     private let database: AppDatabase
     private let verifier: JWSTransactionVerifier
@@ -105,16 +134,14 @@ actor EntitlementManager {
     }
 
     static func state(from payload: JWSTransactionPayload, now: Date, source: EntitlementState.Source) -> EntitlementState {
-        switch payload.productId {
-        case MeshProtocol.ProductID.lifetime:
+        guard let tier = ProTier(productID: payload.productId) else { return .free }
+        if tier == .lifetime {
             return EntitlementState(tier: .lifetime, validUntilMs: nil, source: source)
-        case MeshProtocol.ProductID.pass72h:
-            let validUntil = payload.purchaseDate + Int64(MeshProtocol.proPassDuration * 1_000)
-            guard validUntil > now.unixMilliseconds else { return .free }
-            return EntitlementState(tier: .pass72h, validUntilMs: validUntil, source: source)
-        default:
-            return .free
         }
+        guard let duration = tier.passDuration else { return .free }
+        let validUntil = payload.purchaseDate + Int64(duration * 1_000)
+        guard validUntil > now.unixMilliseconds else { return .free }
+        return EntitlementState(tier: tier, validUntilMs: validUntil, source: source)
     }
 
     // MARK: - Acquisti
@@ -163,16 +190,17 @@ actor EntitlementManager {
             return
         }
         var next = state
-        switch transaction.productID {
-        case MeshProtocol.ProductID.lifetime:
+        guard let tier = ProTier(productID: transaction.productID) else { return }
+        if tier == .lifetime {
             next = EntitlementState(tier: .lifetime, validUntilMs: nil, source: .storeKit)
-        case MeshProtocol.ProductID.pass72h:
-            let validUntil = transaction.purchaseDate.addingTimeInterval(MeshProtocol.proPassDuration).unixMilliseconds
-            if next.tier != .lifetime, validUntil > now.unixMilliseconds {
-                next = EntitlementState(tier: .pass72h, validUntilMs: max(validUntil, next.validUntilMs ?? 0), source: .storeKit)
+        } else if let duration = tier.passDuration {
+            let validUntil = transaction.purchaseDate.addingTimeInterval(duration).unixMilliseconds
+            // Un pass a tempo non declassa un lifetime e non accorcia un pass gia' attivo piu' a lungo.
+            if next.tier != .lifetime, validUntil > now.unixMilliseconds, validUntil > (next.validUntilMs ?? 0) {
+                next = EntitlementState(tier: tier, validUntilMs: validUntil, source: .storeKit)
+            } else if next.tier != .lifetime, validUntil <= (next.validUntilMs ?? 0) {
+                return
             }
-        default:
-            return
         }
         try? await database.identities.updateProStatus(tier: next.tier, validUntilMs: next.validUntilMs, receiptJWS: jws)
         await update(to: next)

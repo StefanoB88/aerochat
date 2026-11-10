@@ -16,8 +16,17 @@ struct MessageBubble: View {
     var onSaveImage: () -> Void = {}
     /// Tocco sulla foto (solo con il file completo in locale): visore a schermo intero.
     var onOpenImage: () -> Void = {}
+    /// Foto da un mittente non verificato: resta sfocata finche' l'utente non la tocca (anti AirDrop-molesto).
+    var hidesMediaUntilTap = false
+    /// Traduzione offline del testo ricevuto, mostrata sotto l'originale.
+    var translation: String?
+
+    @State private var isRevealed = false
 
     private var isOutgoing: Bool { message.isOutgoing }
+
+    /// Sfocatura attiva finche' la foto non viene rivelata (la scelta sopravvive allo scroll della lista).
+    private var isBlurred: Bool { hidesMediaUntilTap && !isRevealed && !RevealedMedia.contains(message.msgID) }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 0) {
@@ -59,24 +68,61 @@ struct MessageBubble: View {
                 .font(.body)
                 .foregroundStyle(AeroTheme.textPrimary)
                 .textSelection(.enabled)
+            if let translation {
+                Divider().overlay(AeroTheme.accentCyan.opacity(0.4))
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "translate")
+                        .font(.caption2)
+                        .foregroundStyle(AeroTheme.accentEmerald)
+                        .padding(.top, 3)
+                    Text(translation)
+                        .font(.callout)
+                        .foregroundStyle(AeroTheme.textPrimary.opacity(0.9))
+                        .textSelection(.enabled)
+                }
+                .accessibilityLabel(Text("Traduzione: \(translation)"))
+            }
         case .image:
             MediaImageView(blurhash: message.blurhash,
                            relativePath: message.mediaLocalPath,
                            store: store,
                            transferProgress: message.mediaLocalPath == nil || transferProgress != nil ? transferProgress : nil)
+                .blur(radius: isBlurred ? 22 : 0)
+                .overlay {
+                    if isBlurred {
+                        VStack(spacing: 6) {
+                            Image(systemName: "eye.slash.fill").font(.title2)
+                            Text("Foto da un contatto non verificato")
+                                .font(.caption.weight(.semibold))
+                                .multilineTextAlignment(.center)
+                            Text("Tocca per mostrarla")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(12)
+                        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(8)
+                    }
+                }
                 .frame(width: 220, height: 165)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .contentShape(.interaction, RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .onTapGesture {
+                    if isBlurred {
+                        Haptics.tap()
+                        RevealedMedia.insert(message.msgID)
+                        withAnimation(.easeOut(duration: 0.3)) { isRevealed = true }
+                        return
+                    }
                     // BlurHash / ricezione in corso: niente visore finche' il file non e' completo.
                     guard message.mediaLocalPath != nil else { return }
                     onOpenImage()
                 }
                 .accessibilityAddTraits(message.mediaLocalPath != nil ? .isButton : [])
-                .accessibilityHint(message.mediaLocalPath != nil ? Text("Apri la foto a schermo intero") : Text(""))
+                .accessibilityHint(isBlurred ? Text("Tocca per mostrare la foto") : message.mediaLocalPath != nil ? Text("Apri la foto a schermo intero") : Text(""))
                 .contextMenu {
-                    if message.mediaLocalPath != nil {
+                    if message.mediaLocalPath != nil, !isBlurred {
                         Button { onSaveImage() } label: { Label("Salva nelle Foto", systemImage: "square.and.arrow.down") }
                     }
                 }
@@ -148,6 +194,14 @@ struct MessageBubble: View {
         let seconds = (ms ?? 0) / 1_000
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
+}
+
+/// Foto sfocate che l'utente ha scelto di mostrare in questa sessione (la lista ricrea le bolle scorrendo).
+@MainActor
+enum RevealedMedia {
+    private static var ids: Set<Data> = []
+    static func contains(_ msgID: Data) -> Bool { ids.contains(msgID) }
+    static func insert(_ msgID: Data) { ids.insert(msgID) }
 }
 
 /// Una o due spunte sovrapposte (SF Symbols non ha una doppia spunta).

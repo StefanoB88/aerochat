@@ -98,7 +98,11 @@ enum MeshProtocol {
     /// `sender_node_id` per relay anonimo: 8 byte a zero.
     static let anonymousSenderID = Data(repeating: 0, count: nodeIDLength)
 
+    /// Durata del Pass Volo Singolo.
+    static let singleFlightPassDuration: TimeInterval = 24 * 3_600
+
     enum ProductID {
+        static let pass24h = "com.aeromesh.pass24h"
         static let pass72h = "com.aeromesh.pass72h"
         static let lifetime = "com.aeromesh.lifetime"
     }

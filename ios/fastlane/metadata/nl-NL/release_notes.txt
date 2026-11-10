@@ -1,0 +1,12 @@
+Welkom bij AeroChat 1.0, de messenger die zonder internet werkt.
+
+• Offline chatten via Bluetooth Low Energy, in de vliegtuigmodus, tussen iPhone en Android
+• End-to-end versleuteling en mesh-netwerk tot 7 hops, met store-and-forward
+• Flight Cabin: scan je instapkaart en chat met het hele vliegtuig
+• Anonieme Public Cabin van 12 uur, met rapporteren, blokkeren en taalfilter
+• 1-op-1 chats en reisgroepen via QR-code of link
+• Foto's, spraakberichten, spraakoproepen en mini-games: Boter-kaas-en-eieren, Zeeslag, Scopa, Scopone, Briscola
+• Cabin Quiz met scorebord
+• Offline vertaling (iOS 18+) en Apple Intelligence op het toestel (iOS 26+)
+• Nabijheidsradar, noodbericht, Flight Card en Live Activity
+• Flight Group Pass: eenmalige aankoop, één betaalt, iedereen gebruikt het

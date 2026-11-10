@@ -4,6 +4,13 @@ Chat offline peer-to-peer via Bluetooth Low Energy (mesh AeroMesh): messaggi, fo
 chiamate, gruppi, Cabina Pubblica e giochi (Tris, Battaglia navale, Scopa, Scopone, Briscola).
 Le due app parlano lo stesso protocollo e si scambiano messaggi tra iPhone e Android.
 
+Release 1.1 (iOS, da replicare su Android — vedi [`PROTOCOL_CHANGES_1_1.md`](PROTOCOL_CHANGES_1_1.md)):
+Cabina del volo dalla carta d'imbarco, quiz di cabina, radar di prossimità, avviso di emergenza,
+traduzione offline, Apple Intelligence on-device, Live Activity, cartolina di volo, link di invito
+`aeromesh://`, Pass Volo Singolo 24 h, moderazione completa (regole, segnala/blocca, filtro linguaggio,
+foto sfocate da sconosciuti). Kit per l'App Review: [`ios/APP_REVIEW_NOTES.md`](ios/APP_REVIEW_NOTES.md),
+listino in 10 lingue in `ios/fastlane/metadata/`.
+
 | Cartella | Piattaforma | Come aprirla |
 |---|---|---|
 | [`ios/`](ios) | iOS 17+ (SwiftUI, GRDB, SwiftProtobuf, libwebp) | `ios/AeroChat.xcodeproj` in Xcode |

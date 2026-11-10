@@ -56,6 +56,20 @@ struct LocalNotificationCenter: MeshNotifier {
         try? await UNUserNotificationCenter.current().add(request)
     }
 
+    /// Avviso di emergenza: notifica "time sensitive" (passa la modalita' Concentrazione) anche con l'app aperta.
+    func notifyEmergency(_ alert: EmergencyAlert) async {
+        let content = UNMutableNotificationContent()
+        content.title = "\(EmergencyService.emoji(for: alert.status)) \(alert.statusTitle)"
+        content.subtitle = alert.senderNickname
+        content.body = alert.text.isEmpty ? String(localized: "Avviso da un passeggero vicino.") : alert.text
+        content.sound = .defaultCritical
+        content.interruptionLevel = .timeSensitive
+        content.threadIdentifier = "emergency"
+        content.userInfo = ["conversation_id": ConversationRecord.cabinLoungeID, "msg_id": alert.msgID.hexString, "emergency": true]
+        let request = UNNotificationRequest(identifier: "emergency-\(alert.msgID.hexString)", content: content, trigger: nil)
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+
     static func preview(for message: MessageRecord) -> String {
         switch message.contentType {
         case .text: return message.text ?? ""
@@ -80,6 +94,8 @@ final class NotificationPresentationDelegate: NSObject, UNUserNotificationCenter
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        // Le emergenze si vedono sempre, anche con la Cabina aperta.
+        if notification.request.content.userInfo["emergency"] as? Bool == true { return [.banner, .list, .sound] }
         let conversationID = notification.request.content.userInfo["conversation_id"] as? String
         let isShowing = await MainActor.run {
             conversationID.map(NotificationPresence.isShowing(conversationID:)) ?? false

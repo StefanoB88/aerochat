@@ -35,6 +35,17 @@ final class ConversationViewModel {
     var showScoponePicker = false
     /// Partita a carte aperta nel tavolo a schermo intero.
     var openedCardTable: CardTableItem?
+    /// Messaggio in corso di segnalazione (menu contestuale).
+    var reportTarget: MessageRecord?
+    /// Contatti verificati di persona (QR): le foto degli altri restano sfocate finche' non vengono toccate.
+    private(set) var trustedSenders: Set<Data> = []
+    /// Traduzione offline dei messaggi ricevuti (iOS 18+); `translations[msgID] == ""` = gia' nella nostra lingua.
+    var translationEnabled = false
+    var translations: [Data: String] = [:]
+    /// Risposte rapide suggerite dal modello on-device per l'ultimo messaggio ricevuto.
+    private(set) var suggestions: [String] = []
+    private var suggestionsFor: Data?
+    private var suggestionsTask: Task<Void, Never>?
 
     private let environment: AppEnvironment
     private var tasks: [Task<Void, Never>] = []
@@ -63,6 +74,7 @@ final class ConversationViewModel {
                 guard let self else { break }
                 self.messages = list
                 await self.markReadIfVisible()
+                self.refreshSuggestions()
             }
         })
         if let peerID = conversation.peerNodeID {
@@ -85,6 +97,13 @@ final class ConversationViewModel {
             for await updated in database.conversations.observe(id: id) {
                 guard let self, let updated else { continue }
                 self.conversation = updated
+            }
+        })
+        tasks.append(Task { [weak self] in
+            for await list in database.peers.observeAll() {
+                guard let self else { break }
+                let trusted = Set(list.filter(\.isTrusted).map(\.nodeID))
+                if trusted != self.trustedSenders { self.trustedSenders = trusted }
             }
         })
         tasks.append(Task { [weak self] in
@@ -373,6 +392,54 @@ final class ConversationViewModel {
         }
     }
 
+    // MARK: Risposte rapide (Apple Intelligence)
+
+    /// Tre suggerimenti per l'ultimo messaggio ricevuto; spariscono appena rispondiamo.
+    func refreshSuggestions() {
+        guard CabinAssistant.isAvailable, AppSettings.smartRepliesEnabled, conversation.type != .cabinLounge,
+              let last = messages.last, !last.isOutgoing, last.contentType == .text, let text = last.text, !text.isEmpty else {
+            suggestions = []
+            suggestionsFor = nil
+            suggestionsTask?.cancel()
+            return
+        }
+        guard suggestionsFor != last.msgID else { return }
+        suggestionsFor = last.msgID
+        suggestions = []
+        suggestionsTask?.cancel()
+        let history = messages.suffix(8).compactMap { message -> String? in
+            guard message.contentType == .text, let text = message.text else { return nil }
+            return "\(message.isOutgoing ? String(localized: "Io") : (message.senderNickname ?? String(localized: "Compagno"))): \(text)"
+        }
+        suggestionsTask = Task { [weak self] in
+            let replies = (try? await CabinAssistant.suggestReplies(history: history, lastIncoming: text)) ?? []
+            guard !Task.isCancelled, let self, self.suggestionsFor == last.msgID else { return }
+            self.suggestions = replies
+        }
+    }
+
+    func useSuggestion(_ text: String) {
+        draft = text
+        suggestions = []
+        sendText()
+    }
+
+    // MARK: Sicurezza
+
+    /// Foto ricevuta da un mittente mai scansionato di persona: sfocata finche' l'utente non la tocca.
+    func hidesMedia(_ message: MessageRecord) -> Bool {
+        guard !message.isOutgoing, message.contentType == .image, AppSettings.blursStrangerMedia else { return false }
+        return !trustedSenders.contains(message.senderNodeID)
+    }
+
+    func block(sender message: MessageRecord) {
+        Task {
+            await environment.blockUser(nodeID: message.senderNodeID, nickname: message.senderNickname)
+            Haptics.warning()
+            infoMessage = String(localized: "\(message.senderNickname ?? String(localized: "Utente")) bloccato. Puoi sbloccarlo da Impostazioni.")
+        }
+    }
+
     // MARK: Gate
 
     /// Applica il modello Freemium e spiega all'utente cosa manca.
@@ -435,6 +502,10 @@ private struct ConversationContent: View {
                 // Viste separate: i timer da 100 ms di registrazione/riproduzione invalidano solo
                 // l'indicatore e la bolla in riproduzione, non l'intera lista dei messaggi.
                 MessageListView(viewModel: viewModel)
+                if !viewModel.suggestions.isEmpty {
+                    SmartReplyBar(suggestions: viewModel.suggestions) { viewModel.useSuggestion($0) }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
                 ComposerBar(text: $viewModel.draft,
                             photoItem: $viewModel.photoItem,
                             recorder: viewModel.recorder,
@@ -498,7 +569,20 @@ private struct ConversationContent: View {
                     .accessibilityLabel("QR del gruppo")
                 }
             }
+            if MessageTranslation.isSupported {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Haptics.tap()
+                        viewModel.translationEnabled.toggle()
+                    } label: {
+                        Image(systemName: "translate")
+                            .foregroundStyle(viewModel.translationEnabled ? AeroTheme.accentEmerald : AeroTheme.accentCyan)
+                    }
+                    .accessibilityLabel(viewModel.translationEnabled ? "Disattiva traduzione" : "Traduci i messaggi ricevuti")
+                }
+            }
         }
+        .messageTranslation(viewModel)
         .toolbarBackground(AeroTheme.background, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .onChange(of: viewModel.photoItem) { _, item in
@@ -531,6 +615,11 @@ private struct ConversationContent: View {
             ScoponePlayerPicker(members: viewModel.groupMembers) { viewModel.inviteScopone(players: $0) }
         }
         .sheet(isPresented: $viewModel.showPaywall) { PaywallView() }
+        .sheet(item: $viewModel.reportTarget) { message in
+            ReportSheet(message: message) { _, _ in
+                viewModel.infoMessage = String(localized: "Grazie: segnalazione registrata.")
+            }
+        }
         .sheet(isPresented: $viewModel.showGroupInvite) { QRPairingSheet(group: viewModel.conversation) }
         .sheet(isPresented: $viewModel.showGroupInfo, onDismiss: {
             // Push solo a scheda chiusa: insieme alla chiusura la navigazione puo' perdersi.
@@ -588,8 +677,26 @@ private struct MessageListView: View {
                                       onTogglePlayback: { viewModel.togglePlayback(message) },
                                       onGameAction: { viewModel.handleGame($0, message: message) },
                                       onSaveImage: { viewModel.saveImage(message) },
-                                      onOpenImage: { viewModel.viewedImage = ViewedImage(message: message) })
+                                      onOpenImage: { viewModel.viewedImage = ViewedImage(message: message) },
+                                      hidesMediaUntilTap: viewModel.hidesMedia(message),
+                                      translation: viewModel.translations[message.msgID].flatMap { $0.isEmpty ? nil : $0 })
                             .id(message.msgID)
+                            .contextMenu {
+                                if !message.isOutgoing, message.contentType != .game {
+                                    Button {
+                                        Haptics.tap()
+                                        viewModel.reportTarget = message
+                                    } label: {
+                                        Label("Segnala messaggio", systemImage: "exclamationmark.bubble")
+                                    }
+                                    Button(role: .destructive) {
+                                        Haptics.tap()
+                                        viewModel.block(sender: message)
+                                    } label: {
+                                        Label("Blocca \(message.senderNickname ?? viewModel.conversation.title)", systemImage: "hand.raised.fill")
+                                    }
+                                }
+                            }
                     }
                     ForEach(viewModel.pendingPhotos, id: \.self) { id in
                         PendingPhotoBubble().id(id)
@@ -622,6 +729,42 @@ private struct MessageListView: View {
                 }
             }
         }
+    }
+}
+
+/// Chip con le risposte rapide suggerite dal modello on-device, sopra la barra di composizione.
+private struct SmartReplyBar: View {
+
+    let suggestions: [String]
+    let onPick: (String) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.caption)
+                    .foregroundStyle(AeroTheme.accentCyan)
+                ForEach(suggestions, id: \.self) { suggestion in
+                    Button {
+                        Haptics.tap()
+                        onPick(suggestion)
+                    } label: {
+                        Text(suggestion)
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(AeroTheme.textPrimary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(AeroTheme.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(AeroTheme.accentCyan.opacity(0.35), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .background(AeroTheme.background)
+        .accessibilityLabel("Risposte rapide suggerite")
     }
 }
 

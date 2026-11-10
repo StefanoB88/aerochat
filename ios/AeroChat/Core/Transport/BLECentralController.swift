@@ -44,6 +44,8 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
     /// Riavvio periodico della scansione: con `AllowDuplicates = false` iOS segnala ogni dispositivo
     /// una sola volta per sessione di scansione, quindi dopo un tentativo fallito non lo rivedremmo piu'.
     private var scanRefreshTimer: DispatchSourceTimer?
+    /// Lettura periodica dell'RSSI dei link aperti (radar di prossimita'): la scansione non la ripete.
+    private var rssiTimer: DispatchSourceTimer?
     /// Tentativi falliti consecutivi per fidato: backoff esponenziale invece di un loop connect/fail.
     private var connectFailures: [UUID: Int] = [:]
     /// Ultimo riavvio della scansione: molti disconnect ravvicinati non devono martellare la radio.
@@ -52,6 +54,7 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
     static let connectTimeout: TimeInterval = 12
     static let handshakeTimeout: TimeInterval = 15
     static let scanRefreshInterval: TimeInterval = 20
+    static let rssiPollInterval: TimeInterval = 4
     static let minimumScanRestartInterval: TimeInterval = 2
     static let maximumReconnectBackoff: TimeInterval = 60
 
@@ -92,6 +95,7 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
                 manager.cancelPeripheralConnection(peripheral)
             }
             stopScanRefresh()
+            stopRSSIPolling()
             handshakeTimeouts.values.forEach { $0.cancel() }
             handshakeTimeouts.removeAll()
             suppressedReconnects.removeAll()
@@ -202,6 +206,28 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
         scanRefreshTimer = nil
     }
 
+    private func startRSSIPolling() {
+        guard rssiTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + Self.rssiPollInterval, repeating: Self.rssiPollInterval, leeway: .seconds(1))
+        timer.setEventHandler { [weak self] in self?.pollRSSI() }
+        timer.resume()
+        rssiTimer = timer
+    }
+
+    private func stopRSSIPolling() {
+        rssiTimer?.cancel()
+        rssiTimer = nil
+    }
+
+    /// Chiede l'RSSI a ogni peripheral con canale aperto; la risposta arriva in `didReadRSSI`.
+    private func pollRSSI() {
+        for id in openChannels {
+            guard let peripheral = peripherals[id], peripheral.state == .connected else { continue }
+            peripheral.readRSSI()
+        }
+    }
+
     /// Se entro `interval` il canale L2CAP non e' aperto, il tentativo viene annullato e il
     /// dispositivo torna rilevabile (una connessione pendente non scade mai da sola).
     private func armHandshakeTimeout(for peripheral: CBPeripheral, after interval: TimeInterval) {
@@ -276,10 +302,12 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
         case .poweredOn:
             startScanIfNeeded()
             startScanRefresh()
+            startRSSIPolling()
             connectTrustedPeripherals()
             resumeRestoredPeripherals()
         default:
             stopScanRefresh()
+            stopRSSIPolling()
             psms.removeAll()
             pendingOpen.removeAll()
             openChannels.removeAll()
@@ -359,6 +387,12 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
     }
 
     // MARK: - CBPeripheralDelegate
+
+    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+        // 127 = valore non disponibile secondo la specifica Bluetooth.
+        guard error == nil, RSSI.intValue != 127 else { return }
+        handler(.discovered(deviceID: peripheral.identifier, rssi: RSSI.intValue))
+    }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard error == nil, let services = peripheral.services else {

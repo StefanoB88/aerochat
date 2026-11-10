@@ -1,0 +1,42 @@
+AeroChat ist der Messenger, der funktioniert, wenn sonst nichts mehr geht. Kein Internet, kein WLAN, kein Konto, keine Telefonnummer. Nickname wählen, Bluetooth einschalten und mit den Menschen um dich herum chatten, sogar im Flugmodus.
+
+Deine Nachrichten springen über ein Bluetooth-Low-Energy-Mesh von Handy zu Handy. Ist die Person, der du schreibst, gerade außer Reichweite, leiten Handys in der Nähe die Nachricht weiter (bis zu 7 Hops) oder bewahren sie auf und stellen sie später zu, sobald ihr euch wieder nahe seid. Alles ist Ende-zu-Ende-verschlüsselt mit X25519, Ed25519 und ChaCha20-Poly1305. Es gibt keine Server: Wir sehen und speichern nichts.
+
+HIER GLÄNZT AEROCHAT
+✈️ Im Flugzeug, vom Boarding bis zur Landung
+🚢 Auf Kreuzfahrten, in Zügen, Fähren und Bussen
+🎪 Auf Festivals und in Stadien, wenn das Netz zusammenbricht
+⛰️ In den Bergen, auf dem Campingplatz, am abgelegenen Strand
+🔦 Bei Stromausfällen und immer dann, wenn das Netz weg ist
+
+FLIGHT CABIN
+Scanne den Barcode deiner Bordkarte (oder gib Flugnummer und Datum ein) und betritt einen privaten, verschlüsselten Chatraum mit allen Mitreisenden deines Flugs. Gelesen werden nur Airline, Flugnummer und Datum, und nichts verlässt dein Handy.
+
+PUBLIC CABIN
+Ein anonymes, öffentliches Schwarzes Brett für Passagiere in Reichweite, das sich alle 12 Stunden zurücksetzt. Klare Regeln, Melden und Blockieren sowie ein Sprachfilter sorgen für ein gutes Miteinander.
+
+CHATTEN, WIE DU WILLST
+💬 1-zu-1-Chats und Reisegruppen: verbinden per QR-Code oder Einladungslink
+✅ Lesebestätigungen und Profilfotos
+📷 Fotos, Sprachnachrichten und Sprachanrufe zwischen Handys in der Nähe
+🎮 Minispiele: Tic-Tac-Toe, Schiffe versenken, Scopa, Scopone und Briscola
+🧠 Cabin Quiz: Live-Quiz für die ganze Kabine, mit Bestenliste
+📡 Näherungsradar: finde die Sitzreihe deiner Freunde über die Bluetooth-Signalstärke
+🌍 Offline-Übersetzung empfangener Nachrichten (ab iOS 18, mit heruntergeladenen Sprachen der Apple-Übersetzen-App)
+✨ Apple Intelligence auf dem Gerät (ab iOS 26, kompatible Geräte): „Was habe ich verpasst?“-Zusammenfassung der Public Cabin und Vorschläge für schnelle Antworten. Alles läuft auf deinem iPhone.
+
+GEMEINSAM SICHER
+Der Notfall-Broadcast sendet „Mir geht's gut“, „Ich brauche Hilfe“ oder „Entwarnung“, auf Wunsch mit GPS-Position, an alle Handys in Reichweite. Die Empfänger erhalten eine Warnung mit hoher Priorität. Praktisch auf Festivals und bei Stromausfällen: Er hilft dir, Menschen in deiner Nähe zu erreichen, ersetzt aber keine Notrufnummern.
+
+AUSSERDEM
+🔒 Live-Aktivität auf dem Sperrbildschirm und in der Dynamic Island: Handys in Reichweite und ungelesene Nachrichten
+🖼️ Flight Card: ein teilbares Bild im Story-Format mit den Zahlen deiner Reise (Nachrichten, neue Bekanntschaften, gewonnene Spiele)
+🤝 Funktioniert zwischen iPhone und Android, gleiches Protokoll
+
+FÜR IMMER KOSTENLOS
+1-zu-1-Textchats, Public Cabin, Flight Cabin (Text) und die verzögerte Zustellung sind kostenlos. Keine Werbung, kein Tracking, keine Analytics.
+
+FLIGHT GROUP PASS
+Einmalkäufe, kein Abo: Single Flight Pass für 24 Stunden, Travel Pass für 72 Stunden oder Lifetime Pass. Ein Pass schaltet Fotos, Sprachnachrichten, Anrufe und Spiele für die ganze Gruppe frei. Einer zahlt, alle nutzen es, auch Android-Freunde mit der kostenlosen App.
+
+Chatten in 10.000 Metern Höhe. Ganz ohne WLAN.

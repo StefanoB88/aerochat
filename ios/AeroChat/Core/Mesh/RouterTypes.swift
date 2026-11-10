@@ -100,10 +100,11 @@ extension PacketType {
     /// Pacchetti testuali/di controllo che possono attendere in `relay_queue` (Delay-Tolerant Networking).
     var isStoreAndForwardEligible: Bool {
         switch self {
-        case .chatText, .deliveryAck, .readReceipt, .groupKeyGossip, .proPassGrant, .gameMove: return true
+        // L'emergenza deve arrivare anche a chi passa di li' piu' tardi.
+        case .chatText, .deliveryAck, .readReceipt, .groupKeyGossip, .proPassGrant, .gameMove, .emergency: return true
         // Il profilo viene ripetuto a ogni nuovo link: non serve tenerlo in coda.
-        // Le chiamate hanno senso solo in tempo reale: niente coda.
-        case .publicLounge, .mediaHeader, .mediaChunk, .profileUpdate, .callSignal, .callAudio, .UNRECOGNIZED: return false
+        // Le chiamate e il quiz hanno senso solo in tempo reale: niente coda.
+        case .publicLounge, .mediaHeader, .mediaChunk, .profileUpdate, .callSignal, .callAudio, .quiz, .UNRECOGNIZED: return false
         }
     }
 

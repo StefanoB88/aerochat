@@ -62,6 +62,11 @@ struct ChatListView: View {
     @State private var showNewGroup = false
     @State private var showPaywall = false
     @State private var showProfile = false
+    @State private var showBoardingPass = false
+    @State private var showFlightCard = false
+    /// Cabina del volo appena creata: aperta subito dopo la chiusura del foglio.
+    @State private var joinedFlightLounge: ConversationRecord?
+    @State private var pendingFlightLounge: ConversationRecord?
     @State private var conversationToDelete: ConversationRecord?
     @State private var actionError: String?
 
@@ -84,7 +89,7 @@ struct ChatListView: View {
                     } label: {
                         AvatarView(imageData: environment.avatarImage, colorHex: environment.avatarColorHex, size: 34)
                     }
-                    .accessibilityLabel("Modifica profilo")
+                    .accessibilityLabel("Impostazioni e profilo")
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -106,8 +111,11 @@ struct ChatListView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button { Haptics.tap(); showBoardingPass = true } label: { Label("Cabina del volo (carta d'imbarco)", systemImage: "airplane.departure") }
                         Button { Haptics.tap(); showNewGroup = true } label: { Label("Nuovo gruppo di viaggio", systemImage: "person.3") }
                         Button { Haptics.tap(); showStoreQR = true } label: { Label("Fai scaricare l'app al gate", systemImage: "arrow.down.app") }
+                        Divider()
+                        Button { Haptics.tap(); showFlightCard = true } label: { Label("Cartolina di volo", systemImage: "sparkles.rectangle.stack") }
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .foregroundStyle(AeroTheme.accentCyan)
@@ -117,12 +125,24 @@ struct ChatListView: View {
             .navigationDestination(for: ConversationRecord.self) { conversation in
                 ConversationView(conversation: conversation)
             }
+            .navigationDestination(item: $joinedFlightLounge) { lounge in
+                ConversationView(conversation: lounge)
+            }
         }
         .sheet(isPresented: $showPairing) { QRPairingSheet() }
+        .sheet(isPresented: $showBoardingPass, onDismiss: {
+            if let lounge = pendingFlightLounge {
+                pendingFlightLounge = nil
+                joinedFlightLounge = lounge
+            }
+        }) {
+            BoardingPassSheet { pendingFlightLounge = $0 }
+        }
+        .sheet(isPresented: $showFlightCard) { FlightCardSheet() }
         .sheet(isPresented: $showStoreQR) { StoreQRSheet() }
         .sheet(isPresented: $showNewGroup) { NewGroupSheet() }
         .sheet(isPresented: $showPaywall) { PaywallView() }
-        .sheet(isPresented: $showProfile) { ProfileEditSheet() }
+        .sheet(isPresented: $showProfile) { SettingsView() }
         .confirmationDialog("Eliminare la chat?",
                             isPresented: Binding(get: { conversationToDelete != nil }, set: { if !$0 { conversationToDelete = nil } }),
                             titleVisibility: .visible,
@@ -259,7 +279,9 @@ struct ChatListView: View {
 
     @ViewBuilder
     private func avatar(_ conversation: ConversationRecord) -> some View {
-        if conversation.type == .group {
+        if conversation.isFlightLounge {
+            AvatarView(imageData: nil, colorHex: "00E5FF", systemImage: "airplane")
+        } else if conversation.type == .group {
             AvatarView(imageData: nil, colorHex: "10B981", systemImage: "person.3.fill")
         } else {
             let peer = conversation.peerNodeID.flatMap { viewModel.peers[$0] }
@@ -282,12 +304,13 @@ struct ChatListView: View {
             Text("Pronti al decollo, \(environment.nickname)")
                 .font(AeroTheme.title(26))
                 .foregroundStyle(AeroTheme.textPrimary)
-            Text("Aggiungi i compagni di volo al gate: a bordo vi troverete da soli via Bluetooth.")
+            Text("Inquadra la carta d'imbarco per entrare nella chat del tuo volo, o aggiungi i compagni al gate: a bordo vi troverete da soli via Bluetooth.")
                 .font(.footnote)
                 .foregroundStyle(AeroTheme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
             Spacer()
+            ctaButton("Inquadra la carta d'imbarco", systemImage: "airplane.departure", tint: AeroTheme.accentCyan) { showBoardingPass = true }
             ctaButton("Aggiungi compagni di volo (QR)", systemImage: "qrcode.viewfinder", tint: AeroTheme.accentCyan) { showPairing = true }
             ctaButton("Fai scaricare l'app al Gate", systemImage: "arrow.down.app.fill", tint: AeroTheme.accentEmerald) { showStoreQR = true }
             Spacer(minLength: 24)

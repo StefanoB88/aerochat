@@ -32,6 +32,7 @@ struct MyApp: App {
     init() {
         // Banner anche con l'app in primo piano / a schermo appena bloccato (vedi delegate).
         UNUserNotificationCenter.current().delegate = NotificationPresentationDelegate.shared
+        AppSettings.registerDefaults()
     }
 
     var body: some Scene {
@@ -43,6 +44,10 @@ struct MyApp: App {
                 .buttonStyle(.haptic)
                 .task {
                     await environment.bootstrap()
+                }
+                // Link di invito `aeromesh://` da Messaggi, AirDrop, Mail.
+                .onOpenURL { url in
+                    environment.handleIncomingURL(url)
                 }
         }
     }

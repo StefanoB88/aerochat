@@ -9,6 +9,7 @@ struct PaywallView: View {
     @State private var products: [Product] = []
     @State private var purchasing: String?
     @State private var message: String?
+    @State private var legalDocument: LegalDocument?
 
     private struct Offer: Identifiable {
         let id: String
@@ -19,6 +20,10 @@ struct PaywallView: View {
 
     private var offers: [Offer] {
         [
+            Offer(id: MeshProtocol.ProductID.pass24h,
+                  title: String(localized: "Pass Volo Singolo 24 Ore"),
+                  subtitle: String(localized: "Un volo, un giorno. Foto, vocali e giochi per te e per il tuo gruppo fino all'atterraggio."),
+                  fallbackPrice: "0,29 €"),
             Offer(id: MeshProtocol.ProductID.pass72h,
                   title: String(localized: "Pass Viaggio 72 Ore"),
                   subtitle: String(localized: "Andata, soggiorno e ritorno. Sblocca il tuo gruppo di viaggio: 1 paga, tutti usano."),
@@ -57,6 +62,20 @@ struct PaywallView: View {
                         Text("Gratis per sempre: chat 1-a-1 di testo, emoji, Cabina Pubblica e consegna differita. Con il Pass: gruppi 3+, note vocali Opus, foto WebP e mini-giochi — anche per i compagni Android con app gratuita.")
                             .font(.caption)
                             .foregroundStyle(AeroTheme.textSecondary)
+                        // Richiesti dalle linee guida App Store per gli acquisti in-app.
+                        HStack(spacing: 16) {
+                            Button("Termini di utilizzo") { legalDocument = .terms }
+                            Button("Privacy") { legalDocument = .privacy }
+                            Link("EULA", destination: AppLinks.appleEULA)
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AeroTheme.accentCyan)
+                        .frame(maxWidth: .infinity)
+                        Text("Acquisti una tantum addebitati sul tuo account App Store. Nessun rinnovo automatico.")
+                            .font(.caption2)
+                            .foregroundStyle(AeroTheme.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
                     }
                     .padding(20)
                 }
@@ -74,6 +93,7 @@ struct PaywallView: View {
                 if products.isEmpty { message = String(localized: "Prezzi non disponibili offline: l'acquisto richiede una connessione.") }
             }
         }
+        .sheet(item: $legalDocument) { LegalView(document: $0) }
         .preferredColorScheme(.dark)
     }
 
@@ -91,7 +111,7 @@ struct PaywallView: View {
             }
             .font(AeroTheme.title(28))
             .foregroundStyle(AeroTheme.textPrimary)
-            if environment.isPro, let until = environment.entitlementState.validUntilMs, environment.entitlementState.tier == .pass72h {
+            if environment.isPro, let until = environment.entitlementState.validUntilMs, environment.entitlementState.tier.isTimeLimited {
                 Text("Pass attivo fino a \(Date(unixMilliseconds: until).formatted(date: .abbreviated, time: .shortened))")
                     .font(.footnote).foregroundStyle(AeroTheme.accentEmerald)
             }

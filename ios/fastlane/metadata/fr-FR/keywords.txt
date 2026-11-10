@@ -1,0 +1,1 @@
+mode avion,mesh,internet,vol,voyage,festival,chiffré,proximité,messagerie,avion,train,croisière

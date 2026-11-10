@@ -161,6 +161,29 @@ extension AppDatabase {
             }
         }
 
+        // Segnalazioni dei contenuti (App Store 1.2): salvate in locale, inoltrabili via email.
+        migrator.registerMigration("v6_reports") { db in
+            try db.create(table: "reports") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("msg_id", .blob).notNull()
+                t.column("conversation_id", .text).notNull()
+                t.column("reported_node_id", .blob).notNull()
+                t.column("reported_nickname", .text)
+                t.column("reason", .text).notNull()
+                t.column("details", .text)
+                t.column("text_snapshot", .text)
+                t.column("created_at_ms", .integer).notNull()
+            }
+            try db.create(indexOn: "reports", columns: ["reported_node_id"])
+        }
+
+        // Cabina del volo: gruppo derivato dalla carta d'imbarco (codice volo per icona, titolo e gate Pro).
+        migrator.registerMigration("v7_flight_lounge") { db in
+            try db.alter(table: "conversations") { t in
+                t.add(column: "flight_code", .text)
+            }
+        }
+
         return migrator
     }
 }

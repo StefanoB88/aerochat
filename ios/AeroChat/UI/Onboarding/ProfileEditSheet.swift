@@ -4,6 +4,16 @@ import PhotosUI
 /// Modifica del profilo in qualsiasi momento: foto, nickname e colore vengono annunciati ai contatti.
 struct ProfileEditSheet: View {
 
+    var body: some View {
+        NavigationStack {
+            ProfileEditView()
+        }
+    }
+}
+
+/// Contenuto della modifica profilo, presentabile sia come foglio sia dentro la navigazione delle Impostazioni.
+struct ProfileEditView: View {
+
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
 
@@ -20,40 +30,38 @@ struct ProfileEditSheet: View {
     private var trimmed: String { nickname.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AeroTheme.background.ignoresSafeArea()
-                ScrollView {
-                    VStack(spacing: 28) {
-                        avatarPicker
-                        nicknameField
-                        colorPicker
-                        if let errorMessage {
-                            Text(errorMessage).font(.footnote).foregroundStyle(.red)
-                        }
-                        Text("Foto, nickname e colore sono visibili ai tuoi compagni di volo e ai membri dei tuoi gruppi.")
-                            .font(.caption)
-                            .foregroundStyle(AeroTheme.textSecondary)
-                            .multilineTextAlignment(.center)
+        ZStack {
+            AeroTheme.background.ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 28) {
+                    avatarPicker
+                    nicknameField
+                    colorPicker
+                    if let errorMessage {
+                        Text(errorMessage).font(.footnote).foregroundStyle(.red)
                     }
-                    .padding(24)
+                    Text("Foto, nickname e colore sono visibili ai tuoi compagni di volo e ai membri dei tuoi gruppi.")
+                        .font(.caption)
+                        .foregroundStyle(AeroTheme.textSecondary)
+                        .multilineTextAlignment(.center)
                 }
-                .scrollDismissesKeyboard(.interactively)
+                .padding(24)
             }
-            .navigationTitle("Il tuo profilo")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(AeroTheme.background, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Annulla") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isSaving {
-                        ProgressView().tint(AeroTheme.accentCyan)
-                    } else {
-                        Button("Salva") { Task { await save() } }
-                            .disabled(trimmed.count < 2 || isProcessingPhoto)
-                    }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .navigationTitle("Il tuo profilo")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(AeroTheme.background, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Annulla") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                if isSaving {
+                    ProgressView().tint(AeroTheme.accentCyan)
+                } else {
+                    Button("Salva") { Task { await save() } }
+                        .disabled(trimmed.count < 2 || isProcessingPhoto)
                 }
             }
         }

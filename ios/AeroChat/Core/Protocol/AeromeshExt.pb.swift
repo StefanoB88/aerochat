@@ -359,6 +359,152 @@ nonisolated struct Aeromesh_V1_CallAudio: Sendable {
   init() {}
 }
 
+nonisolated enum Aeromesh_V1_QuizAction: SwiftProtobuf.Enum, Swift.CaseIterable {
+  typealias RawValue = Int
+  case unspecified // = 0
+  case question // = 1
+  case answer // = 2
+  case reveal // = 3
+  case end // = 4
+  case UNRECOGNIZED(Int)
+
+  init() {
+    self = .unspecified
+  }
+
+  init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .question
+    case 2: self = .answer
+    case 3: self = .reveal
+    case 4: self = .end
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .question: return 1
+    case .answer: return 2
+    case .reveal: return 3
+    case .end: return 4
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  static let allCases: [Aeromesh_V1_QuizAction] = [
+    .unspecified,
+    .question,
+    .answer,
+    .reveal,
+    .end,
+  ]
+
+}
+
+nonisolated struct Aeromesh_V1_QuizScore: Sendable {
+  var nodeID: Data = Data()
+
+  var nickname: String = String()
+
+  var points: UInt32 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct Aeromesh_V1_QuizPacket: Sendable {
+  var quizID: String = String()
+
+  var action: Aeromesh_V1_QuizAction = .unspecified
+
+  var round: UInt32 = 0
+
+  var totalRounds: UInt32 = 0
+
+  var question: String = String()
+
+  var options: [String] = []
+
+  var correctIndex: UInt32 = 0
+
+  var answerIndex: UInt32 = 0
+
+  var scores: [Aeromesh_V1_QuizScore] = []
+
+  var hostNodeID: Data = Data()
+
+  var deadlineMs: Int64 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated enum Aeromesh_V1_EmergencyStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
+  typealias RawValue = Int
+  case unspecified // = 0
+  case ok // = 1
+  case needHelp // = 2
+  case allClear // = 3
+  case UNRECOGNIZED(Int)
+
+  init() {
+    self = .unspecified
+  }
+
+  init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .ok
+    case 2: self = .needHelp
+    case 3: self = .allClear
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .ok: return 1
+    case .needHelp: return 2
+    case .allClear: return 3
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  static let allCases: [Aeromesh_V1_EmergencyStatus] = [
+    .unspecified,
+    .ok,
+    .needHelp,
+    .allClear,
+  ]
+
+}
+
+nonisolated struct Aeromesh_V1_EmergencyBroadcast: Sendable {
+  var status: Aeromesh_V1_EmergencyStatus = .unspecified
+
+  var text: String = String()
+
+  var latitude: Double = 0
+
+  var longitude: Double = 0
+
+  var hasLocation_p: Bool = false
+
+  var issuedAtMs: Int64 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "aeromesh.v1"
@@ -719,6 +865,214 @@ nonisolated extension Aeromesh_V1_CallAudio: SwiftProtobuf.Message, SwiftProtobu
     if lhs.callID != rhs.callID {return false}
     if lhs.sequence != rhs.sequence {return false}
     if lhs.frames != rhs.frames {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_QuizAction: SwiftProtobuf._ProtoNameProviding {
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "QUIZ_ACTION_UNSPECIFIED"),
+    1: .same(proto: "QUESTION"),
+    2: .same(proto: "ANSWER"),
+    3: .same(proto: "REVEAL"),
+    4: .same(proto: "END"),
+  ]
+}
+
+nonisolated extension Aeromesh_V1_EmergencyStatus: SwiftProtobuf._ProtoNameProviding {
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "EMERGENCY_STATUS_UNSPECIFIED"),
+    1: .same(proto: "OK"),
+    2: .same(proto: "NEED_HELP"),
+    3: .same(proto: "ALL_CLEAR"),
+  ]
+}
+
+nonisolated extension Aeromesh_V1_QuizScore: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".QuizScore"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "node_id"),
+    2: .same(proto: "nickname"),
+    3: .same(proto: "points"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.nodeID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.nickname) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.points) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.nodeID.isEmpty {
+      try visitor.visitSingularBytesField(value: self.nodeID, fieldNumber: 1)
+    }
+    if !self.nickname.isEmpty {
+      try visitor.visitSingularStringField(value: self.nickname, fieldNumber: 2)
+    }
+    if self.points != 0 {
+      try visitor.visitSingularUInt32Field(value: self.points, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_QuizScore, rhs: Aeromesh_V1_QuizScore) -> Bool {
+    if lhs.nodeID != rhs.nodeID {return false}
+    if lhs.nickname != rhs.nickname {return false}
+    if lhs.points != rhs.points {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_QuizPacket: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".QuizPacket"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "quiz_id"),
+    2: .same(proto: "action"),
+    3: .same(proto: "round"),
+    4: .standard(proto: "total_rounds"),
+    5: .same(proto: "question"),
+    6: .same(proto: "options"),
+    7: .standard(proto: "correct_index"),
+    8: .standard(proto: "answer_index"),
+    9: .same(proto: "scores"),
+    10: .standard(proto: "host_node_id"),
+    11: .standard(proto: "deadline_ms"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.quizID) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.action) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.round) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.totalRounds) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.question) }()
+      case 6: try { try decoder.decodeRepeatedStringField(value: &self.options) }()
+      case 7: try { try decoder.decodeSingularUInt32Field(value: &self.correctIndex) }()
+      case 8: try { try decoder.decodeSingularUInt32Field(value: &self.answerIndex) }()
+      case 9: try { try decoder.decodeRepeatedMessageField(value: &self.scores) }()
+      case 10: try { try decoder.decodeSingularBytesField(value: &self.hostNodeID) }()
+      case 11: try { try decoder.decodeSingularInt64Field(value: &self.deadlineMs) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.quizID.isEmpty {
+      try visitor.visitSingularStringField(value: self.quizID, fieldNumber: 1)
+    }
+    if self.action != .unspecified {
+      try visitor.visitSingularEnumField(value: self.action, fieldNumber: 2)
+    }
+    if self.round != 0 {
+      try visitor.visitSingularUInt32Field(value: self.round, fieldNumber: 3)
+    }
+    if self.totalRounds != 0 {
+      try visitor.visitSingularUInt32Field(value: self.totalRounds, fieldNumber: 4)
+    }
+    if !self.question.isEmpty {
+      try visitor.visitSingularStringField(value: self.question, fieldNumber: 5)
+    }
+    if !self.options.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.options, fieldNumber: 6)
+    }
+    if self.correctIndex != 0 {
+      try visitor.visitSingularUInt32Field(value: self.correctIndex, fieldNumber: 7)
+    }
+    if self.answerIndex != 0 {
+      try visitor.visitSingularUInt32Field(value: self.answerIndex, fieldNumber: 8)
+    }
+    if !self.scores.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.scores, fieldNumber: 9)
+    }
+    if !self.hostNodeID.isEmpty {
+      try visitor.visitSingularBytesField(value: self.hostNodeID, fieldNumber: 10)
+    }
+    if self.deadlineMs != 0 {
+      try visitor.visitSingularInt64Field(value: self.deadlineMs, fieldNumber: 11)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_QuizPacket, rhs: Aeromesh_V1_QuizPacket) -> Bool {
+    if lhs.quizID != rhs.quizID {return false}
+    if lhs.action != rhs.action {return false}
+    if lhs.round != rhs.round {return false}
+    if lhs.totalRounds != rhs.totalRounds {return false}
+    if lhs.question != rhs.question {return false}
+    if lhs.options != rhs.options {return false}
+    if lhs.correctIndex != rhs.correctIndex {return false}
+    if lhs.answerIndex != rhs.answerIndex {return false}
+    if lhs.scores != rhs.scores {return false}
+    if lhs.hostNodeID != rhs.hostNodeID {return false}
+    if lhs.deadlineMs != rhs.deadlineMs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_EmergencyBroadcast: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".EmergencyBroadcast"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "status"),
+    2: .same(proto: "text"),
+    3: .same(proto: "latitude"),
+    4: .same(proto: "longitude"),
+    5: .standard(proto: "has_location"),
+    6: .standard(proto: "issued_at_ms"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.status) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.text) }()
+      case 3: try { try decoder.decodeSingularDoubleField(value: &self.latitude) }()
+      case 4: try { try decoder.decodeSingularDoubleField(value: &self.longitude) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.hasLocation_p) }()
+      case 6: try { try decoder.decodeSingularInt64Field(value: &self.issuedAtMs) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.status != .unspecified {
+      try visitor.visitSingularEnumField(value: self.status, fieldNumber: 1)
+    }
+    if !self.text.isEmpty {
+      try visitor.visitSingularStringField(value: self.text, fieldNumber: 2)
+    }
+    if self.latitude.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.latitude, fieldNumber: 3)
+    }
+    if self.longitude.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.longitude, fieldNumber: 4)
+    }
+    if self.hasLocation_p != false {
+      try visitor.visitSingularBoolField(value: self.hasLocation_p, fieldNumber: 5)
+    }
+    if self.issuedAtMs != 0 {
+      try visitor.visitSingularInt64Field(value: self.issuedAtMs, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_EmergencyBroadcast, rhs: Aeromesh_V1_EmergencyBroadcast) -> Bool {
+    if lhs.status != rhs.status {return false}
+    if lhs.text != rhs.text {return false}
+    if lhs.latitude != rhs.latitude {return false}
+    if lhs.longitude != rhs.longitude {return false}
+    if lhs.hasLocation_p != rhs.hasLocation_p {return false}
+    if lhs.issuedAtMs != rhs.issuedAtMs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

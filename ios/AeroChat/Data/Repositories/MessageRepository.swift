@@ -183,6 +183,17 @@ struct MessageRepository: Sendable {
         }
     }
 
+    /// Tutti i messaggi dal momento indicato (statistiche della cartolina di volo), piu' recenti per primi.
+    func fetch(since: Date, limit: Int = 5_000) async throws -> [MessageRecord] {
+        try await database.pool.read { db in
+            try MessageRecord
+                .filter(MessageRecord.Columns.createdAtMs >= since.unixMilliseconds)
+                .order(MessageRecord.Columns.createdAtMs.desc)
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
     /// Ricerca istantanea FTS5 (prefissi su ogni token, es. "tax" trova "taxi").
     func search(_ query: String, limit: Int = 50) async throws -> [MessageRecord] {
         guard let pattern = FTS5Pattern(matchingAllPrefixesIn: query) else { return [] }

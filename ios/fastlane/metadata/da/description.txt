@@ -1,0 +1,41 @@
+Chat i 10 kilometers højde. Uden wifi.
+
+AeroChat er den messenger, der virker, når intet andet gør: i flyet, på krydstogtet, i toget, på festivalen, på fjeldet eller under en strømafbrydelse. Du skal hverken bruge internet, wifi, konto eller telefonnummer. Vælg et kaldenavn, slå Bluetooth til, og chat med dem omkring dig, også i flytilstand.
+
+✈️ FLIGHT CABIN
+Scan stregkoden på dit boardingkort (eller indtast flynummer og dato), og kom ind i et privat, krypteret chatrum med alle på samme fly. Kun flyselskab, flynummer og dato aflæses; intet forlader telefonen.
+
+🔒 END-TO-END-KRYPTERET, INGEN SERVERE
+X25519, Ed25519 og ChaCha20‑Poly1305. Der findes ingen servere: vi ser og gemmer ingenting. Beskeder hopper fra telefon til telefon i et mesh-netværk (op til 7 hop), og med store-and-forward bliver de leveret senere, når modtageren igen er inden for rækkevidde.
+
+📱 iPhone OG ANDROID
+Samme protokol på begge platforme: chat med alle, uanset telefon.
+
+💬 SAMTALER OG GRUPPER
+1-til-1-chats og rejsegrupper (par via QR-kode eller invitationslink), læsekvitteringer og profilbillede. Fotos, talebeskeder og taleopkald mellem telefoner i nærheden.
+
+🌐 PUBLIC CABIN
+En anonym, offentlig opslagstavle i 12 timer for passagerer inden for rækkevidde, med klare regler, anmeldelse og blokering samt sprogfilter.
+
+🎮 SPIL OG QUIZ
+Kryds og bolle, Sænke slagskibe, Scopa, Scopone og Briscola. Og Cabin Quiz: live quiz for hele kabinen, med topliste.
+
+🧠 SMART, DIREKTE PÅ ENHEDEN
+Offline oversættelse af modtagne beskeder (iOS 18 eller nyere, med downloadede sprog i Apples Oversæt). Med Apple Intelligence (iOS 26 eller nyere, på kompatible enheder): et "hvad gik jeg glip af"-resumé af Public Cabin og forslag til hurtige svar. Alt kører på enheden.
+
+📡 NÆRHEDSRADAR
+Find din vens sæde eller række ud fra Bluetooth-signalstyrken.
+
+🆘 NØDBESKED
+Send "Jeg er okay", "Jeg har brug for hjælp" eller "Faren er drevet over", eventuelt med GPS-position, til alle telefoner inden for rækkevidde: modtagerne får en prioriteret advarsel. Nyttigt på festivaler og under strømafbrydelser. Det hjælper, men erstatter ikke alarmnumrene.
+
+🎟️ FLIGHT CARD OG LIVE ACTIVITY
+Del et billede i Stories-format med tallene fra din rejse (beskeder, nye bekendtskaber, vundne spil). På låseskærmen og i Dynamic Island ser du, hvor mange telefoner der er inden for rækkevidde, og hvor mange ulæste beskeder du har.
+
+💶 GRATIS FOR ALTID
+1-til-1-tekst, Public Cabin, tekst i Flight Cabin og store-and-forward: alt sammen gratis, uden begrænsninger. Flight Group Pass (engangskøb, intet abonnement) låser op for fotos, talebeskeder, opkald og spil for hele gruppen: Single Flight Pass i 24 timer, Travel Pass i 72 timer eller Lifetime. Én betaler, alle bruger det, også dine Android-venner med gratisappen.
+
+🛡️ PRIVATLIV
+Ingen sporing, ingen analyser, ingen reklamer.
+
+AeroChat: den messenger, der virker, når intet andet gør.

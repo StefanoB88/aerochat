@@ -20,9 +20,11 @@ enum DeliveryStatus: String, Codable, Sendable, DatabaseValueConvertible {
     case read
 }
 
-struct MessageRecord: Codable, Hashable, Sendable, FetchableRecord, PersistableRecord {
+struct MessageRecord: Codable, Hashable, Sendable, Identifiable, FetchableRecord, PersistableRecord {
 
     static let databaseTableName = "messages"
+
+    var id: Data { msgID }
 
     var msgID: Data
     var conversationID: String

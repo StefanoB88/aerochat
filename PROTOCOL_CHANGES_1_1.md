@@ -1,0 +1,82 @@
+# AeroMesh protocol additions – release 1.1 (iOS, da replicare su Android)
+
+Tutte le modifiche sono **retrocompatibili**: i client 1.0 ignorano i `PacketType` sconosciuti e i
+nuovi campi. Il contratto binario resta quello di `aeromesh.proto` / `aeromesh_ext.proto` (aggiornati in
+`ios/AeroChat/Core/Protocol/`); copiare i due file anche in `android/app/src/main/proto/`.
+
+## 1. Nuovi `PacketType`
+
+| Valore | Nome | Destinatario / chiave | Coda S&F | `extra_data` |
+|---|---|---|---|---|
+| 12 | `QUIZ` | `recipient_id` = 8 zeri (Lounge), chiave `SHA256("AeroMesh-Public-Cabin-v1")` | no | `QuizPacket` |
+| 13 | `EMERGENCY` | come sopra, `ttl` = 7 (massimo) | **sì** | `EmergencyBroadcast` |
+
+Il router li tratta come la Lounge: multicast (flooding), autenticazione del mittente tramite le chiavi
+dichiarate in `InnerPayload` (`sender_x25519_pub` → `node_id`), nessun ACK. Un mittente bloccato non viene
+ne' consegnato ne' ritrasmesso (vale ora per **tutti** i pacchetti, anche 1.0).
+
+### QuizPacket (quiz di cabina)
+
+- L'**host** e' l'unica autorita': i partecipanti accettano `QUESTION`/`REVEAL`/`END` solo se
+  `sender_node_id == host_node_id` e, dopo la prima domanda, solo per lo stesso `quiz_id`.
+- `QUESTION`: `round` (1-based), `total_rounds`, `question` (≤300 char), `options` (2..4, ≤80 char),
+  `deadline_ms` (Unix ms). Durata domanda 20 s.
+- `ANSWER`: inviato dal partecipante in multicast; solo l'host lo conta (prima risposta per `node_id`,
+  entro `deadline_ms + 2000`). Gli altri lo ignorano.
+- `REVEAL`: `correct_index` + `scores` (classifica, max 32 voci). Punti: 100 per risposta giusta +
+  `floor(remaining_ms / 20000 * 50)` di bonus velocita'. Pausa 6 s, poi la domanda successiva.
+- `END`: classifica finale.
+- Validazioni lato ricevente: `quiz_id` non vuoto e ≤64 char, `host_node_id` di 8 byte.
+
+### EmergencyBroadcast
+
+- `status`: `OK` (1), `NEED_HELP` (2), `ALL_CLEAR` (3); `UNSPECIFIED` viene scartato.
+- `text` ≤ 280 caratteri; `latitude`/`longitude` validi solo se `has_location` (range controllato).
+- Il ricevente salva un messaggio `system` nella Cabina Pubblica con
+  `"<emoji> <nickname>: <titolo stato> — <text> — 📍 lat, lon"` (vedi `EmergencyService.systemText`),
+  mostra un banner prioritario e una notifica *time sensitive*. `msg_id` dell'envelope = `msg_id` del messaggio.
+
+## 2. Cabina del volo (nessuna modifica wire)
+
+Gruppo derivato dalla carta d'imbarco (IATA BCBP) o inserito a mano, uguale per tutti i passeggeri:
+
+```
+canonical = "<CARRIER>|<FLIGHT_NUMBER senza zeri iniziali>|<yyyy-MM-dd giorno di partenza, UTC>"
+            es. "AZ|204|2026-11-10"
+group_secret_key = SHA256("AeroMesh-Flight-Key-v1|" + canonical)              // 32 byte
+uuid_bytes       = SHA256("AeroMesh-Flight-UUID-v1|" + canonical)[0..16]
+uuid_bytes[6] = (uuid_bytes[6] & 0x0F) | 0x40 ; uuid_bytes[8] = (uuid_bytes[8] & 0x3F) | 0x80   // UUID v4 valido
+group_uuid       = UUID(uuid_bytes) ; recipient_id = SHA256(uuid_bytes)[0..8] (come ogni gruppo)
+```
+
+- Parsing BCBP (primo segmento): `[30..33]` partenza, `[33..36]` arrivo, `[36..39]` compagnia (trim),
+  `[39..44]` numero volo (trim di zeri e spazi), `[44..47]` giorno giuliano → anno piu' vicino a oggi.
+- Titolo locale: `"AZ 204 · FCO → LHR · 10 nov"`; scadenza locale: mezzanotte UTC del giorno + 36 h.
+- Il testo nella Cabina del volo e' **gratuito** per tutti (`FeatureGate`: `groupChat` sempre `allowed`
+  se `flight_code != null`); foto/vocali/giochi seguono le regole Pro. Nessun gossip necessario: i membri si
+  registrano quando ricevono un testo del gruppo (gia' cosi' in 1.0).
+- Su iOS la riga `conversations` ha la colonna `flight_code` (migrazione v7); Android puo' scegliere
+  la propria rappresentazione.
+
+## 3. Pass Volo Singolo
+
+- Nuovo prodotto `com.aeromesh.pass24h` (24 h). `ProPassGrant.product_id` puo' valere anche questo id;
+  il grant resta limitato a `min(72 h, scadenza del pass di chi lo emette)`, come prima.
+
+## 4. Link di invito (`aeromesh://`)
+
+- L'app iOS registra lo schema URL `aeromesh`; aprendo un link `aeromesh://v1?...` (stesso formato del QR)
+  da Messaggi/AirDrop si esegue il pairing. Android dovrebbe dichiarare lo stesso intent-filter.
+- Testo dell'invito: link allo store + link `aeromesh://` di pairing (vedi `QRPairingSheet.inviteText`).
+
+## 5. Moderazione (comportamento locale, nessun wire)
+
+- Filtro linguaggio in Cabina (`ContentFilter`): rifiuto in invio, mascheramento in ricezione.
+- Segnalazioni salvate in locale (`reports`) e inoltrabili via email a `safety@aeromesh.app`.
+- Blocco: niente consegna e **niente relay** dei pacchetti del nodo bloccato.
+- Foto da mittenti non `is_trusted` (mai scansionati via QR) mostrate sfocate finche' toccate.
+
+## 6. RSSI
+
+- iOS ora legge l'RSSI dei link aperti ogni 4 s (`readRSSI`) per il radar di prossimita'. Nessun wire.
+  Android: `BluetoothGatt.readRemoteRssi()` con la stessa cadenza, opzionale.

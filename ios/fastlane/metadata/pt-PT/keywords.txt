@@ -1,0 +1,1 @@
+avião,modo de voo,mesh,internet,ble,viagem,festival,encriptado,perto,cruzeiro,comboio,p2p,segurança

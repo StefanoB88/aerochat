@@ -27,6 +27,11 @@ struct ConversationRecord: Codable, Hashable, Sendable, FetchableRecord, Persist
     var unreadCount: Int
     /// Chat fissata in cima alla lista.
     var isPinned: Bool = false
+    /// Cabina del volo (gruppo derivato dalla carta d'imbarco): codice canonico `AZ|204|2026-11-10`.
+    var flightCode: String?
+
+    /// Gruppo pubblico del volo: testo gratis per tutti, scade dopo il volo.
+    var isFlightLounge: Bool { flightCode != nil }
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -41,6 +46,7 @@ struct ConversationRecord: Codable, Hashable, Sendable, FetchableRecord, Persist
         case lastMessageAtMs = "last_message_at_ms"
         case unreadCount = "unread_count"
         case isPinned = "is_pinned"
+        case flightCode = "flight_code"
     }
 
     enum Columns {
@@ -54,6 +60,8 @@ struct ConversationRecord: Codable, Hashable, Sendable, FetchableRecord, Persist
         static let lastMessageAtMs = Column(CodingKeys.lastMessageAtMs)
         static let unreadCount = Column(CodingKeys.unreadCount)
         static let isPinned = Column(CodingKeys.isPinned)
+        static let flightCode = Column(CodingKeys.flightCode)
+        static let createdAtMs = Column(CodingKeys.createdAtMs)
     }
 
     // MARK: - Factory
@@ -86,6 +94,15 @@ struct ConversationRecord: Codable, Hashable, Sendable, FetchableRecord, Persist
                            expiresAtMs: nil,
                            lastMessageAtMs: nil,
                            unreadCount: 0)
+    }
+
+    /// Cabina del volo: un gruppo con id, chiave e titolo derivati dalla carta d'imbarco, uguali per
+    /// tutti i passeggeri dello stesso volo. Scade 36 ore dopo il giorno di partenza.
+    static func flightLounge(_ pass: BoardingPass, createdAt: Date = Date()) -> ConversationRecord {
+        var record = group(id: pass.loungeGroupID, title: pass.loungeTitle, secretKey: pass.loungeSecretKey, createdAt: createdAt)
+        record.flightCode = pass.canonicalKey
+        record.expiresAtMs = pass.loungeExpiry.unixMilliseconds
+        return record
     }
 
     /// Cabina Pubblica: `recipient_id` tutto a zero, scade dopo 12 ore.

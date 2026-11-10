@@ -1,0 +1,12 @@
+Velkommen til AeroChat 1.0, meldingsappen som fungerer uten internett.
+
+• Offline chat via Bluetooth Low Energy, i flymodus, mellom iPhone og Android
+• Ende-til-ende-kryptering og mesh-nettverk opptil 7 hopp, med store-and-forward
+• Flight Cabin: skann boardingkortet og chat med hele flyet
+• Anonym Public Cabin i 12 timer, med rapportering, blokkering og språkfilter
+• 1-til-1-chatter og reisegrupper via QR-kode eller lenke
+• Bilder, talemeldinger, taleanrop og minispill: Tre på rad, Slagskip, Scopa, Scopone, Briscola
+• Cabin Quiz med toppliste
+• Offline oversettelse (iOS 18+) og Apple Intelligence på enheten (iOS 26+)
+• Nærhetsradar, nødmelding, Flight Card og Live Activity
+• Flight Group Pass: engangskjøp, én betaler, alle bruker det

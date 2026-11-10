@@ -1,0 +1,12 @@
+Bienvenue à bord ! Voici la toute première version d'AeroChat, la messagerie qui fonctionne sans internet.
+
+• Chat hors ligne sur réseau maillé Bluetooth Low Energy : ni Wi-Fi, ni compte, ni numéro de téléphone
+• Chiffrement de bout en bout, relais multi-sauts et livraison différée
+• Cabine de vol : scannez votre carte d'embarquement pour rejoindre le salon privé de votre vol
+• Cabine publique : tableau anonyme de 12 heures pour les passagers à portée
+• Conversations en tête-à-tête et groupes de voyage par QR code ou lien d'invitation
+• Photos, notes vocales, appels vocaux et mini-jeux
+• Quiz de cabine avec classement en direct
+• Traduction hors ligne et résumés Apple Intelligence sur l'appareil
+• Radar de proximité, diffusion d'urgence, Flight card et Activité en direct
+• Fonctionne aussi avec vos amis sur Android

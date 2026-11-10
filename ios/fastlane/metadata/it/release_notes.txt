@@ -1,0 +1,12 @@
+Benvenuto a bordo! Questa è la prima versione di AeroChat, il messenger che funziona senza internet.
+
+• Chat offline su rete mesh Bluetooth Low Energy: niente Wi-Fi, account o numero di telefono
+• Cifratura end-to-end, inoltro multi-hop e consegna differita
+• Cabina di volo: inquadra la carta d'imbarco per entrare nella stanza privata del tuo volo
+• Cabina pubblica: bacheca anonima di 12 ore per i passeggeri in portata
+• Chat 1 a 1 e gruppi di viaggio via QR code o link di invito
+• Foto, note vocali, chiamate vocali e mini giochi
+• Quiz di cabina con classifica dal vivo
+• Traduzione offline e riassunti con Apple Intelligence sul dispositivo
+• Radar di prossimità, avviso di emergenza, Flight card e Attività in tempo reale
+• Funziona anche con gli amici Android

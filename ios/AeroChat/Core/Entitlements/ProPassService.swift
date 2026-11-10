@@ -68,10 +68,11 @@ actor ProPassService {
         guard state.isPro(now: now) else { return false }
 
         var validUntil = now.addingTimeInterval(MeshProtocol.proPassDuration).unixMilliseconds
-        if state.tier == .pass72h, let ownLimit = state.validUntilMs {
+        if state.tier.isTimeLimited, let ownLimit = state.validUntilMs {
+            // Il gruppo resta sbloccato al massimo finche' dura il pass di chi lo regala.
             validUntil = min(validUntil, ownLimit)
         }
-        let productID = state.tier == .lifetime ? MeshProtocol.ProductID.lifetime : MeshProtocol.ProductID.pass72h
+        let productID = state.tier.productID ?? MeshProtocol.ProductID.pass72h
         let grant = try Self.makeGrant(groupID: groupID, validUntilMs: validUntil, productID: productID, identity: identity)
 
         try await database.conversations.setProUnlocked(until: validUntil, conversationID: group.id)
@@ -181,6 +182,10 @@ enum FeatureGate {
                          now: Date = Date()) -> FeatureDecision {
         if conversation.type == .cabinLounge {
             return .loungeTextOnly
+        }
+        // Cabina del volo: il testo e' gratis per tutti i passeggeri; media e giochi restano Pro.
+        if conversation.isFlightLounge, feature == .groupChat {
+            return .allowed
         }
         let unlocked = userIsPro || conversation.isProUnlocked(now: now)
         guard unlocked else { return .requiresPass }
