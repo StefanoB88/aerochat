@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Prefisso shell11_: link di invito aeromesh://, condivisione invito, notifica di stato "a bordo" (Live Activity). Da Localizable.xcstrings (iOS). -->
+<resources>
+    <string name="shell11_link_added">%1$s toegevoegd! Jullie vinden elkaar via Bluetooth.</string>
+    <string name="shell11_link_invalid">Ongeldige uitnodigingslink.</string>
+    <string name="shell11_invite_person">Een reisgenoot uitnodigen (Nearby Share, Berichten…)</string>
+    <string name="shell11_invite_group">Uitnodigen voor de groep (Nearby Share, Berichten…)</string>
+    <string name="shell11_invite_intro_group">Kom bij mijn AeroChat-groep “%1$s”: chatten via Bluetooth, zelfs in het vliegtuig zonder Wi-Fi.</string>
+    <string name="shell11_invite_intro_person">Laten we chatten met AeroChat: via Bluetooth, zelfs in het vliegtuig zonder Wi-Fi.</string>
+    <string name="shell11_invite_download">Download de app</string>
+    <string name="shell11_invite_open_link">Open daarna deze link om met mij te verbinden</string>
+    <string name="shell11_live_title">AeroChat · aan boord</string>
+    <string name="shell11_live_listening">Geen telefoons binnen bereik, aan het luisteren…</string>
+    <string name="shell11_live_active">Bluetooth-mesh actief, geen wifi nodig</string>
+    <plurals name="shell11_live_unread">
+        <item quantity="one">%1$d ongelezen bericht</item>
+        <item quantity="other">%1$d ongelezen berichten</item>
+    </plurals>
+    <plurals name="shell11_live_in_range">
+        <item quantity="one">%1$d telefoon binnen bereik</item>
+        <item quantity="other">%1$d telefoons binnen bereik</item>
+    </plurals>
+</resources>

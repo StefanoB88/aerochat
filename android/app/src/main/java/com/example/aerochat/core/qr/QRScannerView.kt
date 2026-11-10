@@ -63,6 +63,8 @@ fun QRScannerView(
     onCode: (String) -> Unit,
     modifier: Modifier = Modifier,
     onError: ((QRScannerError) -> Unit)? = null,
+    // Bitmask ML Kit dei formati accettati (es. `FORMAT_QR_CODE or FORMAT_PDF417 or FORMAT_AZTEC` per le carte d'imbarco).
+    formats: Int = Barcode.FORMAT_QR_CODE,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -91,11 +93,11 @@ fun QRScannerView(
         }
     }
 
-    DisposableEffect(granted, lifecycleOwner) {
+    DisposableEffect(granted, lifecycleOwner, formats) {
         if (!granted) return@DisposableEffect onDispose {}
         val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor()
         val scanner = BarcodeScanning.getClient(
-            BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build(),
+            BarcodeScannerOptions.Builder().setBarcodeFormats(formats).build(),
         )
         val debouncer = CodeDebouncer()
         var provider: ProcessCameraProvider? = null
@@ -113,7 +115,7 @@ fun QRScannerView(
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
                 analysis.setAnalyzer(analysisExecutor) { proxy ->
-                    analyze(proxy, scanner) { value ->
+                    analyze(proxy, scanner, formats) { value ->
                         ContextCompat.getMainExecutor(context).execute {
                             if (disposed) return@execute
                             macro?.codeSeen()
@@ -151,7 +153,7 @@ private fun hasCameraPermission(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
 @SuppressLint("UnsafeOptInUsageError")
-private fun analyze(proxy: ImageProxy, scanner: BarcodeScanner, onValue: (String) -> Unit) {
+private fun analyze(proxy: ImageProxy, scanner: BarcodeScanner, formats: Int, onValue: (String) -> Unit) {
     val mediaImage = proxy.image
     if (mediaImage == null) {
         proxy.close()
@@ -160,7 +162,7 @@ private fun analyze(proxy: ImageProxy, scanner: BarcodeScanner, onValue: (String
     val input = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
     scanner.process(input)
         .addOnSuccessListener { barcodes ->
-            barcodes.firstOrNull { it.format == Barcode.FORMAT_QR_CODE }?.rawValue?.let(onValue)
+            barcodes.firstOrNull { (it.format and formats) != 0 }?.rawValue?.let(onValue)
         }
         .addOnCompleteListener { proxy.close() }
 }

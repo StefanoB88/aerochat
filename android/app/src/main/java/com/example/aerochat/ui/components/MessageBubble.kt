@@ -19,15 +19,22 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Report
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +57,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -59,6 +67,7 @@ import com.example.aerochat.R
 import com.example.aerochat.core.games.GameSessionState
 import com.example.aerochat.core.media.MediaStore
 import com.example.aerochat.core.media.VoiceNotePlayer
+import com.example.aerochat.core.protocol.toHex
 import com.example.aerochat.data.records.DeliveryStatus
 import com.example.aerochat.data.records.MessageContentType
 import com.example.aerochat.data.records.MessageRecord
@@ -77,6 +86,18 @@ object MessageBubble {
     fun durationLabel(ms: Long): String = durationLabel(ms.toInt())
 }
 
+/**
+ * Foto sfocate che l'utente ha scelto di mostrare in questa sessione (Swift `RevealedMedia`): la lista
+ * ricrea le bolle scorrendo, la scelta deve sopravvivere. Osservabile da Compose.
+ */
+object RevealedMedia {
+    private val ids = mutableStateListOf<String>()
+    fun contains(msgIDHex: String): Boolean = msgIDHex in ids
+    fun insert(msgIDHex: String) {
+        if (msgIDHex !in ids) ids += msgIDHex
+    }
+}
+
 /** Ora breve (Swift `Text(date, style: .time)`), secondo il formato 12/24 h del dispositivo. */
 @Composable
 fun timeLabel(epochMs: Long): String {
@@ -92,6 +113,11 @@ fun timeLabel(epochMs: Long): String {
  * @param transferProgress avanzamento del trasferimento media (0...1) finche' il file non e' completo.
  * @param selectableText testo selezionabile (Swift `.textSelection(.enabled)`); `false` dove la bolla
  *   ha gia' un menu a pressione prolungata (Cabina Pubblica), per non contendersi il gesto.
+ * @param hidesMediaUntilTap foto da un mittente non verificato: resta sfocata (solo BlurHash) finche'
+ *   l'utente non la tocca (anti AirDrop-molesto). La scelta vale per la sessione ([RevealedMedia]).
+ * @param translation traduzione offline del testo ricevuto, mostrata sotto l'originale.
+ * @param onReport / [onBlock] voci "Segnala messaggio" / [blockLabel] nel menu a pressione prolungata
+ *   (solo messaggi ricevuti; `null` = voce assente). Il menu unico contiene anche Copia / Salva nelle Foto.
  */
 @Composable
 fun MessageBubble(
@@ -107,8 +133,18 @@ fun MessageBubble(
     onSaveImage: () -> Unit = {},
     onOpenImage: () -> Unit = {},
     selectableText: Boolean = true,
+    hidesMediaUntilTap: Boolean = false,
+    translation: String? = null,
+    onReport: (() -> Unit)? = null,
+    onBlock: (() -> Unit)? = null,
+    blockLabel: String? = null,
 ) {
     val isOutgoing = message.isOutgoing
+    val menu = BubbleMenu(
+        onReport = if (isOutgoing) null else onReport,
+        onBlock = if (isOutgoing) null else onBlock,
+        blockLabel = blockLabel,
+    )
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
@@ -140,6 +176,9 @@ fun MessageBubble(
                     onSaveImage = onSaveImage,
                     onOpenImage = onOpenImage,
                     selectableText = selectableText,
+                    hidesMediaUntilTap = hidesMediaUntilTap,
+                    translation = translation,
+                    menu = menu,
                 )
                 BubbleFooter(message)
             }
@@ -162,6 +201,42 @@ fun MessageBubble(
     }
 }
 
+/** Voci di sicurezza del menu della bolla (segnala / blocca il mittente). */
+private class BubbleMenu(
+    val onReport: (() -> Unit)?,
+    val onBlock: (() -> Unit)?,
+    val blockLabel: String?,
+) {
+    val hasSafetyItems: Boolean get() = onReport != null || onBlock != null
+}
+
+/** Voci "Segnala messaggio" e "Blocca …" (rosso) in coda al menu a pressione prolungata. */
+@Composable
+private fun SafetyMenuItems(menu: BubbleMenu, close: () -> Unit) {
+    menu.onReport?.let { report ->
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.safety_report_message)) },
+            leadingIcon = { Icon(Icons.Outlined.Report, contentDescription = null) },
+            onClick = {
+                close()
+                Haptics.tap()
+                report()
+            },
+        )
+    }
+    menu.onBlock?.let { block ->
+        DropdownMenuItem(
+            text = { Text(menu.blockLabel ?: stringResource(R.string.safety_block_user, stringResource(R.string.safety_user)), color = Color.Red) },
+            leadingIcon = { Icon(Icons.Filled.PanTool, contentDescription = null, tint = Color.Red) },
+            onClick = {
+                close()
+                Haptics.tap()
+                block()
+            },
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BubbleContent(
@@ -175,6 +250,9 @@ private fun BubbleContent(
     onSaveImage: () -> Unit,
     onOpenImage: () -> Unit,
     selectableText: Boolean,
+    hidesMediaUntilTap: Boolean,
+    translation: String?,
+    menu: BubbleMenu,
 ) {
     when (message.contentType) {
         MessageContentType.text, MessageContentType.system -> {
@@ -182,7 +260,9 @@ private fun BubbleContent(
             // gestore di selezione e dei gesti, ed era il costo maggiore all'apertura della chat. La copia
             // passa da una pressione prolungata (menu di sistema "Copia").
             val content = message.text ?: ""
-            if (selectableText) {
+            // Menu unico: Copia (se il testo e' copiabile) + Segnala / Blocca (messaggi ricevuti).
+            val safety = message.contentType == MessageContentType.text && menu.hasSafetyItems
+            if (selectableText || safety) {
                 var showMenu by remember { mutableStateOf(false) }
                 val clipboard = LocalClipboardManager.current
                 Box {
@@ -201,61 +281,110 @@ private fun BubbleContent(
                         ),
                     )
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(android.R.string.copy)) },
-                            onClick = {
-                                showMenu = false
-                                clipboard.setText(AnnotatedString(content))
-                                Haptics.tap()
-                            },
-                        )
+                        if (selectableText) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(android.R.string.copy)) },
+                                leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },
+                                onClick = {
+                                    showMenu = false
+                                    clipboard.setText(AnnotatedString(content))
+                                    Haptics.tap()
+                                },
+                            )
+                        }
+                        if (safety) SafetyMenuItems(menu) { showMenu = false }
                     }
                 }
             } else {
                 Text(content, style = AeroTheme.body, color = AeroTheme.textPrimary)
             }
+            if (translation != null) {
+                TranslationView(translation)
+            }
         }
         MessageContentType.image -> {
             var showMenu by remember { mutableStateOf(false) }
             val hasFile = message.mediaLocalPath != null
+            val id = remember(message.msgID) { message.msgID.toHex() }
+            // Sfocata finche' non viene rivelata: si mostra solo il BlurHash, il file vero non viene nemmeno caricato.
+            val isBlurred = hidesMediaUntilTap && !RevealedMedia.contains(id)
+            val canSave = hasFile && !isBlurred
+            val hasMenu = canSave || menu.hasSafetyItems
+            val revealHint = stringResource(R.string.safety_tap_to_show_hint)
             Box {
-                MediaImageView(
-                    blurhash = message.blurhash,
-                    relativePath = message.mediaLocalPath,
-                    store = store,
-                    transferProgress = if (message.mediaLocalPath == null || transferProgress != null) transferProgress else null,
+                Box(
                     modifier = Modifier
                         .size(width = 220.dp, height = 165.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClickLabel = if (hasFile) stringResource(R.string.chat_open_photo) else null,
-                            // BlurHash / ricezione in corso: niente visore finche' il file non e' completo.
-                            onClick = { if (hasFile) onOpenImage() },
-                            onLongClick = if (hasFile) {
+                            onClickLabel = when {
+                                isBlurred -> revealHint
+                                hasFile -> stringResource(R.string.chat_open_photo)
+                                else -> null
+                            },
+                            onClick = {
+                                if (isBlurred) {
+                                    Haptics.tap()
+                                    RevealedMedia.insert(id)
+                                    return@combinedClickable
+                                }
+                                // BlurHash / ricezione in corso: niente visore finche' il file non e' completo.
+                                if (hasFile) onOpenImage()
+                            },
+                            onLongClick = if (hasMenu) {
                                 {
                                     Haptics.impact(Haptics.ImpactStyle.medium)
                                     showMenu = true
                                 }
                             } else null,
                         ),
-                )
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.chat_save_to_photos)) },
-                        leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
-                        onClick = {
-                            showMenu = false
-                            onSaveImage()
-                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    MediaImageView(
+                        blurhash = message.blurhash,
+                        relativePath = if (isBlurred) null else message.mediaLocalPath,
+                        store = store,
+                        transferProgress = if (message.mediaLocalPath == null || transferProgress != null) transferProgress else null,
+                        modifier = Modifier.size(width = 220.dp, height = 165.dp),
                     )
+                    if (isBlurred) BlurredMediaOverlay()
+                }
+                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    if (canSave) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_save_to_photos)) },
+                            leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                onSaveImage()
+                            },
+                        )
+                    }
+                    SafetyMenuItems(menu) { showMenu = false }
                 }
             }
         }
         MessageContentType.audio -> {
             val missing = message.mediaLocalPath == null
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            var showMenu by remember { mutableStateOf(false) }
+            Box {
+            Row(
+                modifier = if (menu.hasSafetyItems) {
+                    Modifier.combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {},
+                        onLongClick = {
+                            Haptics.impact(Haptics.ImpactStyle.medium)
+                            showMenu = true
+                        },
+                    )
+                } else Modifier,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 if (missing && transferProgress != null) {
                     TransferProgressRing(progress = transferProgress, lineWidth = 3.dp, size = 28.dp)
                 } else {
@@ -286,6 +415,12 @@ private fun BubbleContent(
                     color = AeroTheme.textSecondary,
                 )
             }
+            if (menu.hasSafetyItems) {
+                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    SafetyMenuItems(menu) { showMenu = false }
+                }
+            }
+            }
         }
         MessageContentType.game -> {
             val data = message.gameState
@@ -299,6 +434,47 @@ private fun BubbleContent(
                 Text(message.text ?: "🎮", color = AeroTheme.textPrimary)
             }
         }
+    }
+}
+
+/** Traduzione sotto l'originale (Swift: divisore ciano + icona `translate` smeraldo). */
+@Composable
+private fun TranslationView(translation: String) {
+    val description = stringResource(R.string.safety_translation_a11y, translation)
+    HorizontalDivider(color = AeroTheme.accentCyan.copy(alpha = 0.4f))
+    Row(
+        modifier = Modifier.clearAndSetSemantics { contentDescription = description },
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            Icons.Filled.Translate,
+            contentDescription = null,
+            tint = AeroTheme.accentEmerald,
+            modifier = Modifier.padding(top = 3.dp).size(14.dp),
+        )
+        Text(translation, fontSize = 16.sp, color = AeroTheme.textPrimary.copy(alpha = 0.9f))
+    }
+}
+
+/** Velo sopra la foto sfocata: "Foto da un contatto non verificato · Tocca per mostrarla". */
+@Composable
+private fun BlurredMediaOverlay() {
+    Column(
+        modifier = Modifier
+            .padding(8.dp)
+            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(Icons.Filled.VisibilityOff, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+        Text(
+            stringResource(R.string.safety_unverified_photo),
+            style = AeroTheme.captionSemibold,
+            color = Color.White,
+            textAlign = TextAlign.Center,
+        )
+        Text(stringResource(R.string.safety_tap_to_show), fontSize = 11.sp, color = Color.White)
     }
 }
 

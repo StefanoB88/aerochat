@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Agent "flight": carta d'imbarco, cartolina di volo, Pass 24 ore, Pass di gruppo. Generato dal catalogo iOS. -->
+<resources>
+    <string name="flight_lounge_title">Flight Cabin</string>
+    <string name="flight_mode_scan">Scan</string>
+    <string name="flight_mode_manual">Enter</string>
+    <string name="flight_camera_denied">Allow camera access in Settings to scan your boarding pass.</string>
+    <string name="flight_camera_unavailable">Camera unavailable.</string>
+    <string name="flight_scan_hint">Scan the barcode on your boarding pass (even from another phone’s screen or from Wallet). Only the airline, flight number, and date are read: your name and PNR are ignored.</string>
+    <string name="flight_number_header">FLIGHT NUMBER</string>
+    <string name="flight_number_placeholder">for example, AZ 204</string>
+    <string name="flight_departure_day">Departure day</string>
+    <string name="flight_invalid_number">Invalid flight number: use the format AZ 204.</string>
+    <string name="flight_join_button">Join the Flight Cabin</string>
+    <string name="flight_manual_hint">All passengers who enter the same flight and date join the same encrypted room, with no QR codes to exchange.</string>
+    <string name="flight_seat">seat %1$s</string>
+    <string name="flight_pairing_qr_error">This is an AeroChat QR code: to add a travel buddy, use “Travel Buddies.”</string>
+    <string name="flight_unrecognized">Code not recognized: scan the barcode on your boarding pass.</string>
+    <string name="flight_joined">You’re on board %1$s! Anyone who scans the same boarding pass finds you here.</string>
+    <string name="flight_join_failed">Couldn’t join the Flight Cabin: %1$s</string>
+    <string name="flight_ok">OK</string>
+    <string name="flight_cancel">Cancel</string>
+    <string name="flight_card_title">Flight Postcard</string>
+    <string name="flight_card_period">Period</string>
+    <string name="flight_card_share_title">My Flight Postcard</string>
+    <string name="flight_card_share">Share Postcard</string>
+    <string name="flight_card_privacy">Numbers only: no messages, names, or photos of other passengers end up on the postcard.</string>
+    <string name="flight_card_whose">%1$s’s flight</string>
+    <string name="flight_card_messages">messages without internet</string>
+    <string name="flight_card_people">passengers met</string>
+    <string name="flight_card_games">games won out of %1$d</string>
+    <string name="flight_card_photos">photos over Bluetooth</string>
+    <string name="flight_card_voice">voice notes</string>
+    <string name="flight_card_hops">phones in the chain (record)</string>
+    <string name="flight_card_lounge">posts in the Cabin</string>
+    <string name="flight_card_slogan">Chat at 33,000 feet.</string>
+    <string name="flight_card_slogan2">No Wi-Fi, no account, just Bluetooth.</string>
+    <string name="flight_menu_boarding">Flight Cabin (Boarding Pass)</string>
+    <string name="flight_empty_hint">Scan your boarding pass to join your flight’s chat, or add your travel buddies at the gate: once on board, you’ll find each other over Bluetooth.</string>
+    <string name="flight_paywall_pass24_title">24-Hour Single Flight Pass</string>
+    <string name="flight_paywall_pass24_subtitle">One flight, one day. Photos, voice notes, and games for you and your group until landing.</string>
+    <string name="flight_paywall_terms">Terms of Use</string>
+    <string name="flight_paywall_privacy">Privacy</string>
+    <string name="flight_paywall_eula">EULA</string>
+    <string name="flight_paywall_one_time">One-time purchases charged to your Google Play account. No automatic renewal.</string>
+    <string name="flight_group_pass_active">Pass active for the whole group</string>
+    <string name="flight_group_pass_until">Photos, voice notes, and games unlocked until %1$s.</string>
+    <string name="flight_group_gift">Gift the Pass to the Whole Group</string>
+    <string name="flight_group_unlock">Unlock the Group with a Pass</string>
+    <string name="flight_group_gift_sent">Pass sent to the members in range; the others get it as soon as they connect.</string>
+    <string name="flight_group_pass_footer">One Pass in the group is enough: whoever has it shares it with every member, including Android users on the free app.</string>
+    <string name="flight_cta_boarding">Scan your boarding pass</string>
+</resources>

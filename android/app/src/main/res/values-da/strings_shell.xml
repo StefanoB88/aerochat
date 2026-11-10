@@ -81,4 +81,5 @@
     <string name="shell_permission_later">Senere</string>
     <string name="shell_permission_open_settings">Åbn Indstillinger</string>
     <string name="shell_permission_location_note">På denne Android-version kræver Bluetooth-søgning også placering: AeroChat bruger eller gemmer den ikke.</string>
+    <string name="shell_mic_settings">Giv adgang til mikrofonen under Indstillinger</string>
 </resources>

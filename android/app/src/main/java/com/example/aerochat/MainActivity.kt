@@ -16,12 +16,13 @@ import com.example.aerochat.core.protocol.MeshProtocol
 import com.example.aerochat.ui.AeroChatTheme
 import com.example.aerochat.ui.AppNavigator
 import com.example.aerochat.ui.components.Haptics
-import kotlinx.coroutines.flow.first
+import com.example.aerochat.ui.pairing.IncomingLinkAlert
 import kotlinx.coroutines.launch
 
 /**
  * Unica Activity: ospita la UI Compose ([ContentView]) e instrada gli Intent esterni:
- * - link `aeromesh://...` (QR inquadrato con la fotocamera di sistema) → [AppEnvironment.pair];
+ * - link `aeromesh://...` (QR della fotocamera di sistema, invito da Messaggi / browser / Nearby Share)
+ *   → [AppEnvironment.handleIncomingURL], esito mostrato da [IncomingLinkAlert];
  * - tocco su una notifica (extra [LocalNotificationCenter.extraConversationID]) → apre la chat.
  * Il ciclo di vita mappa lo `scenePhase` di iOS: `onResume` → `sceneDidBecomeActive()`.
  */
@@ -39,7 +40,10 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { environment.bootstrap() }
         setContent {
             CompositionLocalProvider(LocalAppEnvironment provides environment) {
-                AeroChatTheme { ContentView() }
+                AeroChatTheme {
+                    ContentView()
+                    IncomingLinkAlert()
+                }
             }
         }
         if (savedInstanceState == null) handle(intent)
@@ -75,17 +79,8 @@ class MainActivity : ComponentActivity() {
         if (intent.action == Intent.ACTION_VIEW && data?.scheme == MeshProtocol.qrScheme) {
             val uriString = data.toString()
             intent.data = null
-            lifecycleScope.launch {
-                // Il pairing richiede la mesh accesa (dopo bootstrap e onboarding).
-                environment.router.first { it != null }
-                val conversation = runCatching { environment.pair(uriString) }.getOrNull()
-                if (conversation != null) {
-                    Haptics.success()
-                    AppNavigator.openConversation(conversation.id)
-                } else {
-                    Haptics.error()
-                }
-            }
+            // In attesa se la mesh non e' ancora accesa (avvio a freddo, onboarding in corso).
+            environment.handleIncomingURL(uriString)
         }
     }
 }

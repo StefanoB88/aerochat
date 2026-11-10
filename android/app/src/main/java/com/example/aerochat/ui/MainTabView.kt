@@ -33,6 +33,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -64,6 +66,7 @@ import com.example.aerochat.ui.components.MeshPermissionsGate
 import com.example.aerochat.ui.components.hapticOnTap
 import com.example.aerochat.ui.components.rememberMeshPermissionsRequester
 import com.example.aerochat.ui.lounge.CabinLoungeView
+import com.example.aerochat.ui.lounge.EmergencyBanner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -198,6 +201,11 @@ fun MainTabView() {
 private fun TabsScreen(radioState: RadioState) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val requestPermissions = rememberMeshPermissionsRequester()
+    val environment = LocalAppEnvironment.current
+    val activeEmergency by environment.activeEmergency.collectAsStateWithLifecycle()
+    // Ultimo avviso mostrato, per l'animazione di uscita dopo la chiusura.
+    var shownEmergency by remember { mutableStateOf(activeEmergency) }
+    if (activeEmergency != null) shownEmergency = activeEmergency
     Column(Modifier.fillMaxSize().background(AeroTheme.background)) {
         AnimatedVisibility(
             visible = AirplaneModeBanner.shouldShow(radioState),
@@ -215,7 +223,24 @@ private fun TabsScreen(radioState: RadioState) {
                     },
             )
         }
-        val bannerVisible = AirplaneModeBanner.shouldShow(radioState)
+        val airplaneBannerVisible = AirplaneModeBanner.shouldShow(radioState)
+        // Avviso di emergenza ricevuto: sotto il banner radio, finche' l'utente non lo chiude.
+        AnimatedVisibility(
+            visible = activeEmergency != null,
+            enter = slideInVertically(spring()) { -it } + fadeIn(),
+            exit = slideOutVertically(spring()) { -it } + fadeOut(),
+        ) {
+            shownEmergency?.let { alert ->
+                EmergencyBanner(
+                    alert = alert,
+                    onDismiss = { environment.setActiveEmergency(null) },
+                    modifier = Modifier
+                        .background(AeroTheme.background)
+                        .let { if (airplaneBannerVisible) it else it.statusBarsPadding() },
+                )
+            }
+        }
+        val bannerVisible = airplaneBannerVisible || activeEmergency != null
         // Con il banner in alto la status bar e' gia' gestita: le top bar delle tab non la ripetono.
         Box(
             Modifier

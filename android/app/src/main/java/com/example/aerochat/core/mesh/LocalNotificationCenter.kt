@@ -185,7 +185,11 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
                 .setAutoCancel(true)
                 .setGroup("emergency") // threadIdentifier
                 .setContentIntent(pendingIntent)
-            NotificationManagerCompat.from(context).notify("emergency-$msgHex", notificationID, builder.build())
+            try {
+                NotificationManagerCompat.from(context).notify("emergency-$msgHex", notificationID, builder.build())
+            } catch (_: SecurityException) {
+                // Permesso revocato tra il controllo e la pubblicazione.
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

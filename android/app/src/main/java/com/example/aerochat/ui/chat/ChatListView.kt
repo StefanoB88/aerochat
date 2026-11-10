@@ -25,11 +25,14 @@ import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.FlightTakeoff
 import androidx.compose.material.icons.filled.GetApp
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ConfirmationNumber
+import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.PushPin
@@ -89,12 +92,14 @@ import com.example.aerochat.ui.components.Haptics
 import com.example.aerochat.ui.components.RadioStatusView
 import com.example.aerochat.ui.components.hapticOnTap
 import com.example.aerochat.ui.components.timeLabel
+import com.example.aerochat.ui.flight.BoardingPassSheet
+import com.example.aerochat.ui.flight.FlightCardSheet
 import com.example.aerochat.ui.groups.NewGroupSheet
 import com.example.aerochat.ui.onboarding.OnboardingView
-import com.example.aerochat.ui.onboarding.ProfileEditSheet
 import com.example.aerochat.ui.pairing.QRPairingSheet
 import com.example.aerochat.ui.pairing.StoreQRSheet
 import com.example.aerochat.ui.paywall.PaywallView
+import com.example.aerochat.ui.settings.SettingsScreen
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -211,6 +216,10 @@ fun ChatListView() {
     var showPaywall by remember { mutableStateOf(false) }
     var showProfile by remember { mutableStateOf(false) }
     var showAddMenu by remember { mutableStateOf(false) }
+    var showBoardingPass by remember { mutableStateOf(false) }
+    var showFlightCard by remember { mutableStateOf(false) }
+    /** Cabina del volo appena creata: aperta subito dopo la chiusura del foglio. */
+    var pendingFlightLounge by remember { mutableStateOf<ConversationRecord?>(null) }
     var conversationToDelete by remember { mutableStateOf<ConversationRecord?>(null) }
     var actionError by remember { mutableStateOf<String?>(null) }
 
@@ -303,6 +312,15 @@ fun ChatListView() {
                         }
                         DropdownMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
                             DropdownMenuItem(
+                                text = { Text(stringResource(R.string.flight_menu_boarding)) },
+                                leadingIcon = { Icon(Icons.Outlined.FlightTakeoff, contentDescription = null) },
+                                onClick = {
+                                    Haptics.tap()
+                                    showAddMenu = false
+                                    showBoardingPass = true
+                                },
+                            )
+                            DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_new_travel_group)) },
                                 leadingIcon = { Icon(Icons.Outlined.Groups, contentDescription = null) },
                                 onClick = {
@@ -320,6 +338,16 @@ fun ChatListView() {
                                     showStoreQR = true
                                 },
                             )
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.flight_card_title)) },
+                                leadingIcon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
+                                onClick = {
+                                    Haptics.tap()
+                                    showAddMenu = false
+                                    showFlightCard = true
+                                },
+                            )
                         }
                     }
                 },
@@ -333,6 +361,7 @@ fun ChatListView() {
             } else if (loaded.isEmpty()) {
                 EmptyState(
                     nickname = nickname,
+                    onBoardingPass = { showBoardingPass = true },
                     onPairing = { showPairing = true },
                     onStoreQR = { showStoreQR = true },
                 )
@@ -361,7 +390,40 @@ fun ChatListView() {
     if (showStoreQR) StoreQRSheet(onDismiss = { showStoreQR = false })
     if (showNewGroup) NewGroupSheet(onDismiss = { showNewGroup = false })
     if (showPaywall) PaywallView(onDismiss = { showPaywall = false })
-    if (showProfile) ProfileEditSheet(onDismiss = { showProfile = false })
+    if (showBoardingPass) {
+        BoardingPassSheet(
+            onDismiss = {
+                showBoardingPass = false
+                pendingFlightLounge?.let { lounge ->
+                    pendingFlightLounge = null
+                    navController.navigate(AeroRoutes.conversation(lounge.id))
+                }
+            },
+            onJoined = { pendingFlightLounge = it },
+        )
+    }
+    if (showFlightCard) FlightCardSheet(onDismiss = { showFlightCard = false })
+    var showRadar by remember { mutableStateOf(false) }
+    var showEmergency by remember { mutableStateOf(false) }
+    if (showRadar) com.example.aerochat.ui.lounge.RadarSheet(onDismiss = { showRadar = false })
+    if (showEmergency) com.example.aerochat.ui.lounge.EmergencySheet(onDismiss = { showEmergency = false })
+    if (showProfile) {
+        SettingsScreen(
+            onDismiss = { showProfile = false },
+            onOpenFlightCard = {
+                showProfile = false
+                showFlightCard = true
+            },
+            onOpenRadar = {
+                showProfile = false
+                showRadar = true
+            },
+            onOpenEmergency = {
+                showProfile = false
+                showEmergency = true
+            },
+        )
+    }
 
     conversationToDelete?.let { conversation ->
         AlertDialog(
@@ -541,7 +603,9 @@ private fun pinAction(conversation: ConversationRecord): Pair<ImageVector, Int> 
 
 @Composable
 private fun ConversationAvatar(conversation: ConversationRecord, peer: PeerRecord?) {
-    if (conversation.type == ConversationType.group) {
+    if (conversation.isFlightLounge) {
+        AvatarView(imageData = null, colorHex = "00E5FF", systemImage = Icons.Filled.Flight)
+    } else if (conversation.type == ConversationType.group) {
         AvatarView(imageData = null, colorHex = "10B981", systemImage = Icons.Filled.Groups)
     } else {
         AvatarView(imageData = peer?.avatarImage, colorHex = peer?.avatarColorHex ?: fallbackColorHex(conversation))
@@ -556,7 +620,7 @@ private fun fallbackColorHex(conversation: ConversationRecord): String {
 }
 
 @Composable
-private fun EmptyState(nickname: String, onPairing: () -> Unit, onStoreQR: () -> Unit) {
+private fun EmptyState(nickname: String, onBoardingPass: () -> Unit, onPairing: () -> Unit, onStoreQR: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -576,13 +640,14 @@ private fun EmptyState(nickname: String, onPairing: () -> Unit, onStoreQR: () ->
             textAlign = TextAlign.Center,
         )
         Text(
-            stringResource(R.string.chat_empty_hint),
+            stringResource(R.string.flight_empty_hint),
             style = AeroTheme.footnote,
             color = AeroTheme.textSecondary,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 32.dp),
         )
         Spacer(Modifier.weight(1f))
+        CtaButton(stringResource(R.string.flight_cta_boarding), Icons.Filled.FlightTakeoff, AeroTheme.accentCyan, onBoardingPass)
         CtaButton(stringResource(R.string.chat_cta_add_buddies), Icons.Filled.QrCodeScanner, AeroTheme.accentCyan, onPairing)
         CtaButton(stringResource(R.string.chat_cta_share_app), Icons.Filled.GetApp, AeroTheme.accentEmerald, onStoreQR)
         Spacer(Modifier.height(24.dp))
@@ -598,7 +663,7 @@ private fun CtaButton(title: String, icon: ImageVector, tint: Color, action: () 
         colors = ButtonDefaults.buttonColors(containerColor = tint, contentColor = Color.Black),
     ) {
         Row(
-            modifier = Modifier.defaultMinSize(minHeight = 28.dp).padding(vertical = 20.dp),
+            modifier = Modifier.defaultMinSize(minHeight = 28.dp).padding(vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {

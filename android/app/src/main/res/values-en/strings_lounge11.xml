@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cabina 1.1: segnalazioni, quiz, radar, emergenza (traduzioni dal catalogo iOS). -->
+<resources>
+    <string name="lounge11_profanity_blocked">That language isn’t allowed in the Public Cabin: the chat here stays respectful.</string>
+    <string name="lounge11_report_message">Report Message</string>
+    <string name="lounge11_report_thanks">Thanks: your report has been recorded.</string>
+    <string name="lounge11_quiz_title">Cabin Quiz</string>
+    <string name="lounge11_radar_menu">Proximity Radar</string>
+    <string name="lounge11_emergency_title">Emergency Alert</string>
+    <string name="lounge11_rules_menu">Cabin Rules</string>
+    <string name="lounge11_more_actions">More actions</string>
+    <string name="lounge11_open_radar_hint">Opens the proximity radar</string>
+    <string name="lounge11_close">Close</string>
+    <string name="lounge11_leave">Leave</string>
+    <string name="lounge11_quiz_lobby_title">Challenge the Whole Cabin</string>
+    <string name="lounge11_quiz_lobby_text">Five questions on travel, geography, and aviation. Anyone within Bluetooth range sees the question and answers: the fastest and most accurate wins.</string>
+    <string name="lounge11_quiz_already_running">There’s already a quiz in progress.</string>
+    <string name="lounge11_quiz_host">Host a Quiz</string>
+    <plurals name="lounge11_quiz_in_range">
+        <item quantity="one">%1$d passenger in range right now</item>
+        <item quantity="other">%1$d passengers in range right now</item>
+    </plurals>
+    <string name="lounge11_quiz_preparing">Preparing the first question…</string>
+    <string name="lounge11_quiz_you_host">You’re hosting</string>
+    <string name="lounge11_quiz_hosted_by">Hosted by %1$s</string>
+    <string name="lounge11_quiz_round">Question %1$d of %2$d</string>
+    <string name="lounge11_quiz_too_late">Time’s up for this question.</string>
+    <plurals name="lounge11_quiz_answers">
+        <item quantity="one">%1$d answer received</item>
+        <item quantity="other">%1$d answers received</item>
+    </plurals>
+    <string name="lounge11_quiz_answer_sent">Answer sent: wait for the reveal.</string>
+    <string name="lounge11_quiz_leaderboard">LEADERBOARD</string>
+    <string name="lounge11_quiz_no_scores">No correct answers yet.</string>
+    <string name="lounge11_quiz_finished">Quiz over!</string>
+    <plurals name="lounge11_quiz_winner">
+        <item quantity="one">%1$s wins with %2$d point</item>
+        <item quantity="other">%1$s wins with %2$d points</item>
+    </plurals>
+    <string name="lounge11_quiz_new">New Quiz</string>
+    <plurals name="lounge11_quiz_seconds_left">
+        <item quantity="one">%1$d second remaining</item>
+        <item quantity="other">%1$d seconds remaining</item>
+    </plurals>
+    <string name="lounge11_radar_empty">No AeroChat phones in direct range. The radar shows who’s connected to your device over Bluetooth.</string>
+    <string name="lounge11_passenger">Passenger</string>
+    <string name="lounge11_distance_unknown">Connected (distance unknown)</string>
+    <string name="lounge11_distance_immediate">Very close · same row</string>
+    <string name="lounge11_distance_near">Close · 1–3 rows</string>
+    <string name="lounge11_distance_few_rows">A few rows away</string>
+    <string name="lounge11_distance_far">Far away · back of the cabin</string>
+    <string name="lounge11_radar_title">Radar</string>
+    <plurals name="lounge11_radar_a11y">
+        <item quantity="one">Radar: %1$d phone in range</item>
+        <item quantity="other">Radar: %1$d phones in range</item>
+    </plurals>
+    <string name="lounge11_emergency_status">Status</string>
+    <string name="lounge11_emergency_footer">The alert reaches every AeroChat phone in range, bounces up to 7 hops, and stays queued for anyone who arrives later. It’s no substitute for emergency services: if you can, call the local emergency number.</string>
+    <string name="lounge11_emergency_message_header">Message (optional)</string>
+    <string name="lounge11_emergency_placeholder">Where you are, what you need…</string>
+    <string name="lounge11_emergency_attach_location">Attach My GPS Location</string>
+    <string name="lounge11_emergency_location_denied">Location not authorized: turn it on in Settings › Privacy.</string>
+    <string name="lounge11_emergency_locating">Finding your location…</string>
+    <string name="lounge11_emergency_location_footer">Coordinates travel only over Bluetooth, encrypted, to nearby phones. No server.</string>
+    <string name="lounge11_cancel">Cancel</string>
+    <string name="lounge11_send">Send</string>
+    <string name="lounge11_emergency_failed">Alert not sent: %1$s</string>
+    <string name="lounge11_open_in_maps">Open Location in Maps</string>
+    <string name="lounge11_dismiss_alert">Dismiss alert</string>
+</resources>

@@ -217,6 +217,8 @@ private fun ShowSection(payload: PairingPayload?, group: ConversationRecord?) {
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 32.dp),
         )
+        // Invito via Nearby Share / Messaggi: link allo store + link di pairing, il compagno e' gia' collegato al primo avvio.
+        if (payload != null) InviteShareButton(payload, group)
     }
 }
 

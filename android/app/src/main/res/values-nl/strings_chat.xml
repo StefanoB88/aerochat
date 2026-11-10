@@ -126,4 +126,26 @@
     <string name="chat_group_last_seen">· gezien %1$s</string>
     <string name="chat_group_message_member">Stuur %1$s een bericht</string>
     <string name="chat_group_show_participants">Groepsdeelnemers tonen</string>
+    <string name="chat_call_out_of_range">Reisgenoot buiten bereik: oproepen vereisen een directe verbinding.</string>
+    <string name="chat_gate_call_needs_direct">Oproepen werken alleen met een reisgenoot binnen direct bereik, zonder tussenstations.</string>
+    <string name="chat_gate_call_signal_weak">Signaal te zwak voor een oproep: ga een paar rijen dichter bij elkaar zitten.</string>
+    <string name="chat_voice_call">Spraakoproep</string>
+    <string name="chat_call_hint">Beschikbaar als je reisgenoot binnen direct bereik is</string>
+    <string name="chat_signal_weak">Zwak signaal: ga dichter bij elkaar</string>
+    <string name="chat_call_incoming">Inkomende oproep…</string>
+    <string name="chat_call_ringing">Gaat over…</string>
+    <string name="chat_call_ended_hung_up">Oproep beëindigd</string>
+    <string name="chat_call_ended_rejected">Oproep geweigerd</string>
+    <string name="chat_call_ended_busy">Bezet</string>
+    <string name="chat_call_ended_no_answer">Geen antwoord</string>
+    <string name="chat_call_ended_missed">Gemiste oproep</string>
+    <string name="chat_call_ended_connection_lost">Verbinding verbroken</string>
+    <string name="chat_call_ended_unreachable">Reisgenoot niet bereikbaar</string>
+    <string name="chat_call_ended_microphone_denied">Sta de microfoon toe in Instellingen</string>
+    <string name="chat_call_ended_failed">Oproep mislukt</string>
+    <string name="chat_call_reject">Weiger</string>
+    <string name="chat_call_answer">Beantwoord</string>
+    <string name="chat_call_unmute">Dempen opheffen</string>
+    <string name="chat_call_mute">Dempen</string>
+    <string name="chat_call_speaker">Luidspreker</string>
 </resources>

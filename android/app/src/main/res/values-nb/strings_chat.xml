@@ -126,4 +126,26 @@
     <string name="chat_group_last_seen">· sett %1$s</string>
     <string name="chat_group_message_member">Skriv til %1$s</string>
     <string name="chat_group_show_participants">Vis gruppedeltakerne</string>
+    <string name="chat_call_out_of_range">Reisekameraten er utenfor rekkevidde: anrop krever direkte forbindelse.</string>
+    <string name="chat_gate_call_needs_direct">Anrop fungerer bare når reisekameraten er innen direkte rekkevidde, uten mellomledd.</string>
+    <string name="chat_gate_call_signal_weak">Signalet er for svakt til et anrop: flytt dere noen rader nærmere hverandre.</string>
+    <string name="chat_voice_call">Taleanrop</string>
+    <string name="chat_call_hint">Tilgjengelig når reisekameraten er innen direkte rekkevidde</string>
+    <string name="chat_signal_weak">Svakt signal: gå nærmere hverandre</string>
+    <string name="chat_call_incoming">Innkommende anrop …</string>
+    <string name="chat_call_ringing">Ringer …</string>
+    <string name="chat_call_ended_hung_up">Anrop avsluttet</string>
+    <string name="chat_call_ended_rejected">Anrop avvist</string>
+    <string name="chat_call_ended_busy">Opptatt</string>
+    <string name="chat_call_ended_no_answer">Ingen svar</string>
+    <string name="chat_call_ended_missed">Tapt anrop</string>
+    <string name="chat_call_ended_connection_lost">Forbindelsen ble brutt</string>
+    <string name="chat_call_ended_unreachable">Reisekameraten kan ikke nås</string>
+    <string name="chat_call_ended_microphone_denied">Gi tilgang til mikrofonen i Innstillinger</string>
+    <string name="chat_call_ended_failed">Anropet mislyktes</string>
+    <string name="chat_call_reject">Avvis</string>
+    <string name="chat_call_answer">Svar</string>
+    <string name="chat_call_unmute">Opphev demping</string>
+    <string name="chat_call_mute">Demp</string>
+    <string name="chat_call_speaker">Høyttaler</string>
 </resources>

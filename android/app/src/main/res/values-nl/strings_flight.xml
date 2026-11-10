@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Agent "flight": carta d'imbarco, cartolina di volo, Pass 24 ore, Pass di gruppo. Generato dal catalogo iOS. -->
+<resources>
+    <string name="flight_lounge_title">Vluchtcabine</string>
+    <string name="flight_mode_scan">Scannen</string>
+    <string name="flight_mode_manual">Invoeren</string>
+    <string name="flight_camera_denied">Sta de camera toe in Instellingen om je instapkaart te scannen.</string>
+    <string name="flight_camera_unavailable">Camera niet beschikbaar.</string>
+    <string name="flight_scan_hint">Scan de streepjescode op je instapkaart (ook vanaf het scherm van een andere telefoon of uit Wallet). We lezen alleen de maatschappij, het vluchtnummer en de datum: naam en PNR worden genegeerd.</string>
+    <string name="flight_number_header">VLUCHTNUMMER</string>
+    <string name="flight_number_placeholder">bijv. AZ 204</string>
+    <string name="flight_departure_day">Vertrekdag</string>
+    <string name="flight_invalid_number">Ongeldig vluchtnummer: gebruik het formaat AZ 204.</string>
+    <string name="flight_join_button">Ga de Vluchtcabine binnen</string>
+    <string name="flight_manual_hint">Alle passagiers die dezelfde vlucht en datum invoeren, komen in dezelfde versleutelde ruimte terecht, zonder QR-codes uit te wisselen.</string>
+    <string name="flight_seat">stoel %1$s</string>
+    <string name="flight_pairing_qr_error">Dit is een AeroChat-QR-code: gebruik “Reisgenoten” om een reisgenoot toe te voegen.</string>
+    <string name="flight_unrecognized">Code niet herkend: scan de streepjescode op je instapkaart.</string>
+    <string name="flight_joined">Je bent aan boord van %1$s! Wie dezelfde instapkaart scant, vindt je hier.</string>
+    <string name="flight_join_failed">Kan de Vluchtcabine niet binnengaan: %1$s</string>
+    <string name="flight_ok">OK</string>
+    <string name="flight_cancel">Annuleer</string>
+    <string name="flight_card_title">Vluchtansichtkaart</string>
+    <string name="flight_card_period">Periode</string>
+    <string name="flight_card_share_title">Mijn vluchtansichtkaart</string>
+    <string name="flight_card_share">Ansichtkaart delen</string>
+    <string name="flight_card_privacy">Alleen cijfers: geen berichten, namen of foto’s van andere passagiers komen op de ansichtkaart terecht.</string>
+    <string name="flight_card_whose">De vlucht van %1$s</string>
+    <string name="flight_card_messages">berichten zonder internet</string>
+    <string name="flight_card_people">passagiers ontmoet</string>
+    <string name="flight_card_games">gewonnen spellen van %1$d</string>
+    <string name="flight_card_photos">foto’s via Bluetooth</string>
+    <string name="flight_card_voice">spraakberichten</string>
+    <string name="flight_card_hops">telefoons in de keten (record)</string>
+    <string name="flight_card_lounge">berichten in de cabine</string>
+    <string name="flight_card_slogan">Chatten op 10.000 meter.</string>
+    <string name="flight_card_slogan2">Zonder Wi-Fi, zonder account, alleen Bluetooth.</string>
+    <string name="flight_menu_boarding">Vluchtcabine (instapkaart)</string>
+    <string name="flight_empty_hint">Scan je instapkaart om de chat van je vlucht binnen te gaan, of voeg je reisgenoten toe bij de gate: aan boord vinden jullie elkaar vanzelf via Bluetooth.</string>
+    <string name="flight_paywall_pass24_title">24-uurs Pass voor één vlucht</string>
+    <string name="flight_paywall_pass24_subtitle">Eén vlucht, één dag. Foto’s, spraakberichten en games voor jou en je groep tot aan de landing.</string>
+    <string name="flight_paywall_terms">Gebruiksvoorwaarden</string>
+    <string name="flight_paywall_privacy">Privacy</string>
+    <string name="flight_paywall_eula">EULA</string>
+    <string name="flight_paywall_one_time">Eenmalige aankopen die via je Google Play-account worden afgerekend. Geen automatische verlenging.</string>
+    <string name="flight_group_pass_active">Pass actief voor de hele groep</string>
+    <string name="flight_group_pass_until">Foto’s, spraakberichten en games ontgrendeld tot %1$s.</string>
+    <string name="flight_group_gift">Geef de Pass cadeau aan de hele groep</string>
+    <string name="flight_group_unlock">Ontgrendel de groep met een Pass</string>
+    <string name="flight_group_gift_sent">Pass verzonden naar de leden binnen bereik; de anderen ontvangen hem zodra ze verbinding maken.</string>
+    <string name="flight_group_pass_footer">Eén Pass in de groep is genoeg: wie hem heeft, deelt hem met alle leden, ook Android-gebruikers met de gratis app.</string>
+    <string name="flight_cta_boarding">Scan je instapkaart</string>
+</resources>

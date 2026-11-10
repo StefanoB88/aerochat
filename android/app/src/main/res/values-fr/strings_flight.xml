@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Agent "flight": carta d'imbarco, cartolina di volo, Pass 24 ore, Pass di gruppo. Generato dal catalogo iOS. -->
+<resources>
+    <string name="flight_lounge_title">Cabine du vol</string>
+    <string name="flight_mode_scan">Scanner</string>
+    <string name="flight_mode_manual">Saisir</string>
+    <string name="flight_camera_denied">Autorise l’appareil photo dans les Réglages pour scanner ta carte d’embarquement.</string>
+    <string name="flight_camera_unavailable">Appareil photo indisponible.</string>
+    <string name="flight_scan_hint">Scanne le code-barres de ta carte d’embarquement (même depuis l’écran d’un autre téléphone ou depuis Wallet). Nous ne lisons que la compagnie, le numéro de vol et la date : le nom et le PNR sont ignorés.</string>
+    <string name="flight_number_header">NUMÉRO DE VOL</string>
+    <string name="flight_number_placeholder">ex. AZ 204</string>
+    <string name="flight_departure_day">Jour de départ</string>
+    <string name="flight_invalid_number">Numéro de vol non valide : utilise le format AZ 204.</string>
+    <string name="flight_join_button">Rejoindre la Cabine du vol</string>
+    <string name="flight_manual_hint">Tous les passagers qui saisissent le même vol et la même date rejoignent la même salle chiffrée, sans échanger de QR.</string>
+    <string name="flight_seat">siège %1$s</string>
+    <string name="flight_pairing_qr_error">Ceci est un QR AeroChat : pour ajouter un compagnon, utilise « Compagnons de voyage ».</string>
+    <string name="flight_unrecognized">Code non reconnu : scanne le code-barres de ta carte d’embarquement.</string>
+    <string name="flight_joined">Tu es à bord du vol %1$s ! Ceux qui scannent la même carte te retrouvent ici.</string>
+    <string name="flight_join_failed">Impossible de rejoindre la Cabine du vol : %1$s</string>
+    <string name="flight_ok">OK</string>
+    <string name="flight_cancel">Annuler</string>
+    <string name="flight_card_title">Carte postale de vol</string>
+    <string name="flight_card_period">Période</string>
+    <string name="flight_card_share_title">Ma carte postale de vol</string>
+    <string name="flight_card_share">Partager la carte postale</string>
+    <string name="flight_card_privacy">Que des chiffres : aucun message, nom ou photo d’autres passagers ne figure sur la carte postale.</string>
+    <string name="flight_card_whose">Le vol de %1$s</string>
+    <string name="flight_card_messages">messages sans Internet</string>
+    <string name="flight_card_people">passagers rencontrés</string>
+    <string name="flight_card_games">parties gagnées sur %1$d</string>
+    <string name="flight_card_photos">photos via Bluetooth</string>
+    <string name="flight_card_voice">notes vocales</string>
+    <string name="flight_card_hops">téléphones en chaîne (record)</string>
+    <string name="flight_card_lounge">messages dans la Cabine</string>
+    <string name="flight_card_slogan">Discutez à 10 000 mètres.</string>
+    <string name="flight_card_slogan2">Sans Wi-Fi, sans compte, juste le Bluetooth.</string>
+    <string name="flight_menu_boarding">Cabine du vol (carte d’embarquement)</string>
+    <string name="flight_empty_hint">Scanne ta carte d’embarquement pour rejoindre la discussion de ton vol, ou ajoute tes compagnons de voyage à la porte d’embarquement : à bord, vous vous retrouverez tout seuls via Bluetooth.</string>
+    <string name="flight_paywall_pass24_title">Pass Vol Unique 24 Heures</string>
+    <string name="flight_paywall_pass24_subtitle">Un vol, une journée. Photos, notes vocales et jeux pour toi et ton groupe jusqu’à l’atterrissage.</string>
+    <string name="flight_paywall_terms">Conditions d’utilisation</string>
+    <string name="flight_paywall_privacy">Confidentialité</string>
+    <string name="flight_paywall_eula">EULA</string>
+    <string name="flight_paywall_one_time">Achats uniques débités sur ton compte Google Play. Aucun renouvellement automatique.</string>
+    <string name="flight_group_pass_active">Pass actif pour tout le groupe</string>
+    <string name="flight_group_pass_until">Photos, notes vocales et jeux débloqués jusqu’à %1$s.</string>
+    <string name="flight_group_gift">Offrir le Pass à tout le groupe</string>
+    <string name="flight_group_unlock">Débloquer le groupe avec un Pass</string>
+    <string name="flight_group_gift_sent">Pass envoyé aux membres à portée ; les autres le reçoivent dès qu’ils se connectent.</string>
+    <string name="flight_group_pass_footer">Un seul Pass suffit dans le groupe : celui qui le possède le partage avec tous les membres, même sur Android et avec l’app gratuite.</string>
+    <string name="flight_cta_boarding">Scanner la carte d\'embarquement</string>
+</resources>

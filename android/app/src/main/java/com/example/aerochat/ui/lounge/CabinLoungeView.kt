@@ -2,7 +2,13 @@ package com.example.aerochat.ui.lounge
 
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -28,13 +34,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PanTool
+import androidx.compose.material.icons.filled.Quiz
+import androidx.compose.material.icons.filled.Radar
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Quiz
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -67,16 +82,20 @@ import com.example.aerochat.R
 import com.example.aerochat.app.AppEnvironment
 import com.example.aerochat.app.LocalAppEnvironment
 import com.example.aerochat.core.mesh.MeshRouterActor
-import com.example.aerochat.core.protocol.MeshProtocol
+import com.example.aerochat.core.moderation.AppSettings
+import com.example.aerochat.core.moderation.ContentFilter
 import com.example.aerochat.core.protocol.toHex
 import com.example.aerochat.data.records.ConversationRecord
 import com.example.aerochat.data.records.MessageRecord
-import com.example.aerochat.data.records.PeerRecord
+import com.example.aerochat.data.records.ReportRecord
 import com.example.aerochat.ui.AeroTheme
 import com.example.aerochat.ui.chat.InfoBanner
 import com.example.aerochat.ui.components.ComposerBar
 import com.example.aerochat.ui.components.Haptics
 import com.example.aerochat.ui.components.MessageBubble
+import com.example.aerochat.ui.components.hapticOnTap
+import com.example.aerochat.ui.safety.ReportSheet
+import com.example.aerochat.core.quiz.QuizService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -177,6 +196,11 @@ class CabinLoungeViewModel(context: Context) {
             infoMessage.value = context.getString(R.string.chat_lounge_links_blocked)
             return
         }
+        if (ContentFilter.containsProfanity(text)) {
+            infoMessage.value = context.getString(R.string.lounge11_profanity_blocked)
+            Haptics.warning()
+            return
+        }
         draft.value = ""
         scope.launch {
             try {
@@ -192,34 +216,27 @@ class CabinLoungeViewModel(context: Context) {
     }
 
     fun block(nodeID: ByteArray, environment: AppEnvironment) {
-        val database = environment.database.value ?: return
         val hex = nodeID.toHex()
         blocked = blocked + hex
-        // Va letto prima di rimuovere i messaggi, altrimenti il blocco non verrebbe mai salvato.
-        val sample = _messages.value.firstOrNull { it.senderNodeID.contentEquals(nodeID) }
+        // Va letto prima di rimuovere i messaggi, altrimenti il nickname andrebbe perso.
+        val nickname = _messages.value.firstOrNull { it.senderNodeID.contentEquals(nodeID) }?.senderNickname
         _messages.value = _messages.value.filterNot { it.senderNodeID.contentEquals(nodeID) }
         lastMessages = _messages.value
         scope.launch {
-            // Il mittente potrebbe non essere ancora tra i peer (Lounge anonima): lo registriamo come bloccato.
-            // Chiave segnaposto unica per nodo (la colonna x25519_pub e' UNIQUE).
-            val existing = runCatching { database.peers.fetch(nodeID = nodeID) }.getOrNull()
-            if (existing == null && sample != null) {
-                val placeholderKey = nodeID + ByteArray(max(0, MeshProtocol.publicKeyLength - nodeID.size))
-                runCatching {
-                    database.peers.upsert(
-                        PeerRecord(
-                            nodeID = nodeID,
-                            x25519Pub = placeholderKey,
-                            ed25519Pub = ByteArray(32),
-                            nickname = sample.senderNickname ?: context.getString(R.string.chat_passenger),
-                        ),
-                    )
-                }
-            }
-            runCatching { database.peers.setBlocked(true, nodeID = nodeID) }
-            environment.router.value?.refreshBlockedPeers()
+            // Il mittente potrebbe non essere ancora tra i peer (Lounge anonima): lo registra come bloccato.
+            environment.blockUser(nodeID = nodeID, nickname = nickname)
             Haptics.warning()
         }
+    }
+
+    /** Dopo una segnalazione con blocco i messaggi del mittente spariscono subito dalla bacheca. */
+    fun didReport(report: ReportRecord, didBlock: Boolean) {
+        infoMessage.value = context.getString(R.string.lounge11_report_thanks)
+        if (!didBlock) return
+        val nodeID = report.reportedNodeID
+        blocked = blocked + nodeID.toHex()
+        _messages.value = _messages.value.filterNot { it.senderNodeID.contentEquals(nodeID) }
+        lastMessages = _messages.value
     }
 }
 
@@ -263,8 +280,18 @@ fun CabinLoungeView() {
     val lounge by viewModel.lounge.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val infoMessage by viewModel.infoMessage.collectAsStateWithLifecycle()
+    val quizState by environment.quizState.collectAsStateWithLifecycle()
+    val settings by AppSettings.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
+    // Regole della Cabina: finche' non sono accettate, il foglio si apre a ogni visita della bacheca.
+    var showRules by remember { mutableStateOf(!AppSettings.hasAcceptedLoungeRules) }
+    var showQuiz by remember { mutableStateOf(false) }
+    var showRadar by remember { mutableStateOf(false) }
+    var showEmergency by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    /** Messaggio in corso di segnalazione. */
+    var reportTarget by remember { mutableStateOf<MessageRecord?>(null) }
 
     // Ciclo di vita (STARTED): in background l'osservatore Room ri-interrogava 500 messaggi a ogni
     // scrittura sulla tabella `messages` (anche di altre chat), con lo schermo spento.
@@ -346,6 +373,42 @@ fun CabinLoungeView() {
                     titleContentColor = AeroTheme.textPrimary,
                 ),
                 title = { Text(stringResource(R.string.chat_lounge_title), style = AeroTheme.title(28f)) },
+                actions = {
+                    QuizToolbarButton(state = quizState, onClick = {
+                        Haptics.tap()
+                        showQuiz = true
+                    })
+                    Box {
+                        IconButton(onClick = { showMenu = true }, modifier = Modifier.hapticOnTap()) {
+                            Icon(
+                                Icons.Filled.MoreVert,
+                                contentDescription = stringResource(R.string.lounge11_more_actions),
+                                tint = AeroTheme.accentCyan,
+                            )
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.lounge11_radar_menu)) },
+                                leadingIcon = { Icon(Icons.Filled.Radar, contentDescription = null) },
+                                onClick = { showMenu = false; showRadar = true },
+                                modifier = Modifier.hapticOnTap(),
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.lounge11_emergency_title)) },
+                                leadingIcon = { Icon(Icons.Outlined.WarningAmber, contentDescription = null) },
+                                onClick = { showMenu = false; showEmergency = true },
+                                modifier = Modifier.hapticOnTap(),
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.lounge11_rules_menu)) },
+                                leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
+                                onClick = { showMenu = false; showRules = true },
+                                modifier = Modifier.hapticOnTap(),
+                            )
+                        }
+                    }
+                },
             )
         },
     ) { padding ->
@@ -364,7 +427,14 @@ fun CabinLoungeView() {
                     .consumeWindowInsets(PaddingValues(bottom = bottomGap))
                     .imePadding(),
             ) {
-                LoungeHeader(neighborCount = neighbors.size, expiryText = lounge?.let { viewModel.expiryText(now) } ?: "")
+                LoungeHeader(
+                    neighborCount = neighbors.size,
+                    expiryText = lounge?.let { viewModel.expiryText(now) } ?: "",
+                    onOpenRadar = {
+                        Haptics.tap()
+                        showRadar = true
+                    },
+                )
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -381,10 +451,17 @@ fun CabinLoungeView() {
                         item(key = "empty") { EmptyHint() }
                     }
                     items(messages, key = { it.msgID.toHex() }) { message ->
-                        LoungeMessage(message, onBlock = {
-                            Haptics.tap()
-                            viewModel.block(message.senderNodeID, environment)
-                        })
+                        LoungeMessage(
+                            message,
+                            onReport = {
+                                Haptics.tap()
+                                reportTarget = message
+                            },
+                            onBlock = {
+                                Haptics.tap()
+                                viewModel.block(message.senderNodeID, environment)
+                            },
+                        )
                     }
                 }
                 ComposerBar(
@@ -404,12 +481,52 @@ fun CabinLoungeView() {
             )
         }
     }
+
+    if (showQuiz) CabinQuizSheet(onDismiss = { showQuiz = false })
+    if (showRadar) RadarSheet(onDismiss = { showRadar = false })
+    if (showEmergency) EmergencySheet(onDismiss = { showEmergency = false })
+    reportTarget?.let { message ->
+        ReportSheet(
+            message = message,
+            onDismiss = { reportTarget = null },
+            onReported = { report, didBlock -> viewModel.didReport(report, didBlock) },
+        )
+    }
+    // Prima visita: regole della bacheca da accettare prima di leggere o scrivere.
+    if (showRules) {
+        LoungeRulesSheet(
+            requiresAcceptance = !settings.hasAcceptedLoungeRules,
+            onAccept = { AppSettings.acceptLoungeRules() },
+            onDismiss = { showRules = false },
+        )
+    }
+}
+
+/** Pulsante del quiz nella barra: pieno e verde con un quiz in corso, pulsa durante una domanda. */
+@Composable
+private fun QuizToolbarButton(state: QuizService.State?, onClick: () -> Unit) {
+    val pulsing = state?.phase == QuizService.Phase.question
+    val transition = rememberInfiniteTransition(label = "quizPulse")
+    val pulse by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.35f,
+        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+        label = "quizPulseAlpha",
+    )
+    IconButton(onClick = onClick) {
+        Icon(
+            if (state == null) Icons.Outlined.Quiz else Icons.Filled.Quiz,
+            contentDescription = stringResource(R.string.lounge11_quiz_title),
+            tint = if (state == null) AeroTheme.accentCyan else AeroTheme.accentEmerald,
+            modifier = Modifier.alpha(if (pulsing) pulse else 1f),
+        )
+    }
 }
 
 /** Bolla della Lounge con il menu a pressione prolungata "Blocca / Silenzia" (Swift `.contextMenu`). */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun LoungeMessage(message: MessageRecord, onBlock: () -> Unit) {
+private fun LoungeMessage(message: MessageRecord, onReport: () -> Unit, onBlock: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
     Box {
         MessageBubble(
@@ -433,6 +550,14 @@ private fun LoungeMessage(message: MessageRecord, onBlock: () -> Unit) {
         if (!message.isOutgoing) {
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(
+                    text = { Text(stringResource(R.string.lounge11_report_message)) },
+                    leadingIcon = { Icon(Icons.Outlined.Flag, contentDescription = null) },
+                    onClick = {
+                        showMenu = false
+                        onReport()
+                    },
+                )
+                DropdownMenuItem(
                     text = {
                         Text(
                             stringResource(R.string.chat_block_mute, message.senderNickname ?: "utente"),
@@ -451,28 +576,35 @@ private fun LoungeMessage(message: MessageRecord, onBlock: () -> Unit) {
 }
 
 @Composable
-private fun LoungeHeader(neighborCount: Int, expiryText: String) {
+private fun LoungeHeader(neighborCount: Int, expiryText: String, onOpenRadar: () -> Unit) {
+    val radarHint = stringResource(R.string.lounge11_open_radar_hint)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(AeroTheme.surface.copy(alpha = 0.6f))
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(
-            Icons.Filled.SettingsInputAntenna,
-            contentDescription = null,
-            tint = AeroTheme.textSecondary,
-            modifier = Modifier.size(14.dp),
-        )
-        Text(
-            // Android ignora quantity="zero" (it/en/...): lo zero ha una stringa propria, come la variante "zero" di iOS.
-            if (neighborCount == 0) stringResource(R.string.chat_passengers_in_range_zero)
-            else pluralStringResource(R.plurals.chat_passengers_in_range, neighborCount, neighborCount),
-            style = AeroTheme.caption,
-            color = AeroTheme.textSecondary,
-        )
+        // Numero dei vicini: un tocco apre il radar di prossimita'.
+        Row(
+            modifier = Modifier.clickable(onClickLabel = radarHint, onClick = onOpenRadar),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                Icons.Filled.SettingsInputAntenna,
+                contentDescription = null,
+                tint = AeroTheme.textSecondary,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                // Android ignora quantity="zero" (it/en/...): lo zero ha una stringa propria, come la variante "zero" di iOS.
+                if (neighborCount == 0) stringResource(R.string.chat_passengers_in_range_zero)
+                else pluralStringResource(R.plurals.chat_passengers_in_range, neighborCount, neighborCount),
+                style = AeroTheme.caption,
+                color = AeroTheme.textSecondary,
+            )
+        }
         Spacer(Modifier.weight(1f))
         Text(expiryText, style = AeroTheme.caption, color = AeroTheme.textSecondary)
     }

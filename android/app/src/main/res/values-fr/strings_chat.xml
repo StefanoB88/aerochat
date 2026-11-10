@@ -126,4 +126,26 @@
     <string name="chat_group_last_seen">· vu %1$s</string>
     <string name="chat_group_message_member">Écrire à %1$s</string>
     <string name="chat_group_show_participants">Voir les participants du groupe</string>
+    <string name="chat_call_out_of_range">Compagnon hors de portée : les appels nécessitent une connexion directe.</string>
+    <string name="chat_gate_call_needs_direct">Les appels ne fonctionnent qu’avec un compagnon à portée directe, sans relais.</string>
+    <string name="chat_gate_call_signal_weak">Signal trop faible pour un appel : rapprochez-vous de quelques rangées.</string>
+    <string name="chat_voice_call">Appel vocal</string>
+    <string name="chat_call_hint">Disponible quand ton compagnon est à portée directe</string>
+    <string name="chat_signal_weak">Signal faible : rapprochez-vous</string>
+    <string name="chat_call_incoming">Appel entrant…</string>
+    <string name="chat_call_ringing">Ça sonne…</string>
+    <string name="chat_call_ended_hung_up">Appel terminé</string>
+    <string name="chat_call_ended_rejected">Appel refusé</string>
+    <string name="chat_call_ended_busy">Occupé</string>
+    <string name="chat_call_ended_no_answer">Pas de réponse</string>
+    <string name="chat_call_ended_missed">Appel manqué</string>
+    <string name="chat_call_ended_connection_lost">Connexion perdue</string>
+    <string name="chat_call_ended_unreachable">Compagnon injoignable</string>
+    <string name="chat_call_ended_microphone_denied">Autorise le micro dans les Réglages</string>
+    <string name="chat_call_ended_failed">Échec de l’appel</string>
+    <string name="chat_call_reject">Refuser</string>
+    <string name="chat_call_answer">Répondre</string>
+    <string name="chat_call_unmute">Réactiver</string>
+    <string name="chat_call_mute">Muet</string>
+    <string name="chat_call_speaker">Haut-parleur</string>
 </resources>

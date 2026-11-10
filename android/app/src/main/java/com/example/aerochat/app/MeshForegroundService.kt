@@ -28,7 +28,8 @@ import kotlinx.coroutines.launch
  * Servizio in primo piano che tiene viva la radio BLE a schermo spento (equivalente dei background mode
  * iOS `bluetooth-central` / `bluetooth-peripheral` / `audio`). Non fa lavoro proprio: la mesh vive in
  * [AppEnvironment]; il servizio mantiene il processo in primo piano con una notifica persistente a
- * bassa importanza "AeroChat è attivo sulla mesh".
+ * bassa importanza. La notifica fa anche da "Live Activity" (Swift `LiveActivityController`): mostra
+ * telefoni a portata, messaggi da leggere e Cabina del volo attiva, aggiornati da [updateStatus].
  *
  * Tipi (regole Android 14+):
  * - `connectedDevice` sempre (richiede i permessi BLE runtime concessi);
@@ -50,7 +51,7 @@ class MeshForegroundService : Service() {
         var types = typeConnectedDevice()
         if (wantsMicrophone && canUseMicrophoneType(this)) types = types or typeMicrophone()
         try {
-            ServiceCompat.startForeground(this, notificationID, buildNotification(), types)
+            ServiceCompat.startForeground(this, notificationID, buildNotification(this, status), types)
             isRunning = true
             isMicrophoneActive = types and typeMicrophone() != 0
             ensureMeshRunning()
@@ -60,7 +61,7 @@ class MeshForegroundService : Service() {
             Log.w(tag, "startForeground fallito: $e")
             val retried = wantsMicrophone && runCatching {
                 // Riprova senza microfono, per non perdere la radio.
-                ServiceCompat.startForeground(this, notificationID, buildNotification(), typeConnectedDevice())
+                ServiceCompat.startForeground(this, notificationID, buildNotification(this, status), typeConnectedDevice())
                 isRunning = true
                 isMicrophoneActive = false
             }.isSuccess
@@ -86,24 +87,8 @@ class MeshForegroundService : Service() {
         super.onDestroy()
     }
 
-    private fun buildNotification() = NotificationCompat.Builder(this, channelID)
-        .setSmallIcon(R.drawable.ic_stat_mesh)
-        .setContentTitle(getString(R.string.shell_fgs_notification_title))
-        .setContentText(getString(R.string.shell_fgs_notification_text))
-        .setOngoing(true)
-        .setSilent(true)
-        .setShowWhen(false)
-        .setPriority(NotificationCompat.PRIORITY_LOW)
-        .setCategory(NotificationCompat.CATEGORY_SERVICE)
-        .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-        .setContentIntent(
-            PendingIntent.getActivity(
-                this, 0,
-                Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            ),
-        )
-        .build()
+    /** Stato mostrato nella notifica (Swift `MeshActivityAttributes.ContentState`). */
+    data class LiveStatus(val neighborCount: Int, val unreadCount: Int, val flightTitle: String?)
 
     companion object {
         private const val tag = "MeshForegroundService"
@@ -117,6 +102,69 @@ class MeshForegroundService : Service() {
 
         @Volatile
         private var isMicrophoneActive: Boolean = false
+
+        /** Ultimo stato noto: `null` finche' la mesh non ne ha pubblicato uno (testo generico). */
+        @Volatile
+        private var status: LiveStatus? = null
+
+        /**
+         * Pubblica un nuovo stato "a bordo". Stato identico al precedente: nessuna scrittura (come
+         * `LiveActivityController.update`). Se il servizio e' attivo la notifica si aggiorna sul posto.
+         */
+        fun updateStatus(context: Context, newStatus: LiveStatus) {
+            if (newStatus == status) return
+            status = newStatus
+            if (!isRunning) return
+            val manager = NotificationManagerCompat.from(context)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !manager.areNotificationsEnabled()) return
+            try {
+                manager.notify(notificationID, buildNotification(context, newStatus))
+            } catch (e: SecurityException) {
+                Log.w(tag, "aggiornamento notifica non consentito: $e")
+            }
+        }
+
+        private fun buildNotification(context: Context, status: LiveStatus?): android.app.Notification {
+            val resources = context.resources
+            val builder = NotificationCompat.Builder(context, channelID)
+                .setSmallIcon(R.drawable.ic_stat_mesh)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setSilent(true)
+                .setShowWhen(false)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+                .setContentIntent(
+                    PendingIntent.getActivity(
+                        context, 0,
+                        Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                    ),
+                )
+            if (status == null) {
+                return builder
+                    .setContentTitle(context.getString(R.string.shell_fgs_notification_title))
+                    .setContentText(context.getString(R.string.shell_fgs_notification_text))
+                    .build()
+            }
+            // Riga di stato come nel widget iOS: non letti, altrimenti radio in ascolto / mesh attiva.
+            val statusLine = when {
+                status.unreadCount > 0 ->
+                    resources.getQuantityString(R.plurals.shell11_live_unread, status.unreadCount, status.unreadCount)
+                status.neighborCount == 0 -> context.getString(R.string.shell11_live_listening)
+                else -> context.getString(R.string.shell11_live_active)
+            }
+            val inRange = resources.getQuantityString(R.plurals.shell11_live_in_range, status.neighborCount, status.neighborCount)
+            val title = status.flightTitle?.let { "✈︎ $it" } ?: context.getString(R.string.shell11_live_title)
+            return builder
+                .setContentTitle(title)
+                .setContentText(statusLine)
+                .setSubText(inRange)
+                .setNumber(status.unreadCount)
+                .setStyle(NotificationCompat.BigTextStyle().bigText("$statusLine\n$inRange"))
+                .build()
+        }
 
         /** Avvia (o aggiorna) il servizio. No-op senza permessi BLE; errori di avvio in background ignorati. */
         fun start(context: Context, callActive: Boolean) {

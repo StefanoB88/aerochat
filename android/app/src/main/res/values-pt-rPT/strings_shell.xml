@@ -81,4 +81,5 @@
     <string name="shell_permission_later">Mais tarde</string>
     <string name="shell_permission_open_settings">Abrir Definições</string>
     <string name="shell_permission_location_note">Nesta versão do Android, a pesquisa Bluetooth também requer a localização: o AeroChat não a usa nem a guarda.</string>
+    <string name="shell_mic_settings">Permite o microfone em Definições</string>
 </resources>

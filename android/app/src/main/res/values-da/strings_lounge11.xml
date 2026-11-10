@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cabina 1.1: segnalazioni, quiz, radar, emergenza (traduzioni dal catalogo iOS). -->
+<resources>
+    <string name="lounge11_profanity_blocked">Det sprog er ikke tilladt i Offentlig kabine: her snakker vi respektfuldt.</string>
+    <string name="lounge11_report_message">Anmeld besked</string>
+    <string name="lounge11_report_thanks">Tak: din anmeldelse er registreret.</string>
+    <string name="lounge11_quiz_title">Kabinequiz</string>
+    <string name="lounge11_radar_menu">Nærhedsradar</string>
+    <string name="lounge11_emergency_title">Nødalarm</string>
+    <string name="lounge11_rules_menu">Kabinens regler</string>
+    <string name="lounge11_more_actions">Flere handlinger</string>
+    <string name="lounge11_open_radar_hint">Åbner nærhedsradaren</string>
+    <string name="lounge11_close">Luk</string>
+    <string name="lounge11_leave">Forlad</string>
+    <string name="lounge11_quiz_lobby_title">Udfordr hele kabinen</string>
+    <string name="lounge11_quiz_lobby_text">5 spørgsmål om rejser, geografi og luftfart. Alle inden for Bluetooth-rækkevidde ser spørgsmålet og svarer: den hurtigste og mest præcise vinder.</string>
+    <string name="lounge11_quiz_already_running">Der er allerede en quiz i gang.</string>
+    <string name="lounge11_quiz_host">Vær vært for en quiz</string>
+    <plurals name="lounge11_quiz_in_range">
+        <item quantity="one">%1$d passagerer inden for rækkevidde lige nu</item>
+        <item quantity="other">%1$d passagerer inden for rækkevidde lige nu</item>
+    </plurals>
+    <string name="lounge11_quiz_preparing">Forbereder det første spørgsmål…</string>
+    <string name="lounge11_quiz_you_host">Du er vært</string>
+    <string name="lounge11_quiz_hosted_by">%1$s er vært</string>
+    <string name="lounge11_quiz_round">Spørgsmål %1$d af %2$d</string>
+    <string name="lounge11_quiz_too_late">Tiden er udløbet for dette spørgsmål.</string>
+    <plurals name="lounge11_quiz_answers">
+        <item quantity="one">%1$d svar modtaget</item>
+        <item quantity="other">%1$d svar modtaget</item>
+    </plurals>
+    <string name="lounge11_quiz_answer_sent">Svar sendt: vent på afsløringen.</string>
+    <string name="lounge11_quiz_leaderboard">STILLING</string>
+    <string name="lounge11_quiz_no_scores">Ingen rigtige svar endnu.</string>
+    <string name="lounge11_quiz_finished">Quizzen er slut!</string>
+    <plurals name="lounge11_quiz_winner">
+        <item quantity="one">%1$s vinder med %2$d point</item>
+        <item quantity="other">%1$s vinder med %2$d point</item>
+    </plurals>
+    <string name="lounge11_quiz_new">Ny quiz</string>
+    <plurals name="lounge11_quiz_seconds_left">
+        <item quantity="one">%1$d sekunder tilbage</item>
+        <item quantity="other">%1$d sekunder tilbage</item>
+    </plurals>
+    <string name="lounge11_radar_empty">Ingen AeroChat-telefoner inden for direkte rækkevidde. Radaren viser, hvem der er forbundet til din telefon via Bluetooth.</string>
+    <string name="lounge11_passenger">Passager</string>
+    <string name="lounge11_distance_unknown">Forbundet (ukendt afstand)</string>
+    <string name="lounge11_distance_immediate">Meget tæt på · samme række</string>
+    <string name="lounge11_distance_near">Tæt på · 1-3 rækker</string>
+    <string name="lounge11_distance_few_rows">Et par rækker væk</string>
+    <string name="lounge11_distance_far">Langt væk · bagerst i kabinen</string>
+    <string name="lounge11_radar_title">Radar</string>
+    <plurals name="lounge11_radar_a11y">
+        <item quantity="one">Radar: %1$d telefoner inden for rækkevidde</item>
+        <item quantity="other">Radar: %1$d telefoner inden for rækkevidde</item>
+    </plurals>
+    <string name="lounge11_emergency_status">Status</string>
+    <string name="lounge11_emergency_footer">Alarmen når ud til alle AeroChat-telefoner inden for rækkevidde, videresendes i op til 7 hop og bliver i køen til dem, der kommer senere. Den erstatter ikke redningstjenesten: ring til det lokale alarmnummer, hvis du kan.</string>
+    <string name="lounge11_emergency_message_header">Besked (valgfrit)</string>
+    <string name="lounge11_emergency_placeholder">Hvor du er, hvad du har brug for…</string>
+    <string name="lounge11_emergency_attach_location">Vedhæft min GPS-position</string>
+    <string name="lounge11_emergency_location_denied">Ingen adgang til lokalitet: slå den til under Indstillinger › Anonymitet og sikkerhed.</string>
+    <string name="lounge11_emergency_locating">Finder din position…</string>
+    <string name="lounge11_emergency_location_footer">Koordinaterne sendes kun via Bluetooth, krypteret, til telefoner i nærheden. Ingen server.</string>
+    <string name="lounge11_cancel">Annuller</string>
+    <string name="lounge11_send">Send</string>
+    <string name="lounge11_emergency_failed">Alarmen blev ikke sendt: %1$s</string>
+    <string name="lounge11_open_in_maps">Åbn positionen i Kort</string>
+    <string name="lounge11_dismiss_alert">Luk advarsel</string>
+</resources>

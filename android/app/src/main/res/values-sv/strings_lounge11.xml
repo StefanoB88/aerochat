@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cabina 1.1: segnalazioni, quiz, radar, emergenza (traduzioni dal catalogo iOS). -->
+<resources>
+    <string name="lounge11_profanity_blocked">Sådant språk är inte tillåtet i Offentliga kabinen: här pratar vi respektfullt.</string>
+    <string name="lounge11_report_message">Rapportera meddelande</string>
+    <string name="lounge11_report_thanks">Tack: rapporten har registrerats.</string>
+    <string name="lounge11_quiz_title">Kabinquiz</string>
+    <string name="lounge11_radar_menu">Närhetsradar</string>
+    <string name="lounge11_emergency_title">Nödlarm</string>
+    <string name="lounge11_rules_menu">Kabinregler</string>
+    <string name="lounge11_more_actions">Fler åtgärder</string>
+    <string name="lounge11_open_radar_hint">Öppnar närhetsradarn</string>
+    <string name="lounge11_close">Stäng</string>
+    <string name="lounge11_leave">Lämna</string>
+    <string name="lounge11_quiz_lobby_title">Utmana hela kabinen</string>
+    <string name="lounge11_quiz_lobby_text">5 frågor om resor, geografi och flyg. Alla inom Bluetooth-räckvidd ser frågan och svarar: den som är snabbast och träffsäkrast vinner.</string>
+    <string name="lounge11_quiz_already_running">Det pågår redan ett quiz.</string>
+    <string name="lounge11_quiz_host">Led ett quiz</string>
+    <plurals name="lounge11_quiz_in_range">
+        <item quantity="one">%1$d passagerare inom räckhåll just nu</item>
+        <item quantity="other">%1$d passagerare inom räckhåll just nu</item>
+    </plurals>
+    <string name="lounge11_quiz_preparing">Förbereder första frågan…</string>
+    <string name="lounge11_quiz_you_host">Du leder</string>
+    <string name="lounge11_quiz_hosted_by">%1$s leder quizet</string>
+    <string name="lounge11_quiz_round">Fråga %1$d av %2$d</string>
+    <string name="lounge11_quiz_too_late">Tiden är ute för den här frågan.</string>
+    <plurals name="lounge11_quiz_answers">
+        <item quantity="one">%1$d svar mottagna</item>
+        <item quantity="other">%1$d svar mottagna</item>
+    </plurals>
+    <string name="lounge11_quiz_answer_sent">Svar skickat: vänta på facit.</string>
+    <string name="lounge11_quiz_leaderboard">TOPPLISTA</string>
+    <string name="lounge11_quiz_no_scores">Inga rätta svar ännu.</string>
+    <string name="lounge11_quiz_finished">Quizet är slut!</string>
+    <plurals name="lounge11_quiz_winner">
+        <item quantity="one">%1$s vinner med %2$d poäng</item>
+        <item quantity="other">%1$s vinner med %2$d poäng</item>
+    </plurals>
+    <string name="lounge11_quiz_new">Nytt quiz</string>
+    <plurals name="lounge11_quiz_seconds_left">
+        <item quantity="one">%1$d sekunder kvar</item>
+        <item quantity="other">%1$d sekunder kvar</item>
+    </plurals>
+    <string name="lounge11_radar_empty">Inga AeroChat-telefoner inom direkt räckhåll. Radarn visar vem som är ansluten till din telefon via Bluetooth.</string>
+    <string name="lounge11_passenger">Passagerare</string>
+    <string name="lounge11_distance_unknown">Ansluten (okänt avstånd)</string>
+    <string name="lounge11_distance_immediate">Mycket nära · samma rad</string>
+    <string name="lounge11_distance_near">Nära · 1–3 rader</string>
+    <string name="lounge11_distance_few_rows">Några rader bort</string>
+    <string name="lounge11_distance_far">Långt bort · längst bak i kabinen</string>
+    <string name="lounge11_radar_title">Radar</string>
+    <plurals name="lounge11_radar_a11y">
+        <item quantity="one">Radar: %1$d telefoner inom räckhåll</item>
+        <item quantity="other">Radar: %1$d telefoner inom räckhåll</item>
+    </plurals>
+    <string name="lounge11_emergency_status">Status</string>
+    <string name="lounge11_emergency_footer">Larmet når alla AeroChat-telefoner inom räckhåll, studsar vidare i upp till 7 hopp och ligger kvar i kö för den som kommer senare. Det ersätter inte räddningstjänsten: ring det lokala nödnumret om du kan.</string>
+    <string name="lounge11_emergency_message_header">Meddelande (valfritt)</string>
+    <string name="lounge11_emergency_placeholder">Var du är, vad som behövs…</string>
+    <string name="lounge11_emergency_attach_location">Bifoga min GPS-position</string>
+    <string name="lounge11_emergency_location_denied">Platsåtkomst saknas: aktivera den under Inställningar › Integritet.</string>
+    <string name="lounge11_emergency_locating">Söker position…</string>
+    <string name="lounge11_emergency_location_footer">Koordinaterna skickas bara via Bluetooth, krypterade, till telefoner i närheten. Ingen server.</string>
+    <string name="lounge11_cancel">Avbryt</string>
+    <string name="lounge11_send">Skicka</string>
+    <string name="lounge11_emergency_failed">Larmet skickades inte: %1$s</string>
+    <string name="lounge11_open_in_maps">Öppna platsen i Kartor</string>
+    <string name="lounge11_dismiss_alert">Stäng larmet</string>
+</resources>

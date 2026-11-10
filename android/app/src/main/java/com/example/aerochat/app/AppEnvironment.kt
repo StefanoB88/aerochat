@@ -43,6 +43,8 @@ import com.example.aerochat.data.records.PeerRecord
 import com.example.aerochat.data.records.ReportReason
 import com.example.aerochat.data.records.ReportRecord
 import com.example.aerochat.BuildConfig
+import com.example.aerochat.ui.AppNavigator
+import com.example.aerochat.ui.components.Haptics
 import com.example.aerochat.ui.onboarding.OnboardingView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -50,6 +52,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -170,6 +173,24 @@ class AppEnvironment(
     private val _mediaProgress = MutableStateFlow<Map<String, Double>>(emptyMap())
     val mediaProgress: StateFlow<Map<String, Double>> = _mediaProgress.asStateFlow()
 
+    /**
+     * Esito di un link di invito `aeromesh://` aperto da fuori (Messaggi, browser, Nearby Share), mostrato
+     * come avviso dalla UI; la UI lo azzera con [dismissIncomingLinkMessage].
+     */
+    private val _incomingLinkMessage = MutableStateFlow<String?>(null)
+    val incomingLinkMessage: StateFlow<String?> = _incomingLinkMessage.asStateFlow()
+
+    fun dismissIncomingLinkMessage() {
+        _incomingLinkMessage.value = null
+    }
+
+    /** Link arrivato prima che la mesh fosse accesa (avvio a freddo, onboarding): si abbina a `startMesh`. */
+    private var pendingPairingURI: String? = null
+
+    /** Aggiornamento coalescente della notifica di stato "a bordo" (equivalente della Live Activity). */
+    private var liveStatusRefresh: Job? = null
+    private var lastLiveStatusAtMs = 0L
+
     private val backgroundTasks = mutableListOf<Job>()
     private var isBootstrapping = false
 
@@ -285,6 +306,7 @@ class AppEnvironment(
         } else {
             runCatching { _database.value?.messages?.markIncomingRead(conversationID = conversation.id) }
         }
+        refreshLiveStatus()
     }
 
     /** Avvia trasporto BLE, router e servizi (idempotente). */
@@ -399,6 +421,80 @@ class AppEnvironment(
         if (AppSettings.isDemoModeEnabled) {
             setDemoMode(true)
         }
+
+        // Stato "a bordo" nella notifica del servizio: ogni cambio di conversazioni (non letti, Cabine del
+        // volo) o di vicini la riaggiorna, con coalescenza.
+        backgroundTasks += scope.launch {
+            database.conversations.observePermanent().collect { refreshLiveStatus() }
+        }
+        backgroundTasks += scope.launch {
+            database.conversations.observeActiveFlightLounges().collect { refreshLiveStatus() }
+        }
+        refreshLiveStatus()
+
+        pendingPairingURI?.let { pending ->
+            pendingPairingURI = null
+            pairFromLink(pending)
+        }
+    }
+
+    // MARK: - Link di invito aeromesh://
+
+    /**
+     * Link `aeromesh://v1?...` aperto da un'altra app (Swift `handleIncomingURL`). Se la mesh non e' ancora
+     * accesa il link resta in attesa e si abbina appena parte il router.
+     */
+    fun handleIncomingURL(uri: String) {
+        if (!uri.substringBefore(':').equals(MeshProtocol.qrScheme, ignoreCase = true)) return
+        if (_router.value == null) {
+            pendingPairingURI = uri
+            return
+        }
+        scope.launch { pairFromLink(uri) }
+    }
+
+    private suspend fun pairFromLink(uri: String) {
+        try {
+            val conversation = pair(uri)
+            Haptics.success()
+            _incomingLinkMessage.value = if (conversation.type == ConversationType.group) {
+                context.getString(R.string.shell_pairing_joined_group, conversation.title)
+            } else {
+                context.getString(R.string.shell11_link_added, conversation.title)
+            }
+            AppNavigator.openConversation(conversation.id)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Haptics.error()
+            _incomingLinkMessage.value = context.getString(R.string.shell11_link_invalid)
+        }
+    }
+
+    // MARK: - Notifica di stato "a bordo"
+
+    /**
+     * Aggiorna la notifica del servizio con vicini, non letti e Cabina del volo attiva (Swift
+     * `refreshLiveActivity`). Coalescenza: al massimo un aggiornamento ogni [liveStatusIntervalMs]; le
+     * richieste nel frattempo confluiscono nel prossimo, che legge i valori piu' recenti.
+     */
+    private fun refreshLiveStatus() {
+        if (liveStatusRefresh?.isActive == true) return
+        liveStatusRefresh = scope.launch {
+            val sinceLast = System.currentTimeMillis() - lastLiveStatusAtMs
+            delay(maxOf(liveStatusMinDelayMs, liveStatusIntervalMs - sinceLast))
+            val database = _database.value ?: return@launch
+            if (_router.value == null) return@launch
+            lastLiveStatusAtMs = System.currentTimeMillis()
+            val unread = runCatching { database.conversations.totalUnread() }.getOrDefault(0)
+            val flight = runCatching { database.conversations.activeFlightLounges() }.getOrNull()?.firstOrNull()?.title
+            MeshForegroundService.updateStatus(
+                context,
+                MeshForegroundService.LiveStatus(
+                    neighborCount = _neighbors.value.size, unreadCount = unread, flightTitle = flight,
+                ),
+            )
+        }
     }
 
     /**
@@ -442,6 +538,8 @@ class AppEnvironment(
     suspend fun stopMesh() {
         backgroundTasks.forEach { it.cancel() }
         backgroundTasks.clear()
+        liveStatusRefresh?.cancel()
+        liveStatusRefresh = null
         _calls.value?.stop()
         _calls.value = null
         _quiz.value?.stop()
@@ -587,8 +685,16 @@ class AppEnvironment(
     private suspend fun apply(event: RouterEvent) {
         when (event) {
             is RouterEvent.RadioStateChanged -> _radioState.value = event.state
-            is RouterEvent.NeighborsChanged -> _neighbors.value = event.neighbors
-            is RouterEvent.MessageReceived -> _lastReceivedMessageID.value = event.msgID
+            is RouterEvent.NeighborsChanged -> {
+                // I vicini si aggiornano ogni ~4 s per l'RSSI: la notifica cambia solo se cambia il numero.
+                val countChanged = event.neighbors.size != _neighbors.value.size
+                _neighbors.value = event.neighbors
+                if (countChanged) refreshLiveStatus()
+            }
+            is RouterEvent.MessageReceived -> {
+                _lastReceivedMessageID.value = event.msgID
+                refreshLiveStatus()
+            }
             is RouterEvent.RelayQueueChanged -> _relayQueueCount.value = event.count
             is RouterEvent.GroupMembersChanged -> {
                 // Nuovi membri nel gruppo: se siamo Pro, il pass li raggiunge subito.
@@ -599,6 +705,11 @@ class AppEnvironment(
                 runCatching { proPass.broadcastGrantIfEntitled(group) }
             }
         }
+    }
+
+    private companion object {
+        const val liveStatusIntervalMs = 2_000L
+        const val liveStatusMinDelayMs = 250L
     }
 
     /** `true` se i permessi BLE runtime sono concessi (altrimenti la radio resta `unauthorized`). */

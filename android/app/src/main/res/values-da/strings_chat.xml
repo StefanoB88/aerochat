@@ -126,4 +126,26 @@
     <string name="chat_group_last_seen">· set %1$s</string>
     <string name="chat_group_message_member">Skriv til %1$s</string>
     <string name="chat_group_show_participants">Vis gruppens deltagere</string>
+    <string name="chat_call_out_of_range">Rejsekammeraten er uden for rækkevidde: opkald kræver en direkte forbindelse.</string>
+    <string name="chat_gate_call_needs_direct">Opkald virker kun, når rejsekammeraten er inden for direkte rækkevidde, uden relæ.</string>
+    <string name="chat_gate_call_signal_weak">Signalet er for svagt til et opkald: ryk et par rækker tættere på hinanden.</string>
+    <string name="chat_voice_call">Taleopkald</string>
+    <string name="chat_call_hint">Tilgængelig, når din rejsekammerat er inden for direkte rækkevidde</string>
+    <string name="chat_signal_weak">Svagt signal: ryk tættere sammen</string>
+    <string name="chat_call_incoming">Indgående opkald…</string>
+    <string name="chat_call_ringing">Ringer…</string>
+    <string name="chat_call_ended_hung_up">Opkald afsluttet</string>
+    <string name="chat_call_ended_rejected">Opkald afvist</string>
+    <string name="chat_call_ended_busy">Optaget</string>
+    <string name="chat_call_ended_no_answer">Intet svar</string>
+    <string name="chat_call_ended_missed">Ubesvaret opkald</string>
+    <string name="chat_call_ended_connection_lost">Forbindelsen blev afbrudt</string>
+    <string name="chat_call_ended_unreachable">Rejsekammeraten kan ikke nås</string>
+    <string name="chat_call_ended_microphone_denied">Giv adgang til mikrofonen under Indstillinger</string>
+    <string name="chat_call_ended_failed">Opkaldet mislykkedes</string>
+    <string name="chat_call_reject">Afvis</string>
+    <string name="chat_call_answer">Besvar</string>
+    <string name="chat_call_unmute">Slå lyd til</string>
+    <string name="chat_call_mute">Lydløs</string>
+    <string name="chat_call_speaker">Højttaler</string>
 </resources>

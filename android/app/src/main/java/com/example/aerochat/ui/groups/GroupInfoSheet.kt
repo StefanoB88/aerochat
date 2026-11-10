@@ -2,6 +2,7 @@ package com.example.aerochat.ui.groups
 
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,11 +10,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
@@ -53,10 +59,13 @@ import com.example.aerochat.ui.components.AvatarView
 import com.example.aerochat.ui.components.Haptics
 import com.example.aerochat.ui.components.RadioStatusView
 import com.example.aerochat.ui.components.SheetBarButton
+import com.example.aerochat.ui.paywall.PaywallView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.text.DateFormat
+import java.util.Date
 
 /**
  * Scheda aperta toccando il nome del gruppo: partecipanti (noi compresi) con il loro stato radio.
@@ -80,6 +89,13 @@ fun GroupInfoSheet(
     /** Stato radio per `node_id` (hex). */
     var reachability by remember { mutableStateOf<Map<String, Reachability>>(emptyMap()) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var isGifting by remember { mutableStateOf(false) }
+    var giftMessage by remember { mutableStateOf<String?>(null) }
+    var showPaywall by remember { mutableStateOf(false) }
+    val proPass by environment.proPass.collectAsStateWithLifecycle()
+    // Ricomposizione quando cambia il Pass (testo del pulsante "Regala" / "Sblocca").
+    environment.entitlementState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     LaunchedEffect(database, group.id) {
         database?.conversations?.observeGroupMembers(of = group.id)?.collect { members = it }
@@ -121,6 +137,29 @@ fun GroupInfoSheet(
         }
     }
 
+    /** "1 paga, tutti usano": regala il Pass al gruppo (o compra il tuo per farlo). */
+    fun giftPass() {
+        val service = proPass
+        if (!environment.isPro || service == null) {
+            showPaywall = true
+            return
+        }
+        isGifting = true
+        scope.launch {
+            try {
+                if (service.broadcastGrantIfEntitled(group)) {
+                    Haptics.success()
+                    giftMessage = context.getString(R.string.flight_group_gift_sent)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            } finally {
+                isGifting = false
+            }
+        }
+    }
+
     AeroSheet(
         onDismiss = onDismiss,
         title = stringResource(R.string.chat_group_info_title),
@@ -150,6 +189,18 @@ fun GroupInfoSheet(
                         color = AeroTheme.textSecondary,
                     )
                 }
+            }
+            item {
+                PassSection(
+                    group = group,
+                    isPro = environment.isPro,
+                    isGifting = isGifting,
+                    giftMessage = giftMessage,
+                    onGift = {
+                        Haptics.tap()
+                        giftPass()
+                    },
+                )
             }
             item {
                 Text(
@@ -211,6 +262,77 @@ fun GroupInfoSheet(
                 }
             }
         }
+    }
+    if (showPaywall) PaywallView(onDismiss = { showPaywall = false })
+}
+
+
+/** Sezione Pass del gruppo (Swift `passSection`): pass attivo con scadenza, oppure "Regala"/"Sblocca". */
+@Composable
+private fun PassSection(
+    group: ConversationRecord,
+    isPro: Boolean,
+    isGifting: Boolean,
+    giftMessage: String?,
+    onGift: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.fillMaxWidth().background(AeroTheme.surface, RoundedCornerShape(12.dp))) {
+            if (group.isProUnlocked()) {
+                Column(
+                    Modifier.fillMaxWidth().padding(16.dp).semantics(mergeDescendants = true) {},
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Filled.ConfirmationNumber, contentDescription = null, tint = AeroTheme.accentEmerald)
+                        Text(stringResource(R.string.flight_group_pass_active), style = AeroTheme.body, color = AeroTheme.accentEmerald)
+                    }
+                    group.proUnlockedUntilMs?.let { until ->
+                        val formatted = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(until))
+                        Text(
+                            stringResource(R.string.flight_group_pass_until, formatted),
+                            style = AeroTheme.footnote,
+                            color = AeroTheme.textSecondary,
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !isGifting, onClick = onGift)
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(Icons.Filled.CardGiftcard, contentDescription = null, tint = AeroTheme.accentCyan)
+                    Text(
+                        stringResource(if (isPro) R.string.flight_group_gift else R.string.flight_group_unlock),
+                        style = AeroTheme.body,
+                        color = AeroTheme.textPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (isGifting) {
+                        CircularProgressIndicator(color = AeroTheme.accentCyan, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+            giftMessage?.let {
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(start = 16.dp))
+                Text(
+                    it,
+                    style = AeroTheme.footnote,
+                    color = AeroTheme.accentEmerald,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+        }
+        Text(
+            stringResource(R.string.flight_group_pass_footer),
+            style = AeroTheme.footnote,
+            color = AeroTheme.textSecondary,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
     }
 }
 

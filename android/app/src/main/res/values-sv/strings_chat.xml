@@ -126,4 +126,26 @@
     <string name="chat_group_last_seen">· sedd %1$s</string>
     <string name="chat_group_message_member">Skriv till %1$s</string>
     <string name="chat_group_show_participants">Visa gruppens deltagare</string>
+    <string name="chat_call_out_of_range">Resekamraten är utom räckhåll: samtal kräver en direkt anslutning.</string>
+    <string name="chat_gate_call_needs_direct">Samtal fungerar bara med en resekamrat inom direkt räckhåll, utan reläer.</string>
+    <string name="chat_gate_call_signal_weak">Signalen är för svag för ett samtal: flytta er några rader närmare varandra.</string>
+    <string name="chat_voice_call">Röstsamtal</string>
+    <string name="chat_call_hint">Tillgängligt när resekamraten är inom direkt räckhåll</string>
+    <string name="chat_signal_weak">Svag signal: gå närmare varandra</string>
+    <string name="chat_call_incoming">Inkommande samtal…</string>
+    <string name="chat_call_ringing">Ringer…</string>
+    <string name="chat_call_ended_hung_up">Samtal avslutat</string>
+    <string name="chat_call_ended_rejected">Samtal avvisat</string>
+    <string name="chat_call_ended_busy">Upptaget</string>
+    <string name="chat_call_ended_no_answer">Inget svar</string>
+    <string name="chat_call_ended_missed">Missat samtal</string>
+    <string name="chat_call_ended_connection_lost">Anslutningen bröts</string>
+    <string name="chat_call_ended_unreachable">Resekamraten kan inte nås</string>
+    <string name="chat_call_ended_microphone_denied">Tillåt mikrofonen i Inställningar</string>
+    <string name="chat_call_ended_failed">Samtalet misslyckades</string>
+    <string name="chat_call_reject">Avvisa</string>
+    <string name="chat_call_answer">Svara</string>
+    <string name="chat_call_unmute">Ljud på</string>
+    <string name="chat_call_mute">Ljud av</string>
+    <string name="chat_call_speaker">Högtalare</string>
 </resources>

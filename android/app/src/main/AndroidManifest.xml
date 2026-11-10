@@ -16,9 +16,10 @@
     <uses-permission
         android:name="android.permission.BLUETOOTH_ADMIN"
         android:maxSdkVersion="30" />
-    <uses-permission
-        android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30" />
+    <!-- Posizione: scan BLE su Android 10/11 e, su tutte le versioni, coordinate facoltative dell'avviso
+         di emergenza (chiesta solo quando l'utente attiva "Allega la mia posizione GPS"). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- Vocali e chiamate. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -42,6 +43,10 @@
         android:required="false" />
     <uses-feature
         android:name="android.hardware.microphone"
+        android:required="false" />
+    <!-- Il GPS e' facoltativo (solo per allegare la posizione a un avviso di emergenza). -->
+    <uses-feature
+        android:name="android.hardware.location.gps"
         android:required="false" />
 
     <application

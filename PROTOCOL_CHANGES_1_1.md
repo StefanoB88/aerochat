@@ -1,4 +1,11 @@
-# AeroMesh protocol additions – release 1.1 (iOS, da replicare su Android)
+# AeroMesh protocol additions – release 1.1
+
+> Stato (2026-11-10): implementato su iOS **e Android**. Vettore cross-platform della Cabina del volo per
+> `AZ|204|2026-11-10`: key `021f3ac145f067d79218faaf1d2186661e4b6fb5c89c1c450b93e05db2033202`,
+> UUID `4e5ed36a-a223-4e34-a5c9-c68ebaf63dc8`, recipient_id `b9070b8b2b885f61` (testato su entrambe).
+>
+> Differenze Android: niente riassunto AI della Cabina; traduzione e risposte rapide con ML Kit on-device
+> (risposte rapide solo in inglese); la "Live Activity" e' la notifica del servizio in primo piano.
 
 Tutte le modifiche sono **retrocompatibili**: i client 1.0 ignorano i `PacketType` sconosciuti e i
 nuovi campi. Il contratto binario resta quello di `aeromesh.proto` / `aeromesh_ext.proto` (aggiornati in

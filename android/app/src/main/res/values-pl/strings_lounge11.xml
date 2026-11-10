@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cabina 1.1: segnalazioni, quiz, radar, emergenza (traduzioni dal catalogo iOS). -->
+<resources>
+    <string name="lounge11_profanity_blocked">Taki język nie jest dozwolony w Kabinie Publicznej: tutaj rozmawiamy z szacunkiem.</string>
+    <string name="lounge11_report_message">Zgłoś wiadomość</string>
+    <string name="lounge11_report_thanks">Dziękujemy: zgłoszenie zostało zapisane.</string>
+    <string name="lounge11_quiz_title">Quiz kabinowy</string>
+    <string name="lounge11_radar_menu">Radar bliskości</string>
+    <string name="lounge11_emergency_title">Alert awaryjny</string>
+    <string name="lounge11_rules_menu">Zasady Kabiny</string>
+    <string name="lounge11_more_actions">Więcej czynności</string>
+    <string name="lounge11_open_radar_hint">Otwiera radar bliskości</string>
+    <string name="lounge11_close">Zamknij</string>
+    <string name="lounge11_leave">Wyjdź</string>
+    <string name="lounge11_quiz_lobby_title">Rzuć wyzwanie całej kabinie</string>
+    <string name="lounge11_quiz_lobby_text">5 pytań o podróże, geografię i lotnictwo. Każdy w zasięgu Bluetooth widzi pytanie i odpowiada: wygrywa ten, kto jest szybki i dokładny.</string>
+    <string name="lounge11_quiz_already_running">Quiz już trwa.</string>
+    <string name="lounge11_quiz_host">Poprowadź quiz</string>
+    <plurals name="lounge11_quiz_in_range">
+        <item quantity="one">Pasażerów w zasięgu teraz: %1$d</item>
+        <item quantity="few">Pasażerów w zasięgu teraz: %1$d</item>
+        <item quantity="many">Pasażerów w zasięgu teraz: %1$d</item>
+        <item quantity="other">Pasażerów w zasięgu teraz: %1$d</item>
+    </plurals>
+    <string name="lounge11_quiz_preparing">Przygotowywanie pierwszego pytania…</string>
+    <string name="lounge11_quiz_you_host">Prowadzisz</string>
+    <string name="lounge11_quiz_hosted_by">Prowadzi %1$s</string>
+    <string name="lounge11_quiz_round">Pytanie %1$d z %2$d</string>
+    <string name="lounge11_quiz_too_late">Czas na to pytanie minął.</string>
+    <plurals name="lounge11_quiz_answers">
+        <item quantity="one">Otrzymane odpowiedzi: %1$d</item>
+        <item quantity="few">Otrzymane odpowiedzi: %1$d</item>
+        <item quantity="many">Otrzymane odpowiedzi: %1$d</item>
+        <item quantity="other">Otrzymane odpowiedzi: %1$d</item>
+    </plurals>
+    <string name="lounge11_quiz_answer_sent">Odpowiedź wysłana: poczekaj na rozwiązanie.</string>
+    <string name="lounge11_quiz_leaderboard">RANKING</string>
+    <string name="lounge11_quiz_no_scores">Na razie brak poprawnych odpowiedzi.</string>
+    <string name="lounge11_quiz_finished">Koniec quizu!</string>
+    <plurals name="lounge11_quiz_winner">
+        <item quantity="one">Wygrywa %1$s z wynikiem %2$d pkt</item>
+        <item quantity="few">Wygrywa %1$s z wynikiem %2$d pkt</item>
+        <item quantity="many">Wygrywa %1$s z wynikiem %2$d pkt</item>
+        <item quantity="other">Wygrywa %1$s z wynikiem %2$d pkt</item>
+    </plurals>
+    <string name="lounge11_quiz_new">Nowy quiz</string>
+    <plurals name="lounge11_quiz_seconds_left">
+        <item quantity="one">Pozostało %1$d sek.</item>
+        <item quantity="few">Pozostało %1$d sek.</item>
+        <item quantity="many">Pozostało %1$d sek.</item>
+        <item quantity="other">Pozostało %1$d sek.</item>
+    </plurals>
+    <string name="lounge11_radar_empty">Brak telefonów z AeroChat w bezpośrednim zasięgu. Radar pokazuje, kto jest połączony z Twoim telefonem przez Bluetooth.</string>
+    <string name="lounge11_passenger">Pasażer</string>
+    <string name="lounge11_distance_unknown">Połączono (odległość nieznana)</string>
+    <string name="lounge11_distance_immediate">Bardzo blisko · ten sam rząd</string>
+    <string name="lounge11_distance_near">Blisko · 1–3 rzędy</string>
+    <string name="lounge11_distance_few_rows">Kilka rzędów dalej</string>
+    <string name="lounge11_distance_far">Daleko · koniec kabiny</string>
+    <string name="lounge11_radar_title">Radar</string>
+    <plurals name="lounge11_radar_a11y">
+        <item quantity="one">Radar: telefony w zasięgu – %1$d</item>
+        <item quantity="few">Radar: telefony w zasięgu – %1$d</item>
+        <item quantity="many">Radar: telefony w zasięgu – %1$d</item>
+        <item quantity="other">Radar: telefony w zasięgu – %1$d</item>
+    </plurals>
+    <string name="lounge11_emergency_status">Stan</string>
+    <string name="lounge11_emergency_footer">Alert dociera do wszystkich telefonów z AeroChat w zasięgu, jest przekazywany dalej przez maksymalnie 7 przeskoków i czeka w kolejce na tych, którzy pojawią się później. Nie zastępuje służb ratunkowych: jeśli możesz, zadzwoń pod lokalny numer alarmowy.</string>
+    <string name="lounge11_emergency_message_header">Wiadomość (opcjonalnie)</string>
+    <string name="lounge11_emergency_placeholder">Gdzie jesteś, czego potrzebujesz…</string>
+    <string name="lounge11_emergency_attach_location">Dołącz moją pozycję GPS</string>
+    <string name="lounge11_emergency_location_denied">Brak zgody na lokalizację: włącz ją w Ustawienia › Prywatność.</string>
+    <string name="lounge11_emergency_locating">Ustalanie pozycji…</string>
+    <string name="lounge11_emergency_location_footer">Współrzędne są przesyłane wyłącznie przez Bluetooth, zaszyfrowane, do pobliskich telefonów. Bez serwera.</string>
+    <string name="lounge11_cancel">Anuluj</string>
+    <string name="lounge11_send">Wyślij</string>
+    <string name="lounge11_emergency_failed">Alert niewysłany: %1$s</string>
+    <string name="lounge11_open_in_maps">Otwórz pozycję w Mapach</string>
+    <string name="lounge11_dismiss_alert">Zamknij alert</string>
+</resources>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Agent "flight": carta d'imbarco, cartolina di volo, Pass 24 ore, Pass di gruppo. Generato dal catalogo iOS. -->
+<resources>
+    <string name="flight_lounge_title">Flygkabin</string>
+    <string name="flight_mode_scan">Skanna</string>
+    <string name="flight_mode_manual">Ange</string>
+    <string name="flight_camera_denied">Tillåt kameran i Inställningar för att skanna boardingkortet.</string>
+    <string name="flight_camera_unavailable">Kameran är inte tillgänglig.</string>
+    <string name="flight_scan_hint">Skanna streckkoden på boardingkortet (även från en annan telefons skärm eller från Wallet). Vi läser bara flygbolag, flightnummer och datum: namn och PNR ignoreras.</string>
+    <string name="flight_number_header">FLIGHTNUMMER</string>
+    <string name="flight_number_placeholder">t.ex. AZ 204</string>
+    <string name="flight_departure_day">Avresedag</string>
+    <string name="flight_invalid_number">Ogiltigt flightnummer: använd formatet AZ 204.</string>
+    <string name="flight_join_button">Gå med i Flygkabinen</string>
+    <string name="flight_manual_hint">Alla passagerare som anger samma flight och datum hamnar i samma krypterade rum, utan att behöva byta QR-koder med varandra.</string>
+    <string name="flight_seat">plats %1$s</string>
+    <string name="flight_pairing_qr_error">Det här är en AeroChat-QR-kod: använd ”Resekamrater” för att lägga till en resekamrat.</string>
+    <string name="flight_unrecognized">Koden kändes inte igen: skanna streckkoden på boardingkortet.</string>
+    <string name="flight_joined">Du är ombord på %1$s! Alla som skannar samma boardingkort hittar dig här.</string>
+    <string name="flight_join_failed">Det gick inte att gå med i Flygkabinen: %1$s</string>
+    <string name="flight_ok">OK</string>
+    <string name="flight_cancel">Avbryt</string>
+    <string name="flight_card_title">Flygvykort</string>
+    <string name="flight_card_period">Period</string>
+    <string name="flight_card_share_title">Mitt flygvykort</string>
+    <string name="flight_card_share">Dela vykortet</string>
+    <string name="flight_card_privacy">Bara siffror: inga meddelanden, namn eller foton av andra passagerare hamnar på vykortet.</string>
+    <string name="flight_card_whose">%1$ss flygresa</string>
+    <string name="flight_card_messages">meddelanden utan internet</string>
+    <string name="flight_card_people">passagerare du mött</string>
+    <string name="flight_card_games">vunna spel av %1$d</string>
+    <string name="flight_card_photos">foton via Bluetooth</string>
+    <string name="flight_card_voice">röstmeddelanden</string>
+    <string name="flight_card_hops">telefoner i kedjan (rekord)</string>
+    <string name="flight_card_lounge">inlägg i kabinen</string>
+    <string name="flight_card_slogan">Chatta på 10 000 meter.</string>
+    <string name="flight_card_slogan2">Utan Wi-Fi, utan konto, bara Bluetooth.</string>
+    <string name="flight_menu_boarding">Flygkabin (boardingkort)</string>
+    <string name="flight_empty_hint">Skanna boardingkortet för att gå med i chatten för din flygresa, eller lägg till resekamrater vid gaten: ombord hittar ni varandra av er själva via Bluetooth.</string>
+    <string name="flight_paywall_pass24_title">24-timmars Pass för en flygresa</string>
+    <string name="flight_paywall_pass24_subtitle">En flygresa, en dag. Foton, röstmeddelanden och spel för dig och din grupp fram till landningen.</string>
+    <string name="flight_paywall_terms">Användarvillkor</string>
+    <string name="flight_paywall_privacy">Integritet</string>
+    <string name="flight_paywall_eula">EULA</string>
+    <string name="flight_paywall_one_time">Engångsköp som debiteras ditt Google Play-konto. Ingen automatisk förnyelse.</string>
+    <string name="flight_group_pass_active">Pass aktivt för hela gruppen</string>
+    <string name="flight_group_pass_until">Foton, röstmeddelanden och spel upplåsta till %1$s.</string>
+    <string name="flight_group_gift">Ge bort Passet till hela gruppen</string>
+    <string name="flight_group_unlock">Lås upp gruppen med ett Pass</string>
+    <string name="flight_group_gift_sent">Passet har skickats till medlemmarna inom räckhåll; de andra får det så fort de ansluter.</string>
+    <string name="flight_group_pass_footer">Det räcker med ett Pass i gruppen: den som har det delar det med alla medlemmar, även Android-användare med gratisappen.</string>
+    <string name="flight_cta_boarding">Skanna boardingkortet</string>
+</resources>

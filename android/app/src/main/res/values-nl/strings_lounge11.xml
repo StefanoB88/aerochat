@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cabina 1.1: segnalazioni, quiz, radar, emergenza (traduzioni dal catalogo iOS). -->
+<resources>
+    <string name="lounge11_profanity_blocked">Dat taalgebruik is niet toegestaan in de Openbare cabine: hier kletsen we met respect.</string>
+    <string name="lounge11_report_message">Bericht melden</string>
+    <string name="lounge11_report_thanks">Bedankt: je melding is geregistreerd.</string>
+    <string name="lounge11_quiz_title">Cabinequiz</string>
+    <string name="lounge11_radar_menu">Nabijheidsradar</string>
+    <string name="lounge11_emergency_title">Noodmelding</string>
+    <string name="lounge11_rules_menu">Cabineregels</string>
+    <string name="lounge11_more_actions">Meer acties</string>
+    <string name="lounge11_open_radar_hint">Opent de nabijheidsradar</string>
+    <string name="lounge11_close">Sluit</string>
+    <string name="lounge11_leave">Verlaten</string>
+    <string name="lounge11_quiz_lobby_title">Daag de hele cabine uit</string>
+    <string name="lounge11_quiz_lobby_text">5 vragen over reizen, geografie en luchtvaart. Iedereen binnen Bluetooth-bereik ziet de vraag en antwoordt: wie snel en precies is, wint.</string>
+    <string name="lounge11_quiz_already_running">Er is al een quiz bezig.</string>
+    <string name="lounge11_quiz_host">Presenteer een quiz</string>
+    <plurals name="lounge11_quiz_in_range">
+        <item quantity="one">%1$d passagiers nu binnen bereik</item>
+        <item quantity="other">%1$d passagiers nu binnen bereik</item>
+    </plurals>
+    <string name="lounge11_quiz_preparing">De eerste vraag wordt voorbereid…</string>
+    <string name="lounge11_quiz_you_host">Jij presenteert</string>
+    <string name="lounge11_quiz_hosted_by">%1$s presenteert</string>
+    <string name="lounge11_quiz_round">Vraag %1$d van %2$d</string>
+    <string name="lounge11_quiz_too_late">De tijd voor deze vraag is om.</string>
+    <plurals name="lounge11_quiz_answers">
+        <item quantity="one">%1$d antwoorden ontvangen</item>
+        <item quantity="other">%1$d antwoorden ontvangen</item>
+    </plurals>
+    <string name="lounge11_quiz_answer_sent">Antwoord verzonden: wacht op de onthulling.</string>
+    <string name="lounge11_quiz_leaderboard">RANGLIJST</string>
+    <string name="lounge11_quiz_no_scores">Nog geen goede antwoorden.</string>
+    <string name="lounge11_quiz_finished">Quiz afgelopen!</string>
+    <plurals name="lounge11_quiz_winner">
+        <item quantity="one">%1$s wint met %2$d punten</item>
+        <item quantity="other">%1$s wint met %2$d punten</item>
+    </plurals>
+    <string name="lounge11_quiz_new">Nieuwe quiz</string>
+    <plurals name="lounge11_quiz_seconds_left">
+        <item quantity="one">%1$d seconden over</item>
+        <item quantity="other">%1$d seconden over</item>
+    </plurals>
+    <string name="lounge11_radar_empty">Geen AeroChat-telefoons binnen direct bereik. De radar toont wie via Bluetooth met je telefoon verbonden is.</string>
+    <string name="lounge11_passenger">Passagier</string>
+    <string name="lounge11_distance_unknown">Verbonden (afstand onbekend)</string>
+    <string name="lounge11_distance_immediate">Heel dichtbij · dezelfde rij</string>
+    <string name="lounge11_distance_near">Dichtbij · 1-3 rijen</string>
+    <string name="lounge11_distance_few_rows">Een paar rijen verderop</string>
+    <string name="lounge11_distance_far">Ver weg · achterin de cabine</string>
+    <string name="lounge11_radar_title">Radar</string>
+    <plurals name="lounge11_radar_a11y">
+        <item quantity="one">Radar: %1$d telefoons binnen bereik</item>
+        <item quantity="other">Radar: %1$d telefoons binnen bereik</item>
+    </plurals>
+    <string name="lounge11_emergency_status">Status</string>
+    <string name="lounge11_emergency_footer">De melding bereikt alle AeroChat-telefoons binnen bereik, springt tot 7 keer door en blijft in de wachtrij voor wie later aankomt. Het is geen vervanging voor de hulpdiensten: bel als het kan het lokale alarmnummer.</string>
+    <string name="lounge11_emergency_message_header">Bericht (optioneel)</string>
+    <string name="lounge11_emergency_placeholder">Waar je bent, wat je nodig hebt…</string>
+    <string name="lounge11_emergency_attach_location">Mijn gps-locatie bijvoegen</string>
+    <string name="lounge11_emergency_location_denied">Locatie niet toegestaan: schakel die in via Instellingen › Privacy.</string>
+    <string name="lounge11_emergency_locating">Locatie zoeken…</string>
+    <string name="lounge11_emergency_location_footer">De coördinaten gaan alleen via Bluetooth, versleuteld, naar telefoons in de buurt. Geen server.</string>
+    <string name="lounge11_cancel">Annuleer</string>
+    <string name="lounge11_send">Verstuur</string>
+    <string name="lounge11_emergency_failed">Melding niet verzonden: %1$s</string>
+    <string name="lounge11_open_in_maps">Locatie openen in Kaarten</string>
+    <string name="lounge11_dismiss_alert">Melding sluiten</string>
+</resources>

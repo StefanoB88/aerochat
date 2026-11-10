@@ -134,4 +134,26 @@
     <string name="chat_group_last_seen">· widziano %1$s</string>
     <string name="chat_group_message_member">Napisz do %1$s</string>
     <string name="chat_group_show_participants">Pokaż uczestników grupy</string>
+    <string name="chat_call_out_of_range">Towarzysz podróży poza zasięgiem: połączenia wymagają bezpośredniego kontaktu.</string>
+    <string name="chat_gate_call_needs_direct">Połączenia działają tylko z towarzyszem podróży w bezpośrednim zasięgu, bez przekaźników.</string>
+    <string name="chat_gate_call_signal_weak">Sygnał zbyt słaby na połączenie: zbliżcie się o kilka rzędów.</string>
+    <string name="chat_voice_call">Połączenie głosowe</string>
+    <string name="chat_call_hint">Dostępne, gdy towarzysz podróży jest w bezpośrednim zasięgu</string>
+    <string name="chat_signal_weak">Słaby sygnał: zbliżcie się</string>
+    <string name="chat_call_incoming">Połączenie przychodzące…</string>
+    <string name="chat_call_ringing">Dzwoni…</string>
+    <string name="chat_call_ended_hung_up">Połączenie zakończone</string>
+    <string name="chat_call_ended_rejected">Połączenie odrzucone</string>
+    <string name="chat_call_ended_busy">Zajęte</string>
+    <string name="chat_call_ended_no_answer">Brak odpowiedzi</string>
+    <string name="chat_call_ended_missed">Nieodebrane połączenie</string>
+    <string name="chat_call_ended_connection_lost">Utracono połączenie</string>
+    <string name="chat_call_ended_unreachable">Towarzysz podróży nieosiągalny</string>
+    <string name="chat_call_ended_microphone_denied">Zezwól na mikrofon w Ustawieniach</string>
+    <string name="chat_call_ended_failed">Połączenie nieudane</string>
+    <string name="chat_call_reject">Odrzuć</string>
+    <string name="chat_call_answer">Odbierz</string>
+    <string name="chat_call_unmute">Wyłącz wyciszenie</string>
+    <string name="chat_call_mute">Wycisz</string>
+    <string name="chat_call_speaker">Głośnik</string>
 </resources>

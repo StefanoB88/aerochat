@@ -126,4 +126,26 @@
     <string name="chat_group_last_seen">· gesehen %1$s</string>
     <string name="chat_group_message_member">%1$s schreiben</string>
     <string name="chat_group_show_participants">Teilnehmer der Gruppe anzeigen</string>
+    <string name="chat_call_out_of_range">Mitreisender außer Reichweite: Anrufe brauchen eine direkte Verbindung.</string>
+    <string name="chat_gate_call_needs_direct">Anrufe funktionieren nur mit einem Mitreisenden in direkter Reichweite, ohne Zwischenstationen.</string>
+    <string name="chat_gate_call_signal_weak">Signal zu schwach für einen Anruf: Rückt ein paar Reihen näher zusammen.</string>
+    <string name="chat_voice_call">Sprachanruf</string>
+    <string name="chat_call_hint">Verfügbar, wenn der Mitreisende in direkter Reichweite ist</string>
+    <string name="chat_signal_weak">Schwaches Signal: Kommt näher zusammen</string>
+    <string name="chat_call_incoming">Eingehender Anruf…</string>
+    <string name="chat_call_ringing">Es klingelt…</string>
+    <string name="chat_call_ended_hung_up">Anruf beendet</string>
+    <string name="chat_call_ended_rejected">Anruf abgelehnt</string>
+    <string name="chat_call_ended_busy">Besetzt</string>
+    <string name="chat_call_ended_no_answer">Keine Antwort</string>
+    <string name="chat_call_ended_missed">Verpasster Anruf</string>
+    <string name="chat_call_ended_connection_lost">Verbindung verloren</string>
+    <string name="chat_call_ended_unreachable">Mitreisender nicht erreichbar</string>
+    <string name="chat_call_ended_microphone_denied">Mikrofon in den Einstellungen erlauben</string>
+    <string name="chat_call_ended_failed">Anruf fehlgeschlagen</string>
+    <string name="chat_call_reject">Ablehnen</string>
+    <string name="chat_call_answer">Annehmen</string>
+    <string name="chat_call_unmute">Ton an</string>
+    <string name="chat_call_mute">Stumm</string>
+    <string name="chat_call_speaker">Lautsprecher</string>
 </resources>

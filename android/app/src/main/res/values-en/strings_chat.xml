@@ -126,4 +126,26 @@
     <string name="chat_group_last_seen">· seen %1$s</string>
     <string name="chat_group_message_member">Message %1$s</string>
     <string name="chat_group_show_participants">Show group participants</string>
+    <string name="chat_call_out_of_range">Travel buddy out of range: calls need a direct connection.</string>
+    <string name="chat_gate_call_needs_direct">Calls only work with a travel buddy in direct range, with no relays.</string>
+    <string name="chat_gate_call_signal_weak">Signal too weak for a call: move a few rows closer.</string>
+    <string name="chat_voice_call">Voice call</string>
+    <string name="chat_call_hint">Available when your travel buddy is in direct range</string>
+    <string name="chat_signal_weak">Weak signal: move closer</string>
+    <string name="chat_call_incoming">Incoming call…</string>
+    <string name="chat_call_ringing">Ringing…</string>
+    <string name="chat_call_ended_hung_up">Call ended</string>
+    <string name="chat_call_ended_rejected">Call declined</string>
+    <string name="chat_call_ended_busy">Busy</string>
+    <string name="chat_call_ended_no_answer">No answer</string>
+    <string name="chat_call_ended_missed">Missed call</string>
+    <string name="chat_call_ended_connection_lost">Connection lost</string>
+    <string name="chat_call_ended_unreachable">Travel buddy unreachable</string>
+    <string name="chat_call_ended_microphone_denied">Allow microphone access in Settings</string>
+    <string name="chat_call_ended_failed">Call failed</string>
+    <string name="chat_call_reject">Decline</string>
+    <string name="chat_call_answer">Answer</string>
+    <string name="chat_call_unmute">Unmute</string>
+    <string name="chat_call_mute">Mute</string>
+    <string name="chat_call_speaker">Speaker</string>
 </resources>

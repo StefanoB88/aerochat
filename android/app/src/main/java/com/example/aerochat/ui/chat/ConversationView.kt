@@ -9,6 +9,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -122,6 +129,12 @@ import com.example.aerochat.ui.components.rememberMicrophonePermission
 import com.example.aerochat.ui.groups.GroupInfoSheet
 import com.example.aerochat.ui.pairing.QRPairingSheet
 import com.example.aerochat.ui.paywall.PaywallView
+import com.example.aerochat.core.moderation.AppSettings
+import com.example.aerochat.data.records.MessageContentType
+import com.example.aerochat.ui.safety.MessageTranslation
+import com.example.aerochat.ui.safety.MessageTranslator
+import com.example.aerochat.ui.safety.ReportSheet
+import com.example.aerochat.ui.safety.SmartReplySuggester
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -205,6 +218,30 @@ class ConversationViewModel(
      */
     var requestMicrophonePermission: suspend () -> Boolean = { recorder.hasPermission() }
 
+    // MARK: Sicurezza, traduzione, risposte rapide
+
+    /** Mittenti verificati di persona (QR): le loro foto non vengono sfocate. Hex del node_id. */
+    private val _trustedSenders = MutableStateFlow<Set<String>>(emptySet())
+    val trustedSenders: StateFlow<Set<String>> = _trustedSenders.asStateFlow()
+    /** Messaggio da segnalare (foglio "Segnala"). */
+    val reportTarget = MutableStateFlow<MessageRecord?>(null)
+
+    /** Traduzione offline dei messaggi ricevuti; `translations[msgIDHex] == ""` = gia' nella nostra lingua. */
+    private val _translationEnabled = MutableStateFlow(false)
+    val translationEnabled: StateFlow<Boolean> = _translationEnabled.asStateFlow()
+    private val _translations = MutableStateFlow<Map<String, String>>(emptyMap())
+    val translations: StateFlow<Map<String, String>> = _translations.asStateFlow()
+    private var translator: MessageTranslator? = null
+    private var translationJob: Job? = null
+    private var didReportTranslationUnavailable = false
+
+    /** Tre suggerimenti per l'ultimo messaggio ricevuto; spariscono appena rispondiamo. */
+    private val _suggestions = MutableStateFlow<List<String>>(emptyList())
+    val suggestions: StateFlow<List<String>> = _suggestions.asStateFlow()
+    private var suggestionsFor: String? = null
+    private var suggestionsJob: Job? = null
+    private var suggester: SmartReplySuggester? = null
+
     private val tasks = mutableListOf<Job>()
 
     init {
@@ -224,6 +261,8 @@ class ConversationViewModel(
         tasks += scope.launch {
             database.messages.observe(conversationID = id).collect { list ->
                 _messages.value = list
+                scheduleTranslations()
+                refreshSuggestions()
                 // Fuori dal collector: la conferma di lettura scrive sul DB e manda READ_RECEIPT via BLE,
                 // e teneva fermo il flusso dei messaggi (e l'apertura della chat) finche' non finiva.
                 scheduleMarkRead()
@@ -243,6 +282,12 @@ class ConversationViewModel(
                     val others = list.filter { me == null || !it.nodeID.contentEquals(me) }
                     if (others != _groupMembers.value) _groupMembers.value = others
                 }
+            }
+        }
+        tasks += scope.launch {
+            database.peers.observeAll().collect { list ->
+                val trusted = list.filter { it.isTrusted }.mapTo(mutableSetOf()) { it.nodeID.toHex() }
+                if (trusted != _trustedSenders.value) _trustedSenders.value = trusted
             }
         }
         tasks += scope.launch {
@@ -285,6 +330,10 @@ class ConversationViewModel(
     fun dispose() {
         stop()
         scope.cancel()
+        translator?.close()
+        translator = null
+        suggester?.close()
+        suggester = null
     }
 
     private var markReadJob: Job? = null
@@ -464,6 +513,108 @@ class ConversationViewModel(
                 errorMessage.value = context.getString(R.string.chat_voice_not_sent, e.describe())
             }
         }
+    }
+
+    // MARK: Sicurezza
+
+    /** Foto ricevuta da un mittente mai scansionato di persona: sfocata finche' l'utente non la tocca. */
+    fun hidesMedia(message: MessageRecord, trusted: Set<String>, blursStrangerMedia: Boolean): Boolean {
+        if (message.isOutgoing || message.contentType != MessageContentType.image || !blursStrangerMedia) return false
+        return message.senderNodeID.toHex() !in trusted
+    }
+
+    fun block(sender: MessageRecord) {
+        val message = sender
+        scope.launch {
+            environment.blockUser(nodeID = message.senderNodeID, nickname = message.senderNickname)
+            Haptics.warning()
+            infoMessage.value = context.getString(
+                R.string.safety_blocked_info, message.senderNickname ?: context.getString(R.string.safety_user),
+            )
+        }
+    }
+
+    // MARK: Traduzione offline (ML Kit)
+
+    /** Attiva/disattiva la traduzione (il consenso al download delle lingue lo chiede la UI prima). */
+    fun setTranslationEnabled(enabled: Boolean) {
+        _translationEnabled.value = enabled
+        if (enabled) {
+            didReportTranslationUnavailable = false
+            scheduleTranslations()
+        } else {
+            translationJob?.cancel()
+            translationJob = null
+            _translations.value = emptyMap()
+            // Al prossimo avvio si riprovano anche le lingue fallite (nel frattempo puo' esserci rete).
+            translator?.close()
+            translator = null
+        }
+    }
+
+    /** Un solo job alla volta: traduce, una frase per volta, i testi ricevuti non ancora elaborati. */
+    private fun scheduleTranslations() {
+        if (!_translationEnabled.value || translationJob?.isActive == true) return
+        translationJob = scope.launch {
+            val translator = translator ?: MessageTranslator().also { translator = it }
+            while (isActive && _translationEnabled.value) {
+                val done = _translations.value
+                val pending = _messages.value.filter { message ->
+                    !message.isOutgoing && message.contentType == MessageContentType.text &&
+                        !message.text.isNullOrBlank() && message.msgID.toHex() !in done
+                }
+                if (pending.isEmpty()) break
+                // Prima i piu' recenti: sono quelli sullo schermo.
+                for (message in pending.asReversed()) {
+                    if (!isActive || !_translationEnabled.value) return@launch
+                    val result = when (val outcome = translator.translate(message.text.orEmpty())) {
+                        is MessageTranslator.Outcome.Translated -> outcome.text
+                        MessageTranslator.Outcome.NotNeeded -> ""
+                        MessageTranslator.Outcome.Unavailable -> {
+                            if (!didReportTranslationUnavailable) {
+                                didReportTranslationUnavailable = true
+                                infoMessage.value = context.getString(R.string.safety_translate_unavailable)
+                            }
+                            ""
+                        }
+                    }
+                    if (!_translationEnabled.value) return@launch
+                    _translations.update { it + (message.msgID.toHex() to result) }
+                }
+            }
+        }
+    }
+
+    // MARK: Risposte rapide (ML Kit Smart Reply)
+
+    fun refreshSuggestions() {
+        val last = _messages.value.lastOrNull()
+        val eligible = AppSettings.smartRepliesEnabled &&
+            _conversation.value.type != ConversationType.cabinLounge &&
+            last != null && !last.isOutgoing && last.contentType == MessageContentType.text && !last.text.isNullOrBlank()
+        if (!eligible) {
+            if (_suggestions.value.isNotEmpty()) _suggestions.value = emptyList()
+            suggestionsFor = null
+            suggestionsJob?.cancel()
+            return
+        }
+        val lastID = last!!.msgID.toHex()
+        if (suggestionsFor == lastID) return
+        suggestionsFor = lastID
+        _suggestions.value = emptyList()
+        suggestionsJob?.cancel()
+        val history = _messages.value.takeLast(10)
+        suggestionsJob = scope.launch {
+            val suggester = suggester ?: SmartReplySuggester().also { suggester = it }
+            val replies = suggester.suggest(history)
+            if (suggestionsFor == lastID) _suggestions.value = replies
+        }
+    }
+
+    fun useSuggestion(text: String) {
+        draft.value = text
+        _suggestions.value = emptyList()
+        sendText()
     }
 
     // MARK: Chiamate
@@ -680,6 +831,11 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
     val showScoponePicker by viewModel.showScoponePicker.collectAsStateWithLifecycle()
     val openedCardTable by viewModel.openedCardTable.collectAsStateWithLifecycle()
     val openedCardTableState by viewModel.openedCardTableState.collectAsStateWithLifecycle()
+    val reportTarget by viewModel.reportTarget.collectAsStateWithLifecycle()
+    val translationEnabled by viewModel.translationEnabled.collectAsStateWithLifecycle()
+    val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+    /** Spiegazione del download delle lingue (serve rete una volta), prima di attivare la traduzione. */
+    var showTranslationConsent by remember { mutableStateOf(false) }
     // Ricomposizione quando cambia lo stato Pro (abilita il pulsante di chiamata).
     LocalAppEnvironment.current.entitlementState.collectAsStateWithLifecycle()
 
@@ -760,6 +916,24 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
                     }
                 },
                 actions = {
+                    if (MessageTranslation.targetLanguage != null) {
+                        IconButton(onClick = {
+                            Haptics.tap()
+                            when {
+                                translationEnabled -> viewModel.setTranslationEnabled(false)
+                                MessageTranslation.hasDownloadConsent(context) -> viewModel.setTranslationEnabled(true)
+                                else -> showTranslationConsent = true
+                            }
+                        }) {
+                            Icon(
+                                Icons.Filled.Translate,
+                                contentDescription = stringResource(
+                                    if (translationEnabled) R.string.safety_translate_off else R.string.safety_translate_on,
+                                ),
+                                tint = if (translationEnabled) AeroTheme.accentEmerald else AeroTheme.accentCyan,
+                            )
+                        }
+                    }
                     if (conversation.type == ConversationType.direct) {
                         val canCall = viewModel.canCallNow(reachability)
                         val label = stringResource(R.string.chat_voice_call)
@@ -793,6 +967,9 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
                 // Viste separate: i tick da 100 ms di registrazione/riproduzione ricompongono solo
                 // l'indicatore e la bolla in riproduzione, non l'intera lista dei messaggi.
                 MessageListView(viewModel, Modifier.weight(1f))
+                if (suggestions.isNotEmpty()) {
+                    SmartReplyBar(suggestions = suggestions, onPick = viewModel::useSuggestion)
+                }
                 ComposerBar(
                     text = draft,
                     onTextChange = { viewModel.draft.value = it },
@@ -819,6 +996,36 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
 
     if (showPaywall) {
         PaywallView(onDismiss = { viewModel.showPaywall.value = false })
+    }
+    reportTarget?.let { target ->
+        ReportSheet(
+            message = target,
+            onDismiss = { viewModel.reportTarget.value = null },
+            onReported = { _, _ -> viewModel.infoMessage.value = context.getString(R.string.safety_report_thanks) },
+        )
+    }
+    if (showTranslationConsent) {
+        AlertDialog(
+            onDismissRequest = { showTranslationConsent = false },
+            containerColor = AeroTheme.surface,
+            titleContentColor = AeroTheme.textPrimary,
+            textContentColor = AeroTheme.textSecondary,
+            icon = { Icon(Icons.Filled.Translate, contentDescription = null, tint = AeroTheme.accentEmerald) },
+            title = { Text(stringResource(R.string.safety_translate_download_title)) },
+            text = { Text(stringResource(R.string.safety_translate_download_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTranslationConsent = false
+                    MessageTranslation.setDownloadConsent(context, granted = true)
+                    viewModel.setTranslationEnabled(true)
+                }) { Text(stringResource(R.string.safety_translate_download_confirm), color = AeroTheme.accentCyan) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTranslationConsent = false }) {
+                    Text(stringResource(R.string.safety_cancel), color = AeroTheme.accentCyan)
+                }
+            },
+        )
     }
     if (showGroupInvite) {
         QRPairingSheet(onDismiss = { viewModel.showGroupInvite.value = false }, group = conversation)
@@ -931,6 +1138,9 @@ private fun MessageListView(viewModel: ConversationViewModel, modifier: Modifier
     val mediaProgressState = environment.mediaProgress.collectAsStateWithLifecycle()
     val store by environment.mediaStore.collectAsStateWithLifecycle()
     val conversation by viewModel.conversation.collectAsStateWithLifecycle()
+    val trustedSenders by viewModel.trustedSenders.collectAsStateWithLifecycle()
+    val translations by viewModel.translations.collectAsStateWithLifecycle()
+    val settings by AppSettings.state.collectAsStateWithLifecycle()
     val showSender = conversation.type == ConversationType.group || conversation.type == ConversationType.cabinLounge
     val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
@@ -970,6 +1180,8 @@ private fun MessageListView(viewModel: ConversationViewModel, modifier: Modifier
             val id = message.msgID.toHex()
             val isCurrent = playingMessageID == id
             val transferProgress by remember(id) { derivedStateOf { mediaProgressState.value[id] } }
+            val canModerate = !message.isOutgoing &&
+                message.contentType != MessageContentType.game && message.contentType != MessageContentType.system
             MessageBubble(
                 message = message,
                 showSender = showSender,
@@ -981,10 +1193,51 @@ private fun MessageListView(viewModel: ConversationViewModel, modifier: Modifier
                 onGameAction = { viewModel.handleGame(it, message) },
                 onSaveImage = { viewModel.saveImage(message) },
                 onOpenImage = { viewModel.viewedImage.value = message },
+                hidesMediaUntilTap = viewModel.hidesMedia(message, trustedSenders, settings.blursStrangerMedia),
+                translation = translations[id]?.takeIf { it.isNotEmpty() },
+                // Segnala / blocca su ogni messaggio ricevuto (non partite ne' messaggi di sistema).
+                onReport = if (canModerate) ({ viewModel.reportTarget.value = message }) else null,
+                onBlock = if (canModerate) ({ viewModel.block(sender = message) }) else null,
+                blockLabel = stringResource(R.string.safety_block_user, message.senderNickname ?: conversation.title),
             )
         }
         items(pendingPhotos, key = { it.toString() }) {
             PendingPhotoBubble()
+        }
+    }
+}
+
+/** Chip con le risposte rapide suggerite dal modello on-device, sopra la barra di composizione. */
+@Composable
+private fun SmartReplyBar(suggestions: List<String>, onPick: (String) -> Unit) {
+    val description = stringResource(R.string.safety_smart_replies_a11y)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(AeroTheme.background)
+            .horizontalScroll(rememberScrollState())
+            .semantics { contentDescription = description }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = AeroTheme.accentCyan, modifier = Modifier.size(14.dp))
+        suggestions.forEach { suggestion ->
+            Text(
+                suggestion,
+                style = AeroTheme.footnote,
+                fontWeight = FontWeight.Medium,
+                color = AeroTheme.textPrimary,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(AeroTheme.surface)
+                    .border(1.dp, AeroTheme.accentCyan.copy(alpha = 0.35f), CircleShape)
+                    .clickable(role = Role.Button) {
+                        Haptics.tap()
+                        onPick(suggestion)
+                    }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+            )
         }
     }
 }

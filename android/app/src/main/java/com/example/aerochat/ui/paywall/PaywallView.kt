@@ -1,6 +1,7 @@
 package com.example.aerochat.ui.paywall
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,6 +33,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,6 +45,7 @@ import com.example.aerochat.R
 import com.example.aerochat.app.LocalAppEnvironment
 import com.example.aerochat.core.entitlements.EntitlementManager
 import com.example.aerochat.core.entitlements.StoreProduct
+import com.example.aerochat.core.moderation.AppLinks
 import com.example.aerochat.core.protocol.MeshProtocol
 import com.example.aerochat.data.records.ProTier
 import com.example.aerochat.ui.AeroTheme
@@ -49,6 +55,8 @@ import com.example.aerochat.ui.components.Haptics
 import com.example.aerochat.ui.components.SheetBarButton
 import com.example.aerochat.ui.components.findActivity
 import com.example.aerochat.ui.components.hapticOnTap
+import com.example.aerochat.ui.settings.LegalDocument
+import com.example.aerochat.ui.settings.LegalSheet
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -58,7 +66,8 @@ import java.util.Date
 private data class Offer(val id: String, val title: String, val subtitle: String, val fallbackPrice: String)
 
 /**
- * Flight Group Pass: Pass Viaggio 72 ore (0,49 €) e Frequent Flyer Lifetime (2,49 €). Zero abbonamenti.
+ * Flight Group Pass: Pass Volo Singolo 24 ore (0,29 €), Pass Viaggio 72 ore (0,49 €) e Frequent Flyer
+ * Lifetime (2,49 €). Zero abbonamenti.
  * Prezzi da Google Play Billing; l'acquisto usa l'Activity corrente. Si presenta da solo come foglio.
  */
 @Composable
@@ -66,14 +75,22 @@ fun PaywallView(onDismiss: () -> Unit) {
     val environment = LocalAppEnvironment.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     val entitlements by environment.entitlements.collectAsStateWithLifecycle()
     val entitlementState by environment.entitlementState.collectAsStateWithLifecycle()
     val emptyProducts = remember { MutableStateFlow<List<StoreProduct>>(emptyList()) }
     val products by (entitlements?.products ?: emptyProducts).collectAsStateWithLifecycle()
     var purchasing by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var legalDocument by remember { mutableStateOf<LegalDocument?>(null) }
 
     val offers = listOf(
+        Offer(
+            MeshProtocol.ProductID.pass24h,
+            stringResource(R.string.flight_paywall_pass24_title),
+            stringResource(R.string.flight_paywall_pass24_subtitle),
+            "0,29 €",
+        ),
         Offer(
             MeshProtocol.ProductID.pass72h,
             stringResource(R.string.shell_paywall_pass72_title),
@@ -145,7 +162,7 @@ fun PaywallView(onDismiss: () -> Unit) {
                     color = AeroTheme.textPrimary,
                 )
                 val until = entitlementState.validUntilMs
-                if (environment.isPro && until != null && entitlementState.tier == ProTier.pass72h) {
+                if (environment.isPro && until != null && entitlementState.tier.isTimeLimited) {
                     val formatted = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(until))
                     Text(
                         stringResource(R.string.shell_paywall_active_until, formatted),
@@ -185,8 +202,42 @@ fun PaywallView(onDismiss: () -> Unit) {
             }
 
             Text(stringResource(R.string.shell_paywall_free_note), style = AeroTheme.caption, color = AeroTheme.textSecondary)
+
+            // Link legali, come richiesto dagli store per gli acquisti in-app.
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+            ) {
+                LegalLink(stringResource(R.string.flight_paywall_terms)) { legalDocument = LegalDocument.terms }
+                LegalLink(stringResource(R.string.flight_paywall_privacy)) { legalDocument = LegalDocument.privacy }
+                LegalLink(stringResource(R.string.flight_paywall_eula)) { uriHandler.openUri(AppLinks.appleEULA) }
+            }
+            Text(
+                stringResource(R.string.flight_paywall_one_time),
+                style = TextStyle(fontSize = 11.sp),
+                color = AeroTheme.textSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
+    legalDocument?.let { LegalSheet(document = it, onDismiss = { legalDocument = null }) }
+}
+
+@Composable
+private fun LegalLink(title: String, onClick: () -> Unit) {
+    Text(
+        title,
+        style = AeroTheme.captionSemibold,
+        color = AeroTheme.accentCyan,
+        modifier = Modifier
+            .clickable {
+                Haptics.tap()
+                // Nessun browser installato: il link resta semplicemente inattivo.
+                runCatching { onClick() }
+            }
+            .padding(vertical = 8.dp),
+    )
 }
 
 @Composable
