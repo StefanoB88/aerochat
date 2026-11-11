@@ -135,6 +135,12 @@ struct CardTableView: View {
         .onChange(of: state.myTurn) { _, myTurn in
             if !myTurn { selectedCard = nil }
         }
+        #if DEBUG
+        // Screenshot dell'App Store: carta gia' scelta, presa evidenziata.
+        .onAppear {
+            if StoreScreenshots.isEnabled { selectedCard = StoreScreenshots.preselectedCard }
+        }
+        #endif
         .task(id: scopaFlash) {
             guard scopaFlash else { return }
             try? await Task.sleep(for: .seconds(1.4))
@@ -303,7 +309,9 @@ struct CardTableView: View {
                             .foregroundStyle(AeroTheme.textSecondary)
                     }
                 } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 50, maximum: 60), spacing: 6)], spacing: 6) {
+                    // Colonne fisse (al massimo 6 per riga): le carte restano centrate sul tavolo.
+                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(54), spacing: 6), count: min(max(scopa.table.count, 1), 6)),
+                              spacing: 6) {
                         ForEach(scopa.table, id: \.self) { card in
                             NeapolitanCardView(card: card, width: 48, highlighted: highlightedTableCards.contains(card),
                                                dimmed: selectedCard != nil && !highlightedTableCards.isEmpty

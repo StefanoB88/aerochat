@@ -22,6 +22,10 @@ struct MessageBubble: View {
     var onDeleteForEveryone: (() -> Void)? = nil
 
     @State private var isRevealed = false
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    /// Spazio lasciato dal lato opposto: su iPad le bolle non occupano tutta la larghezza.
+    private var sideInset: CGFloat { horizontalSizeClass == .regular ? 220 : 56 }
 
     private var isOutgoing: Bool { message.isOutgoing }
 
@@ -30,7 +34,7 @@ struct MessageBubble: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 0) {
-            if isOutgoing { Spacer(minLength: 56) }
+            if isOutgoing { Spacer(minLength: sideInset) }
             VStack(alignment: .leading, spacing: 6) {
                 if showSender, !isOutgoing, let sender = message.senderNickname {
                     Text(sender)
@@ -55,7 +59,7 @@ struct MessageBubble: View {
                         .offset(x: -4, y: -8)
                 }
             }
-            if !isOutgoing { Spacer(minLength: 56) }
+            if !isOutgoing { Spacer(minLength: sideInset) }
         }
         .frame(maxWidth: .infinity, alignment: isOutgoing ? .trailing : .leading)
     }

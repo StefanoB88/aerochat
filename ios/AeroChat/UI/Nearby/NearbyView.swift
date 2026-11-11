@@ -232,13 +232,20 @@ struct NearbySheet: View {
     }
 
     private func badge(_ title: LocalizedStringKey, systemImage: String, color: Color) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption2.weight(.semibold))
-            .labelStyle(.titleAndIcon)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.15), in: Capsule())
-            .foregroundStyle(color)
+        // Icona e testo vicini e su una riga sola: con tre etichette il testo si rimpicciolisce invece
+        // di andare a capo (la Label di sistema lasciava molto spazio tra icona e testo).
+        HStack(spacing: 3) {
+            Image(systemName: systemImage)
+            Text(title)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .font(.caption2.weight(.semibold))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(color.opacity(0.15), in: Capsule())
+        .foregroundStyle(color)
+        .accessibilityElement(children: .combine)
     }
 
     private func signal(_ rssi: Int?) -> some View {

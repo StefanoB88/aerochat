@@ -76,6 +76,9 @@ struct MainTabView: View {
         .sheet(item: $environment.requestedTripCard) { trip in
             FlightCardSheet(trip: trip)
         }
+        #if DEBUG
+        .modifier(StoreScreenshotPresenter(selectedTab: $selectedTab))
+        #endif
         // Tocco su una notifica locale.
         .onChange(of: DeepLinkCenter.shared.pending) { _, link in
             handle(link)

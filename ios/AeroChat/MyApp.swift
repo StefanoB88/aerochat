@@ -9,7 +9,13 @@ import UserNotifications
 /// resterebbe spenta fino all'apertura manuale dell'app.
 final class AppDelegate: NSObject, UIApplicationDelegate {
 
-    let environment = AppEnvironment()
+    let environment: AppEnvironment = {
+        #if DEBUG
+        // Screenshot dell'App Store: DB temporaneo con dati finti, nessuna radio (solo DEBUG).
+        if StoreScreenshots.isEnabled { return StoreScreenshots.makeEnvironment() }
+        #endif
+        return AppEnvironment()
+    }()
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {

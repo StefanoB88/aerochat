@@ -144,9 +144,16 @@ final class AppEnvironment {
             let keys = try await identityStore.loadOrCreateKeys()
             database = db
             identityKeys = keys
+            #if DEBUG
+            if StoreScreenshots.isEnabled { try await StoreScreenshots.seed(database: db, keys: keys) }
+            #endif
             identityRecord = try await db.identities.fetch()
             phase = .ready
             if identityRecord != nil {
+                #if DEBUG
+                // Prima della mesh: alcuni servizi (StoreKit, Live Activity) possono tardare ad avviarsi.
+                if StoreScreenshots.isEnabled { StoreScreenshots.startLiveState(self) }
+                #endif
                 await startMesh()
             }
         } catch {
