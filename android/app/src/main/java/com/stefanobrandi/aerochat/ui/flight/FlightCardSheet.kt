@@ -105,9 +105,10 @@ private const val previewHeightDp = 462
 /**
  * Cartolina di volo: i numeri del viaggio in formato Storie (1080x1920) da condividere.
  * La cartolina mostrata in anteprima e' la stessa che viene catturata (GraphicsLayer) e condivisa come PNG.
+ * [tripStats]: numeri gia' pronti della cartolina di fine volo (al posto di quelli derivati da [trip]).
  */
 @Composable
-fun FlightCardSheet(onDismiss: () -> Unit, trip: FlightTrip? = null) {
+fun FlightCardSheet(onDismiss: () -> Unit, trip: FlightTrip? = null, tripStats: FlightStats? = null) {
     val environment = LocalAppEnvironment.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -122,7 +123,7 @@ fun FlightCardSheet(onDismiss: () -> Unit, trip: FlightTrip? = null) {
     LaunchedEffect(database, period, trip) {
         // Cartolina di fine volo: i contatori del viaggio, gia' pronti.
         if (trip != null) {
-            stats = trip.stats()
+            stats = tripStats ?: trip.stats()
             return@LaunchedEffect
         }
         val database = database ?: return@LaunchedEffect

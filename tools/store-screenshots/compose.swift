@@ -8,6 +8,10 @@
 // Compilazione: swiftc -O -module-cache-path /tmp/mc compose.swift -o /tmp/compose
 // Uso:          /tmp/compose --input shot.png --output out.png --width 1320 --height 2868 \
 //                            --title "Titolo" [--subtitle "Sottotitolo"] [--corner 0.12]
+// Feature graphic di Google Play (icona a sinistra, nome e slogan, telefono inclinato a destra):
+//               /tmp/compose --feature --icon icona.png --input shot.png --output feature.png \
+//                            --width 1024 --height 500 --title "AeroChat" --subtitle "Slogan"
+// Ricodifica senza alfa ne' metadati (icona dello store): /tmp/compose --reencode --input in.png --output out.png
 
 import CoreGraphics
 import CoreText
@@ -24,6 +28,11 @@ struct Options {
     var subtitle: String?
     /// Raggio degli angoli in frazione della larghezza dello screenshot (nil = automatico).
     var corner: CGFloat?
+    /// Feature graphic (Google Play) invece dello screenshot promozionale.
+    var feature = false
+    var icon: String?
+    /// Solo ricodifica dell'immagine di ingresso (stesse dimensioni, senza alfa e metadati).
+    var reencode = false
 }
 
 func fail(_ message: String) -> Never {
@@ -48,11 +57,18 @@ func parseOptions() -> Options {
         case "--title": options.title = value()
         case "--subtitle": options.subtitle = value()
         case "--corner": options.corner = Double(value()).map { CGFloat($0) }
+        case "--feature": options.feature = true
+        case "--icon": options.icon = value()
+        case "--reencode": options.reencode = true
         case "-h", "--help":
             print("uso: compose --input IN --output OUT --width W --height H --title T [--subtitle S] [--corner 0.12]")
             exit(0)
         default: fail("opzione sconosciuta \(key)")
         }
+    }
+    if options.reencode {
+        guard !options.input.isEmpty, !options.output.isEmpty else { fail("servono --input e --output") }
+        return options
     }
     guard !options.input.isEmpty, !options.output.isEmpty, options.width > 0, options.height > 0, !options.title.isEmpty else {
         fail("servono --input, --output, --width, --height e --title")
@@ -79,8 +95,9 @@ struct TextBlock {
     let lines: Int
 }
 
-func makeBlock(_ text: String, font: CTFont, color textColor: CGColor, width: CGFloat, lineSpacing: CGFloat) -> TextBlock {
-    var alignment = CTTextAlignment.center
+func makeBlock(_ text: String, font: CTFont, color textColor: CGColor, width: CGFloat, lineSpacing: CGFloat,
+               alignment textAlignment: CTTextAlignment = .center) -> TextBlock {
+    var alignment = textAlignment
     var spacing = lineSpacing
     var breakMode = CTLineBreakMode.byWordWrapping
     // I puntatori devono restare validi fino alla creazione dello stile.
@@ -141,9 +158,141 @@ func roundedRect(_ rect: CGRect, radius: CGFloat) -> CGPath {
     CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
 }
 
+/// PNG senza alfa e senza metadati (vedi `strippedPNG`).
+func writePNG(_ image: CGImage, to path: String) {
+    let encoded = NSMutableData()
+    guard let destination = CGImageDestinationCreateWithData(encoded, UTType.png.identifier as CFString, 1, nil) else {
+        fail("impossibile codificare il PNG")
+    }
+    CGImageDestinationAddImage(destination, image, nil)
+    guard CGImageDestinationFinalize(destination) else { fail("codifica PNG non riuscita") }
+    do {
+        try strippedPNG(encoded as Data).write(to: URL(fileURLWithPath: path))
+    } catch {
+        fail("scrittura di \(path) non riuscita: \(error)")
+    }
+}
+
+func makeOpaqueContext(width: Int, height: Int) -> (CGContext, CGColorSpace) {
+    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+          let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: colorSpace, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
+        fail("impossibile creare il contesto grafico")
+    }
+    context.interpolationQuality = .high
+    context.setShouldAntialias(true)
+    return (context, colorSpace)
+}
+
+/// Il testo piu' grande possibile (fino a `maxSize`) che sta in `maxLines` righe, allineato a sinistra.
+func fitLeft(_ text: String, width: CGFloat, maxSize: CGFloat, maxLines: Int, emphasized: Bool, alpha: CGFloat) -> TextBlock {
+    var size = maxSize
+    while true {
+        let font = CTFontCreateUIFontForLanguage(emphasized ? .emphasizedSystem : .system, size, nil)
+            ?? CTFontCreateWithName((emphasized ? "Helvetica-Bold" : "Helvetica") as CFString, size, nil)
+        let block = makeBlock(text, font: font, color: color(0xFFFFFF, alpha: alpha), width: width,
+                              lineSpacing: size * 0.08, alignment: .left)
+        if block.lines <= maxLines || size <= 12 { return block }
+        size *= 0.95
+    }
+}
+
+/// Feature graphic: sfumatura, icona a sinistra, nome e slogan al centro, telefono inclinato a destra.
+func composeFeatureGraphic(_ options: Options) {
+    let width = CGFloat(options.width)
+    let height = CGFloat(options.height)
+    let (context, colorSpace) = makeOpaqueContext(width: options.width, height: options.height)
+    let gradient = CGGradient(colorsSpace: colorSpace, colors: [color(0x3D6BFF), color(0x0A1A4F)] as CFArray, locations: [0, 1])!
+    context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: height), end: CGPoint(x: width, y: 0),
+                               options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+
+    // Telefono inclinato a destra (esce in basso dalla tela).
+    let screenshot = loadImage(options.input)
+    let phoneHeight = height * 1.15
+    let phoneWidth = phoneHeight * CGFloat(screenshot.width) / CGFloat(screenshot.height)
+    // Coordinate CoreGraphics (origine in basso): il centro sta sotto la meta', il bordo alto resta visibile.
+    let center = CGPoint(x: width * 0.83, y: height * 0.36)
+    context.saveGState()
+    context.translateBy(x: center.x, y: center.y)
+    context.rotate(by: -10 * .pi / 180)
+    let shotRect = CGRect(x: -phoneWidth / 2, y: -phoneHeight / 2, width: phoneWidth, height: phoneHeight)
+    let radius = phoneWidth * 0.125
+    let bezel = phoneWidth * 0.022
+    let bezelRect = shotRect.insetBy(dx: -bezel, dy: -bezel)
+    context.saveGState()
+    context.setShadow(offset: CGSize(width: 0, height: -height * 0.012), blur: width * 0.03, color: color(0x000000, alpha: 0.55))
+    context.addPath(roundedRect(bezelRect, radius: radius + bezel))
+    context.setFillColor(color(0x05070D))
+    context.fillPath()
+    context.restoreGState()
+    context.addPath(roundedRect(bezelRect.insetBy(dx: 1, dy: 1), radius: radius + bezel - 1))
+    context.setStrokeColor(color(0xFFFFFF, alpha: 0.14))
+    context.setLineWidth(2)
+    context.strokePath()
+    context.addPath(roundedRect(shotRect, radius: radius))
+    context.clip()
+    context.draw(screenshot, in: shotRect)
+    context.restoreGState()
+
+    // Icona con angoli arrotondati e ombra.
+    let margin = height * 0.12
+    let iconSize = height * 0.40
+    let iconRect = CGRect(x: margin, y: (height - iconSize) / 2, width: iconSize, height: iconSize)
+    if let iconPath = options.icon {
+        let icon = loadImage(iconPath)
+        context.saveGState()
+        context.setShadow(offset: CGSize(width: 0, height: -height * 0.01), blur: height * 0.05, color: color(0x000000, alpha: 0.45))
+        context.addPath(roundedRect(iconRect, radius: iconSize * 0.225))
+        context.setFillColor(color(0x0A1A4F))
+        context.fillPath()
+        context.restoreGState()
+        context.saveGState()
+        context.addPath(roundedRect(iconRect, radius: iconSize * 0.225))
+        context.clip()
+        context.draw(icon, in: iconRect)
+        context.restoreGState()
+    }
+
+    // Nome e slogan, centrati in verticale accanto all'icona.
+    let textX = iconRect.maxX + height * 0.08
+    let textWidth = width * 0.665 - textX
+    let title = fitLeft(options.title, width: textWidth, maxSize: height * 0.19, maxLines: 1, emphasized: true, alpha: 1)
+    let subtitleText = options.subtitle ?? ""
+    let subtitle = fitLeft(subtitleText, width: textWidth, maxSize: height * 0.068, maxLines: 3, emphasized: false, alpha: 0.85)
+    let gap = height * 0.03
+    let total = title.size.height + (subtitleText.isEmpty ? 0 : gap + subtitle.size.height)
+    let top = (height - total) / 2
+    draw(title, in: context, topY: top, x: textX, canvasHeight: height)
+    if !subtitleText.isEmpty {
+        draw(subtitle, in: context, topY: top + title.size.height + gap, x: textX, canvasHeight: height)
+    }
+    guard let output = context.makeImage() else { fail("impossibile creare l'immagine") }
+    writePNG(output, to: options.output)
+}
+
+/// Stessa immagine, ridisegnata su fondo opaco (l'icona di Play non deve avere trasparenza).
+func reencode(_ options: Options) {
+    let image = loadImage(options.input)
+    let (context, _) = makeOpaqueContext(width: image.width, height: image.height)
+    let rect = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+    context.setFillColor(color(0x0A1A4F))
+    context.fill(rect)
+    context.draw(image, in: rect)
+    guard let output = context.makeImage() else { fail("impossibile creare l'immagine") }
+    writePNG(output, to: options.output)
+}
+
 // MARK: - Composizione
 
 let options = parseOptions()
+if options.reencode {
+    reencode(options)
+    exit(0)
+}
+if options.feature {
+    composeFeatureGraphic(options)
+    exit(0)
+}
 let screenshot = loadImage(options.input)
 let width = CGFloat(options.width)
 let height = CGFloat(options.height)

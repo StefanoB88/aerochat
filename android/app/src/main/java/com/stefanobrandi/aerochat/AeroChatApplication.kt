@@ -2,6 +2,7 @@ package com.stefanobrandi.aerochat
 
 import android.app.Application
 import com.stefanobrandi.aerochat.app.AppEnvironment
+import com.stefanobrandi.aerochat.screenshots.StoreScreenshots
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,5 +17,8 @@ class AeroChatApplication : Application() {
     /** Scope dell'intero processo, sul main thread (come `@MainActor`). */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    val environment: AppEnvironment by lazy { AppEnvironment(this, applicationScope) }
+    /** Con la modalita' screenshot (solo build debug) l'ambiente usa dati finti e radio simulata. */
+    val environment: AppEnvironment by lazy {
+        StoreScreenshots.makeEnvironment(this, applicationScope) ?: AppEnvironment(this, applicationScope)
+    }
 }

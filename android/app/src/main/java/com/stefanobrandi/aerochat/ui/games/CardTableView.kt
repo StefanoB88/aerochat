@@ -139,6 +139,7 @@ fun CardTableDialog(
     onDismiss: () -> Unit,
     statusMessage: String? = null,
     onStatusExpire: () -> Unit = {},
+    initialSelectedCard: Int? = null,
 ) {
     // Inset del tavolo (Pixel 8a, navigazione a gesti: mano e "Gioca" finivano sulla maniglia di sistema,
     // e a volte succedeva ancora con il minimo di 24 dp). Si prende il massimo, lato per lato, di:
@@ -189,7 +190,7 @@ fun CardTableDialog(
             ) {
                 CardTableView(
                     state, onAction, onDismiss, statusMessage = statusMessage, onStatusExpire = onStatusExpire,
-                    contentPadding = contentPadding,
+                    contentPadding = contentPadding, initialSelectedCard = initialSelectedCard,
                 )
             }
         }
@@ -316,8 +317,10 @@ fun CardTableView(
     statusMessage: String? = null,
     onStatusExpire: () -> Unit = {},
     contentPadding: PaddingValues? = null,
+    /** Carta della mano gia' selezionata all'apertura (screenshot degli store). */
+    initialSelectedCard: Int? = null,
 ) {
-    var selectedCard by remember { mutableStateOf<Int?>(null) }
+    var selectedCard by remember { mutableStateOf(initialSelectedCard) }
     var selectedOption by remember { mutableIntStateOf(0) }
     var confirmResign by remember { mutableStateOf(false) }
     var showScoreSheet by remember { mutableStateOf(false) }

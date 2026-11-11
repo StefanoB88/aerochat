@@ -162,7 +162,10 @@ fun MessageBubble(
         verticalAlignment = Alignment.Bottom,
     ) {
         if (isOutgoing) Spacer(Modifier.width(56.dp))
-        Box(Modifier.weight(1f, fill = false)) {
+        val hops = message.hopCountReceived
+        val showsHopBadge = hops != null && hops > 1 && !isOutgoing
+        // Il badge "via N persone" sporge sopra la bolla: spazio riservato, cosi' non copre la prima riga.
+        Box(Modifier.weight(1f, fill = false).padding(top = if (showsHopBadge) HopBadgeOverhang else 0.dp)) {
             Column(
                 modifier = Modifier
                     .background(
@@ -205,17 +208,18 @@ fun MessageBubble(
                     onDismiss = { confirmDelete = false },
                 )
             }
-            val hops = message.hopCountReceived
-            if (hops != null && hops > 1 && !isOutgoing) {
+            if (showsHopBadge && hops != null) {
                 Text(
                     // "via 2 persone": i telefoni che hanno fatto da ponte (hops - 1).
                     pluralStringResource(R.plurals.nearby_via_people_badge, hops - 1, hops - 1),
                     fontSize = 9.sp,
+                    // Senza, il badge eredita l'interlinea di 24 sp del tema: alto il triplo e sopra al testo.
+                    lineHeight = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.Black,
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .offset(x = (-4).dp, y = (-8).dp)
+                        .offset(x = (-4).dp, y = -HopBadgeOverhang)
                         .background(Color(0xFFFFCC00).copy(alpha = 0.9f), CircleShape)
                         .padding(horizontal = 5.dp, vertical = 2.dp),
                 )
@@ -224,6 +228,9 @@ fun MessageBubble(
         if (!isOutgoing) Spacer(Modifier.width(56.dp))
     }
 }
+
+/** Quanto il badge "via N persone" sporge sopra il bordo della bolla. */
+private val HopBadgeOverhang = 10.dp
 
 /**
  * Voci del menu della bolla: sicurezza (segnala / blocca il mittente) sui messaggi ricevuti, modifica e

@@ -75,6 +75,7 @@ import com.stefanobrandi.aerochat.ui.lounge.EmergencyBanner
 import com.stefanobrandi.aerochat.ui.flight.FlightCardSheet
 import com.stefanobrandi.aerochat.ui.nearby.NearbyBannerHost
 import com.stefanobrandi.aerochat.ui.nearby.NearbyPeopleScreen
+import com.stefanobrandi.aerochat.screenshots.StoreScreenshots
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -197,8 +198,8 @@ fun MainTabView() {
         }
     }
 
-    // Primo avvio: permessi BLE (+ notifiche su Android 13+).
-    MeshPermissionsGate()
+    // Primo avvio: permessi BLE (+ notifiche su Android 13+). Non negli screenshot (radio simulata).
+    if (!StoreScreenshots.isActive) MeshPermissionsGate()
 
     CompositionLocalProvider(LocalNavController provides navController) {
         Box(Modifier.fillMaxSize().background(AeroTheme.background)) {
@@ -260,6 +261,8 @@ fun MainTabView() {
     pendingTripCard?.let { trip ->
         FlightCardSheet(onDismiss = { environment.dismissTripCard() }, trip = trip)
     }
+    // Screenshot degli store (solo debug): tavolo da gioco o cartolina del volo.
+    StoreScreenshots.Overlay()
 }
 
 @Composable

@@ -13,6 +13,7 @@ import com.stefanobrandi.aerochat.app.AppEnvironment
 import com.stefanobrandi.aerochat.app.LocalAppEnvironment
 import com.stefanobrandi.aerochat.core.mesh.LocalNotificationCenter
 import com.stefanobrandi.aerochat.core.protocol.MeshProtocol
+import com.stefanobrandi.aerochat.screenshots.StoreScreenshots
 import com.stefanobrandi.aerochat.ui.AeroChatTheme
 import com.stefanobrandi.aerochat.ui.AppNavigator
 import com.stefanobrandi.aerochat.ui.components.Haptics
@@ -34,6 +35,8 @@ class MainActivity : ComponentActivity() {
     private val environment: AppEnvironment get() = (application as AeroChatApplication).environment
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Screenshot degli store (solo debug, stub vuoto in release): prima del primo accesso all'ambiente.
+        StoreScreenshots.configure(intent)
         enableEdgeToEdge(
             // Icone delle barre di sistema chiare/scure in base al tema di sistema.
             statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
