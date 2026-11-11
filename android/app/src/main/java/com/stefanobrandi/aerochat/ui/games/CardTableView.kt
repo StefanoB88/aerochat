@@ -60,6 +60,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -227,28 +228,41 @@ fun CardTableView(
 
     val canPlay = canPlayState && !playInFlight
 
-    fun playSelected() {
-        val card = selectedCard ?: return
-        if (!canPlay) return
-        playInFlight = true
-        val captured = if (captureOptions.isEmpty()) emptyList() else captureOptions[minOf(selectedOption, captureOptions.size - 1)]
-        selectedCard = null
-        selectedOption = 0
-        onAction(GameBubbleAction.PlayCard(card, captured))
-    }
-
-    fun tap(card: Int) {
-        if (playInFlight) return
-        if (!canPlay) {
-            Haptics.warning()
-            return
+    // Gestori dei tocchi letti sempre dallo stato corrente. Prima erano funzioni locali passate come
+    // `::tap` / `::playSelected`: con lo strong skipping di Compose il riferimento restava quello della
+    // prima composizione, con `canPlay` di allora. Aprendo il tavolo durante il turno dell'avversario,
+    // al proprio turno i tocchi venivano ignorati finche' non si chiudeva e riapriva il tavolo.
+    val currentState by rememberUpdatedState(state)
+    val currentOnAction by rememberUpdatedState(onAction)
+    val playSelected: () -> Unit = remember {
+        {
+            val current = currentState
+            val card = selectedCard
+            val playable = current.status == GameStatus.active && current.myTurn && current.mySeat != null && !playInFlight
+            if (card != null && playable) {
+                val options = current.scopa?.captureOptions(card).orEmpty()
+                val captured = if (options.isEmpty()) emptyList() else options[minOf(selectedOption, options.size - 1)]
+                playInFlight = true
+                selectedCard = null
+                selectedOption = 0
+                currentOnAction(GameBubbleAction.PlayCard(card, captured))
+            }
         }
-        if (selectedCard == card) {
-            playSelected()
-        } else {
-            Haptics.tap()
-            selectedCard = card
-            selectedOption = 0
+    }
+    val tap: (Int) -> Unit = remember {
+        { card ->
+            val current = currentState
+            val playable = current.status == GameStatus.active && current.myTurn && current.mySeat != null
+            when {
+                playInFlight -> Unit
+                !playable -> Haptics.warning()
+                selectedCard == card -> playSelected()
+                else -> {
+                    Haptics.tap()
+                    selectedCard = card
+                    selectedOption = 0
+                }
+            }
         }
     }
 
@@ -286,7 +300,7 @@ fun CardTableView(
             if (captureOptions.size > 1) {
                 CaptureChooser(captureOptions, selectedOption) { selectedOption = it }
             }
-            BottomArea(state, selectedCard, canPlay, onTap = ::tap, onPlay = ::playSelected)
+            BottomArea(state, selectedCard, canPlay, onTap = tap, onPlay = playSelected)
         }
         AnimatedVisibility(
             visible = scopaFlash,
