@@ -11,9 +11,7 @@
     <string name="shell_banner_unauthorized_message">Sta Bluetooth toe voor AeroChat in Instellingen › Privacy om met je reisgenoten te praten.</string>
     <string name="shell_banner_unsupported_message">Dit apparaat ondersteunt geen Bluetooth LE, dat nodig is voor het mesh-netwerk.</string>
     <string name="shell_banner_off_message">Je kunt Bluetooth veilig weer inschakelen (net als voor draadloze koptelefoons) terwijl het mobiele netwerk uit blijft.</string>
-    <string name="shell_radio_direct">Directe verbinding</string>
     <string name="shell_radio_out_of_range">Buiten bereik</string>
-    <string name="shell_radio_out_of_range_queued">Buiten bereik — berichten in wachtrij</string>
     <string name="shell_radio_status_a11y">Radiostatus: %1$s</string>
     <string name="shell_onboarding_tagline">Berichten van stoel naar stoel, zonder wifi en zonder account. Alleen een nickname.</string>
     <string name="shell_onboarding_question">HOE NOEMEN ZE JE AAN BOORD?</string>
@@ -65,11 +63,6 @@
     <string name="shell_paywall_buy">Koop</string>
     <string name="shell_paywall_thanks">Bedankt! Je pass is actief en wordt doorgegeven aan je groepen.</string>
     <string name="shell_paywall_failed">Aankoop niet voltooid: %1$s</string>
-    <plurals name="shell_radio_via_bridge">
-        <item quantity="zero">Via relais (%1$d hops)</item>
-        <item quantity="one">Via relais (%1$d hop)</item>
-        <item quantity="other">Via relais (%1$d hops)</item>
-    </plurals>
     <string name="shell_permission_bluetooth_rationale">AeroChat gebruikt Bluetooth om versleutelde berichten uit te wisselen met reisgenoten in de buurt, ook zonder wifi of mobiel netwerk.</string>
     <string name="shell_permission_camera_rationale">AeroChat gebruikt de camera om de QR-code van je reisgenoten te scannen en om foto’s te maken die je wilt versturen.</string>
     <string name="shell_permission_microphone_rationale">AeroChat gebruikt de microfoon om spraakberichten op te nemen die je naar je reisgenoten stuurt.</string>

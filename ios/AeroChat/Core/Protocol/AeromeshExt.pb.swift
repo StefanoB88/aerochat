@@ -565,6 +565,76 @@ nonisolated struct Aeromesh_V1_TypingIndicator: Sendable {
   init() {}
 }
 
+nonisolated struct Aeromesh_V1_Presence: Sendable {
+  var avatarColorHex: String = String()
+
+  var flightCode: String = String()
+
+  var openToGames: Bool = false
+
+  var sentAtMs: Int64 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated enum Aeromesh_V1_ContactAction: SwiftProtobuf.Enum, Swift.CaseIterable {
+  typealias RawValue = Int
+  case unspecified // = 0
+  case request // = 1
+  case accept // = 2
+  case decline // = 3
+  case UNRECOGNIZED(Int)
+
+  init() {
+    self = .unspecified
+  }
+
+  init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .request
+    case 2: self = .accept
+    case 3: self = .decline
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .request: return 1
+    case .accept: return 2
+    case .decline: return 3
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  static let allCases: [Aeromesh_V1_ContactAction] = [
+    .unspecified,
+    .request,
+    .accept,
+    .decline,
+  ]
+
+}
+
+nonisolated struct Aeromesh_V1_ContactRequest: Sendable {
+  var action: Aeromesh_V1_ContactAction = .unspecified
+
+  var requestID: Data = Data()
+
+  var greeting: String = String()
+
+  var gameKind: Int32 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "aeromesh.v1"
@@ -1217,6 +1287,109 @@ nonisolated extension Aeromesh_V1_TypingIndicator: SwiftProtobuf.Message, SwiftP
 
   static func ==(lhs: Aeromesh_V1_TypingIndicator, rhs: Aeromesh_V1_TypingIndicator) -> Bool {
     if lhs.isTyping != rhs.isTyping {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_Presence: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".Presence"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "avatar_color_hex"),
+    2: .standard(proto: "flight_code"),
+    3: .standard(proto: "open_to_games"),
+    4: .standard(proto: "sent_at_ms"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.avatarColorHex) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.flightCode) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.openToGames) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.sentAtMs) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.avatarColorHex.isEmpty {
+      try visitor.visitSingularStringField(value: self.avatarColorHex, fieldNumber: 1)
+    }
+    if !self.flightCode.isEmpty {
+      try visitor.visitSingularStringField(value: self.flightCode, fieldNumber: 2)
+    }
+    if self.openToGames != false {
+      try visitor.visitSingularBoolField(value: self.openToGames, fieldNumber: 3)
+    }
+    if self.sentAtMs != 0 {
+      try visitor.visitSingularInt64Field(value: self.sentAtMs, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_Presence, rhs: Aeromesh_V1_Presence) -> Bool {
+    if lhs.avatarColorHex != rhs.avatarColorHex {return false}
+    if lhs.flightCode != rhs.flightCode {return false}
+    if lhs.openToGames != rhs.openToGames {return false}
+    if lhs.sentAtMs != rhs.sentAtMs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_ContactAction: SwiftProtobuf._ProtoNameProviding {
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "CONTACT_ACTION_UNSPECIFIED"),
+    1: .same(proto: "CONTACT_ACTION_REQUEST"),
+    2: .same(proto: "CONTACT_ACTION_ACCEPT"),
+    3: .same(proto: "CONTACT_ACTION_DECLINE"),
+  ]
+}
+
+nonisolated extension Aeromesh_V1_ContactRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".ContactRequest"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "action"),
+    2: .standard(proto: "request_id"),
+    3: .same(proto: "greeting"),
+    4: .standard(proto: "game_kind"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.action) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.requestID) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.greeting) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.gameKind) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.action != .unspecified {
+      try visitor.visitSingularEnumField(value: self.action, fieldNumber: 1)
+    }
+    if !self.requestID.isEmpty {
+      try visitor.visitSingularBytesField(value: self.requestID, fieldNumber: 2)
+    }
+    if !self.greeting.isEmpty {
+      try visitor.visitSingularStringField(value: self.greeting, fieldNumber: 3)
+    }
+    if self.gameKind != 0 {
+      try visitor.visitSingularInt32Field(value: self.gameKind, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_ContactRequest, rhs: Aeromesh_V1_ContactRequest) -> Bool {
+    if lhs.action != rhs.action {return false}
+    if lhs.requestID != rhs.requestID {return false}
+    if lhs.greeting != rhs.greeting {return false}
+    if lhs.gameKind != rhs.gameKind {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

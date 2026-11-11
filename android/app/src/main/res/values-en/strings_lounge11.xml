@@ -9,7 +9,6 @@
     <string name="lounge11_emergency_title">Emergency Alert</string>
     <string name="lounge11_rules_menu">Cabin Rules</string>
     <string name="lounge11_more_actions">More actions</string>
-    <string name="lounge11_open_radar_hint">Opens the proximity radar</string>
     <string name="lounge11_close">Close</string>
     <string name="lounge11_leave">Leave</string>
     <string name="lounge11_quiz_lobby_title">Challenge the Whole Cabin</string>

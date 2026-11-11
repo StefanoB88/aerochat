@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.3: Persone vicine (PRESENCE / CONTACT_REQUEST), prova con il passeggero virtuale, schermata
+     principale contestuale, testi di consegna "umani", ricordo del viaggio, impostazioni raggruppate. -->
+<resources>
+    <!-- Persone vicine -->
+    <string name="nearby_title">Personas cerca</string>
+    <string name="nearby_challenge_title">Reta a alguien cercano</string>
+    <string name="nearby_requests">Solicitudes</string>
+    <string name="nearby_people_section">Cerca de ti</string>
+    <plurals name="nearby_people_count">
+        <item quantity="one">%d persona cerca</item>
+        <item quantity="many">%d personas cerca</item>
+        <item quantity="other">%d personas cerca</item>
+    </plurals>
+    <string name="nearby_visible_toggle">Visible para las personas cercanas</string>
+    <string name="nearby_visible_on_hint">Quien tenga AeroChat abierto cerca de ti ve tu apodo y puede saludarte.</string>
+    <string name="nearby_visible_off_hint">Eres invisible: los demás no te verán, pero tú sigues viéndolos.</string>
+    <string name="nearby_only_games">Solo quien acepta retos</string>
+    <string name="nearby_say_hello">Saludar</string>
+    <string name="nearby_challenge">Retar</string>
+    <string name="nearby_open_chat">Abrir el chat</string>
+    <string name="nearby_waiting">Esperando…</string>
+    <string name="nearby_pick_game">Reta a %1$s a…</string>
+    <string name="nearby_same_flight">En tu vuelo</string>
+    <string name="nearby_already_contact">Ya en tus contactos</string>
+    <string name="nearby_signal_very_close">Muy cerca</string>
+    <string name="nearby_signal_close">Cerca</string>
+    <string name="nearby_signal_far">Un poco lejos</string>
+    <string name="nearby_signal_unknown">Por aquí</string>
+    <string name="nearby_accept">Aceptar</string>
+    <string name="nearby_decline">Rechazar</string>
+    <string name="nearby_reply">Responder</string>
+    <string name="nearby_hello_sent">Saludo enviado a %1$s</string>
+    <string name="nearby_challenge_sent">Reto enviado a %1$s</string>
+    <string name="nearby_send_failed">No se pudo enviar: acércate e inténtalo de nuevo.</string>
+    <string name="nearby_accepted">¡%1$s ha aceptado!</string>
+    <string name="nearby_declined">Solicitud rechazada por %1$s</string>
+    <string name="nearby_empty_title">Nadie cerca, por ahora</string>
+    <string name="nearby_empty_hint">Quien tenga AeroChat abierto cerca de ti aparecerá aquí. Cuantos más seáis, más lejos llegan los mensajes.</string>
+    <string name="nearby_invite_friends">Invitar amigos</string>
+    <string name="nearby_try_demo">Prueba con el pasajero virtual</string>
+    <string name="nearby_game_scopa">Scopa</string>
+    <string name="nearby_game_briscola">Briscola</string>
+    <string name="nearby_game_tictactoe">Tres en raya</string>
+    <string name="nearby_game_battleship">Hundir la flota</string>
+
+    <!-- Notifiche -->
+    <string name="nearby_channel_name">Personas cerca</string>
+    <string name="nearby_notification_hello">%1$s te saluda 👋</string>
+    <string name="nearby_notification_challenge">%1$s te reta a %2$s</string>
+    <string name="nearby_notification_body">Toca para aceptar o rechazar.</string>
+    <string name="nearby_trip_ready_title">Tu postal del vuelo está lista ✈️</string>
+    <string name="nearby_trip_ready_body">Vuelo %1$s: personas que has conocido, mensajes y partidas en una imagen para compartir.</string>
+    <string name="nearby_trip_card_header">Vuelo %1$s · %2$s</string>
+    <string name="nearby_leaderboard_title">Clasificación del vuelo %1$s</string>
+    <plurals name="nearby_leaderboard_wins">
+        <item quantity="one">Partidas ganadas: %1$d de %2$d</item>
+        <item quantity="many">Partidas ganadas: %1$d de %2$d</item>
+        <item quantity="other">Partidas ganadas: %1$d de %2$d</item>
+    </plurals>
+
+    <!-- Primo avvio -->
+    <string name="nearby_onboarding_1_title">Funciona sin internet</string>
+    <string name="nearby_onboarding_1_body">Sin Wi-Fi, sin red: AeroChat usa el Bluetooth del teléfono. En el avión, en el metro, en los conciertos.</string>
+    <string name="nearby_onboarding_2_title">Los mensajes pasan de teléfono en teléfono</string>
+    <string name="nearby_onboarding_2_body">Cada teléfono con AeroChat hace de puente: el mensaje salta de persona en persona hasta quien debe leerlo. Siempre cifrado.</string>
+    <string name="nearby_onboarding_3_title">Cuantos más seáis, más lejos llega</string>
+    <string name="nearby_onboarding_3_body">Invita a quien viaja contigo: cada persona más amplía el alcance para todos.</string>
+    <string name="nearby_onboarding_next">Siguiente</string>
+    <string name="nearby_onboarding_skip">Omitir</string>
+    <string name="nearby_onboarding_start">Vamos</string>
+    <string name="nearby_onboarding_try">Prueba ahora con un pasajero virtual</string>
+
+    <!-- Prova con il passeggero virtuale -->
+    <string name="nearby_try_now">Prueba ahora</string>
+    <string name="nearby_try_now_hint">Un chat de prueba con un pasajero virtual: responde y juega a las cartas, y todo se queda en este teléfono.</string>
+    <string name="nearby_demo_nickname">Pasajero virtual</string>
+    <string name="nearby_demo_header">Pasajero virtual · solo en este teléfono</string>
+    <string name="nearby_demo_banner">Chat de prueba: el pasajero virtual vive solo en este teléfono, no se envía nada.</string>
+    <string name="nearby_demo_delete">Eliminar</string>
+    <string name="nearby_demo_welcome">¡Hola! Soy el pasajero virtual 👋 Vivo solo en este teléfono: escríbeme algo o rétame a las cartas. ¡Acabo de proponerte una Scopa aquí abajo!</string>
+    <string name="nearby_demo_cards_only">Yo solo juego a las cartas: ¡prueba a retarme a la Scopa o a la Briscola! 🃏</string>
+    <string name="nearby_demo_game_over">¡Buena partida! 🎉 Con personas de verdad funciona igual: invita a alguien cercano.</string>
+    <string name="nearby_demo_invite_hint">Lo bueno llega con personas de verdad: invita a alguien cercano y chatead incluso sin red.</string>
+    <string name="nearby_demo_invite_cta">Invita a alguien cercano</string>
+
+    <!-- Schermata principale contestuale -->
+    <string name="nearby_home_on_flight">Estás en el vuelo %1$s</string>
+    <string name="nearby_home_on_flight_hint">Chatea y juega con quienes están a bordo, incluso en modo avión.</string>
+    <string name="nearby_home_in_flight">¿Vuelas? ✈️</string>
+    <string name="nearby_home_in_flight_hint">Añade la tarjeta de embarque para entrar en la Cabina de tu vuelo.</string>
+    <string name="nearby_home_enter_lounge">Entra en la Cabina del vuelo</string>
+    <string name="nearby_home_play_aboard">Juega con quienes están a bordo</string>
+    <string name="nearby_home_add_boarding">Añade la tarjeta de embarque</string>
+    <string name="nearby_home_ground_title">Lleva a tus amigos a bordo</string>
+    <string name="nearby_home_ground_hint">AeroChat funciona sin internet: cuantos más seáis, más lejos llegan los mensajes.</string>
+    <string name="nearby_home_invite">Invitar amigos</string>
+    <string name="nearby_home_group">Crear un grupo</string>
+    <string name="nearby_empty_chats_hint">Saluda a alguien cercano, añade a un amigo con el QR o prueba la app ahora mismo con un pasajero virtual.</string>
+
+    <!-- Testi di consegna -->
+    <string name="nearby_queued_line">Llegará cuando estéis cerca</string>
+    <plurals name="nearby_via_people_badge">
+        <item quantity="one">vía %d persona</item>
+        <item quantity="many">vía %d personas</item>
+        <item quantity="other">vía %d personas</item>
+    </plurals>
+    <string name="nearby_status_near_you">Cerca de ti</string>
+    <string name="nearby_status_nobody">Nadie cerca por ahora</string>
+    <plurals name="nearby_status_people_nearby">
+        <item quantity="one">%d persona cerca</item>
+        <item quantity="many">%d personas cerca</item>
+        <item quantity="other">%d personas cerca</item>
+    </plurals>
+    <plurals name="nearby_status_via_people">
+        <item quantity="one">Alcanzable a través de %d persona</item>
+        <item quantity="many">Alcanzable a través de %d personas</item>
+        <item quantity="other">Alcanzable a través de %d personas</item>
+    </plurals>
+    <plurals name="nearby_status_via_people_short">
+        <item quantity="one">A través de %d persona</item>
+        <item quantity="many">A través de %d personas</item>
+        <item quantity="other">A través de %d personas</item>
+    </plurals>
+    <string name="nearby_status_out_of_range_waiting">Fuera de alcance — el mensaje esperará</string>
+
+    <!-- Impostazioni -->
+    <string name="nearby_settings_profile">Perfil</string>
+    <string name="nearby_settings_privacy">Privacidad</string>
+    <string name="nearby_settings_notifications">Notificaciones</string>
+    <string name="nearby_settings_subscription">Suscripción</string>
+    <string name="nearby_settings_about">Info y legal</string>
+    <string name="nearby_settings_visible_short">Visible</string>
+    <string name="nearby_settings_hidden_short">Invisible</string>
+    <string name="nearby_settings_pro_active">Activo</string>
+    <string name="nearby_settings_open_to_games">Acepto retos de cartas</string>
+    <string name="nearby_settings_visibility_footer">Si eres visible, quienes están cerca ven tu apodo y el color de tu avatar, y pueden saludarte o retarte. Nadie se convierte en contacto sin tu consentimiento.</string>
+    <string name="nearby_settings_notifications_status">Notificaciones de la app</string>
+    <string name="nearby_settings_on">Activadas</string>
+    <string name="nearby_settings_off">Desactivadas</string>
+    <string name="nearby_settings_notifications_open">Abrir los ajustes del sistema</string>
+    <string name="nearby_settings_notifications_footer">Mensajes, solicitudes de personas cercanas, alertas de emergencia y la postal de fin de vuelo.</string>
+    <string name="nearby_settings_subscription_footer">El Flight Group Pass desbloquea las funciones Pro para ti y tu grupo de viaje.</string>
+</resources>

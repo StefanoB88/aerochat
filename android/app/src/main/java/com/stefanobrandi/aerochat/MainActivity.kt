@@ -23,7 +23,9 @@ import kotlinx.coroutines.launch
  * Unica Activity: ospita la UI Compose ([ContentView]) e instrada gli Intent esterni:
  * - link `aeromesh://...` (QR della fotocamera di sistema, invito da Messaggi / browser / Nearby Share)
  *   → [AppEnvironment.handleIncomingURL], esito mostrato da [IncomingLinkAlert];
- * - tocco su una notifica (extra [LocalNotificationCenter.extraConversationID]) → apre la chat.
+ * - tocco su una notifica (extra [LocalNotificationCenter.extraConversationID]) → apre la chat;
+ * - richiesta di una persona vicina ([LocalNotificationCenter.extraNearby]) → "Persone vicine";
+ * - cartolina di fine volo ([LocalNotificationCenter.extraTripKey]) → cartolina del viaggio.
  * Il ciclo di vita mappa lo `scenePhase` di iOS: `onResume` → `sceneDidBecomeActive()`; primo piano e
  * background della radio seguono invece il processo (`ProcessLifecycleOwner` in [AppEnvironment]).
  */
@@ -69,6 +71,14 @@ class MainActivity : ComponentActivity() {
         intent.getStringExtra(LocalNotificationCenter.extraConversationID)?.let { conversationID ->
             AppNavigator.openConversation(conversationID)
             intent.removeExtra(LocalNotificationCenter.extraConversationID)
+        }
+        if (intent.getBooleanExtra(LocalNotificationCenter.extraNearby, false)) {
+            AppNavigator.openNearby()
+            intent.removeExtra(LocalNotificationCenter.extraNearby)
+        }
+        intent.getStringExtra(LocalNotificationCenter.extraTripKey)?.let { key ->
+            environment.openTripCard(key)
+            intent.removeExtra(LocalNotificationCenter.extraTripKey)
         }
         val data = intent.data
         if (intent.action == Intent.ACTION_VIEW && data?.scheme == MeshProtocol.qrScheme) {

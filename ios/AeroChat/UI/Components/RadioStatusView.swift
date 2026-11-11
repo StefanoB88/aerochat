@@ -5,6 +5,8 @@ struct RadioStatusView: View {
 
     let reachability: Reachability
     var compact = false
+    /// Gruppi e Cabina: quante persone della conversazione sono a portata diretta (testo "3 persone vicine").
+    var nearbyCount: Int?
 
     private var color: Color {
         switch reachability {
@@ -14,14 +16,26 @@ struct RadioStatusView: View {
         }
     }
 
+    /// Testo centrato sulle persone (la logica dello stato radio non cambia, solo il modo di dirlo).
     private var label: String {
+        Self.text(for: reachability, compact: compact, nearbyCount: nearbyCount)
+    }
+
+    static func text(for reachability: Reachability, compact: Bool, nearbyCount: Int? = nil) -> String {
         switch reachability {
         case .direct:
-            return String(localized: "Connessione diretta")
+            if let nearbyCount, nearbyCount > 0 {
+                return String(localized: "\(nearbyCount) persone vicine")
+            }
+            return String(localized: "Vicino a te")
         case .viaBridge(let hops):
-            return String(localized: "Tramite ponte (\(hops) salti)")
+            // hop 2 = un telefono in mezzo: si contano le persone che fanno da ponte.
+            let relays = max(1, hops - 1)
+            return compact
+                ? String(localized: "Tramite \(relays) persone")
+                : String(localized: "Raggiungibile tramite \(relays) persone")
         case .outOfRange:
-            return compact ? String(localized: "Fuori portata") : String(localized: "Fuori portata — invio in coda")
+            return compact ? String(localized: "Fuori portata") : String(localized: "Fuori portata — il messaggio aspetterà")
         }
     }
 
@@ -38,6 +52,6 @@ struct RadioStatusView: View {
                 .minimumScaleFactor(0.8)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Stato radio: \(label)"))
+        .accessibilityLabel(Text(label))
     }
 }

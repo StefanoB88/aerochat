@@ -41,6 +41,29 @@ struct FlightStats: Equatable, Sendable {
     var loungeMessages = 0
     /// Titoli delle Cabine del volo attive (es. "AZ 204 · FCO → LHR · 10 nov").
     var flightTitles: [String] = []
+    /// Cartolina di un volo finito: "Volo AZ204 · 10 nov" al posto del periodo.
+    var headline: String?
+    /// Classifica del volo (partite vinte durante il volo in corso o finito).
+    var leaderboard: [FlightLeaderboard.Entry] = []
+
+    var myRank: Int? { FlightLeaderboard.myRank(in: leaderboard) }
+
+    /// Numeri congelati di un volo finito (ricordo del viaggio).
+    init(trip: FlightTrip) {
+        self.period = .trip
+        messagesSent = trip.messagesSent
+        messagesReceived = trip.messagesReceived
+        peopleMet = trip.peopleMet
+        gamesWon = trip.gamesWon
+        gamesPlayed = trip.gamesPlayed
+        flightTitles = [trip.title]
+        leaderboard = trip.leaderboard
+        headline = String(localized: "Volo \(trip.flightNumber) · \(trip.date.formatted(.dateTime.day().month(.abbreviated)))")
+    }
+
+    init(period: Period) {
+        self.period = period
+    }
 
     var totalMessages: Int { messagesSent + messagesReceived }
 

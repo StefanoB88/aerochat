@@ -11,9 +11,7 @@
     <string name="shell_banner_unauthorized_message">Tillåt Bluetooth för AeroChat i Inställningar › Integritet för att prata med dina resekompisar.</string>
     <string name="shell_banner_unsupported_message">Den här enheten saknar stöd för Bluetooth LE, som krävs för meshnätet.</string>
     <string name="shell_banner_off_message">Du kan tryggt slå på Bluetooth igen (precis som för trådlösa hörlurar) och samtidigt låta mobilnätet vara avstängt.</string>
-    <string name="shell_radio_direct">Direkt anslutning</string>
     <string name="shell_radio_out_of_range">Utom räckhåll</string>
-    <string name="shell_radio_out_of_range_queued">Utom räckhåll — meddelanden i kö</string>
     <string name="shell_radio_status_a11y">Radiostatus: %1$s</string>
     <string name="shell_onboarding_tagline">Meddelanden från säte till säte, utan Wi-Fi och utan konto. Bara ett smeknamn.</string>
     <string name="shell_onboarding_question">VAD KALLAS DU OMBORD?</string>
@@ -65,11 +63,6 @@
     <string name="shell_paywall_buy">Köp</string>
     <string name="shell_paywall_thanks">Tack! Ditt pass är aktivt och delas nu med dina grupper.</string>
     <string name="shell_paywall_failed">Köpet slutfördes inte: %1$s</string>
-    <plurals name="shell_radio_via_bridge">
-        <item quantity="zero">Via relä (%1$d hopp)</item>
-        <item quantity="one">Via relä (%1$d hopp)</item>
-        <item quantity="other">Via relä (%1$d hopp)</item>
-    </plurals>
     <string name="shell_permission_bluetooth_rationale">AeroChat använder Bluetooth för att utbyta krypterade meddelanden med resekompisar i närheten, även utan Wi-Fi eller mobilnät.</string>
     <string name="shell_permission_camera_rationale">AeroChat använder kameran för att skanna dina resekompisars QR-koder och för att ta foton att skicka.</string>
     <string name="shell_permission_microphone_rationale">AeroChat använder mikrofonen för att spela in röstmeddelanden som du skickar till dina resekompisar.</string>

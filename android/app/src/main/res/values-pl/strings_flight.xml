@@ -36,7 +36,6 @@
     <string name="flight_card_slogan">Czat na wysokości 10 000 metrów.</string>
     <string name="flight_card_slogan2">Bez Wi-Fi, bez konta, tylko Bluetooth.</string>
     <string name="flight_menu_boarding">Kabina Lotu (karta pokładowa)</string>
-    <string name="flight_empty_hint">Zeskanuj kartę pokładową, aby wejść do czatu swojego lotu, albo dodaj towarzyszy podróży przy bramce: na pokładzie odnajdziecie się sami przez Bluetooth.</string>
     <string name="flight_paywall_pass24_title">24-godzinny Pass na Jeden Lot</string>
     <string name="flight_paywall_pass24_subtitle">Jeden lot, jeden dzień. Zdjęcia, notatki głosowe i gry dla Ciebie i Twojej grupy aż do lądowania.</string>
     <string name="flight_paywall_terms">Warunki korzystania</string>

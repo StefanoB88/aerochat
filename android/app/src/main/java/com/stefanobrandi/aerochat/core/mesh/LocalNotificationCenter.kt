@@ -22,7 +22,9 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.stefanobrandi.aerochat.MainActivity
 import com.stefanobrandi.aerochat.R
 import com.stefanobrandi.aerochat.core.emergency.EmergencyAlert
+import com.stefanobrandi.aerochat.core.protocol.MeshProtocol
 import com.stefanobrandi.aerochat.core.protocol.toHex
+import com.stefanobrandi.aerochat.proto.GameKind
 import com.stefanobrandi.aerochat.data.records.ConversationRecord
 import com.stefanobrandi.aerochat.data.records.ConversationType
 import com.stefanobrandi.aerochat.data.records.MessageContentType
@@ -208,6 +210,84 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
         }
     }
 
+    /**
+     * "Marco ti saluta" / "Marco ti sfida a Scopa": il tocco apre "Persone vicine" con la richiesta. Pubblicata
+     * anche con l'app aperta (la UI mostra in piu' il banner); rispetta il permesso `POST_NOTIFICATIONS`.
+     */
+    override suspend fun notifyContactRequest(request: IncomingContactRequest) {
+        try {
+            createChannels()
+            if (!canPostNotifications()) return
+            val title = if (request.isChallenge) {
+                val game = GameKind.forNumber(request.gameKind)?.let { gameName(it) }.orEmpty()
+                context.getString(R.string.nearby_notification_challenge, request.nickname, game)
+            } else {
+                context.getString(R.string.nearby_notification_hello, request.nickname)
+            }
+            val body = request.greeting.ifEmpty { context.getString(R.string.nearby_notification_body) }
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(extraNearby, true)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context, request.id.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val builder = NotificationCompat.Builder(context, nearbyChannelID)
+                .setSmallIcon(android.R.drawable.stat_notify_chat)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setTimeoutAfter(MeshProtocol.contactRequestLifetime)
+                .setContentIntent(pendingIntent)
+            try {
+                NotificationManagerCompat.from(context).notify("nearby-${request.id}", notificationID, builder.build())
+            } catch (_: SecurityException) {
+                // Permesso revocato tra il controllo e la pubblicazione.
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("AeroMesh.Notify", "richiesta non notificata: $e")
+        }
+    }
+
+    /** Via la notifica di una richiesta a cui si e' risposto (o scaduta). */
+    fun cancelContactRequest(requestHex: String) {
+        runCatching { NotificationManagerCompat.from(context).cancel("nearby-$requestHex", notificationID) }
+    }
+
+    /** "La tua cartolina di volo e' pronta ✈️": una volta per volo; il tocco apre la cartolina del viaggio. */
+    fun notifyTripMemory(tripKey: String, flightCode: String) {
+        try {
+            createChannels()
+            if (!canPostNotifications()) return
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(extraTripKey, tripKey)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context, tripKey.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val builder = NotificationCompat.Builder(context, nearbyChannelID)
+                .setSmallIcon(android.R.drawable.ic_menu_gallery)
+                .setContentTitle(context.getString(R.string.nearby_trip_ready_title))
+                .setContentText(context.getString(R.string.nearby_trip_ready_body, flightCode))
+                .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+            try {
+                NotificationManagerCompat.from(context).notify("trip-$tripKey", notificationID, builder.build())
+            } catch (_: SecurityException) {
+                // Permesso revocato tra il controllo e la pubblicazione.
+            }
+        } catch (e: Exception) {
+            Log.w("AeroMesh.Notify", "cartolina non notificata: $e")
+        }
+    }
+
     override suspend fun cancelMessage(msgID: ByteArray, conversationID: String) {
         try {
             NotificationManagerCompat.from(context).cancel(msgID.toHex(), notificationID)
@@ -259,6 +339,18 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
             lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
         }
         NotificationManagerCompat.from(context).createNotificationChannel(emergency)
+        val nearby = NotificationChannel(
+            nearbyChannelID, context.getString(R.string.nearby_channel_name), NotificationManager.IMPORTANCE_HIGH,
+        ).apply { setShowBadge(false) }
+        NotificationManagerCompat.from(context).createNotificationChannel(nearby)
+    }
+
+    private fun gameName(kind: GameKind): String = when (kind) {
+        GameKind.SCOPA -> context.getString(R.string.nearby_game_scopa)
+        GameKind.BRISCOLA -> context.getString(R.string.nearby_game_briscola)
+        GameKind.TIC_TAC_TOE -> context.getString(R.string.nearby_game_tictactoe)
+        GameKind.BATTLESHIP -> context.getString(R.string.nearby_game_battleship)
+        else -> ""
     }
 
     companion object {
@@ -275,6 +367,12 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
         const val extraEmergency = "emergency"
         /** Canale degli avvisi di emergenza (priorita' massima). */
         const val emergencyChannelID = "emergency"
+        /** Canale di "Persone vicine" (richieste) e della cartolina di volo. */
+        const val nearbyChannelID = "nearby"
+        /** Extra dell'Intent di apertura: apre "Persone vicine". */
+        const val extraNearby = "nearby"
+        /** Extra dell'Intent di apertura: chiave del volo della cartolina da mostrare. */
+        const val extraTripKey = "tripKey"
 
         /** Id numerico comune: le notifiche si distinguono per tag (`msg_id` hex), come l'identifier iOS. */
         private const val notificationID = 1

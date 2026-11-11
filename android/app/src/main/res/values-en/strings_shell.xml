@@ -11,9 +11,7 @@
     <string name="shell_banner_unauthorized_message">Allow Bluetooth for AeroChat in Settings › Privacy to talk to your travel buddies.</string>
     <string name="shell_banner_unsupported_message">This device doesn’t support the Bluetooth LE required for the mesh.</string>
     <string name="shell_banner_off_message">You can safely turn Bluetooth back on (just like for wireless headphones) while keeping cellular turned off.</string>
-    <string name="shell_radio_direct">Direct connection</string>
     <string name="shell_radio_out_of_range">Out of range</string>
-    <string name="shell_radio_out_of_range_queued">Out of range — messages queued</string>
     <string name="shell_radio_status_a11y">Radio status: %1$s</string>
     <string name="shell_onboarding_tagline">Seat-to-seat messaging, no Wi-Fi and no account. Just a nickname.</string>
     <string name="shell_onboarding_question">WHAT DO THEY CALL YOU ON BOARD?</string>
@@ -65,10 +63,6 @@
     <string name="shell_paywall_buy">Buy</string>
     <string name="shell_paywall_thanks">Thanks! Your pass is active and is being shared with your groups.</string>
     <string name="shell_paywall_failed">Purchase not completed: %1$s</string>
-    <plurals name="shell_radio_via_bridge">
-        <item quantity="one">Via relay (%1$d hop)</item>
-        <item quantity="other">Via relay (%1$d hops)</item>
-    </plurals>
     <string name="shell_permission_bluetooth_rationale">AeroChat uses Bluetooth to exchange encrypted messages with nearby travel buddies, even without Wi-Fi or cellular service.</string>
     <string name="shell_permission_camera_rationale">AeroChat uses the camera to scan your travel buddies’ QR codes and to take photos to send.</string>
     <string name="shell_permission_microphone_rationale">AeroChat uses the microphone to record voice notes to send to your travel buddies.</string>

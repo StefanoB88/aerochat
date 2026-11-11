@@ -177,3 +177,28 @@ message MessageRevision {
 message TypingIndicator {
   bool is_typing = 1;
 }
+
+// "Chi e' vicino" (PRESENCE, release 1.3): chiave della Lounge, ttl 1, mai in coda ne' nel DB.
+message Presence {
+  string avatar_color_hex = 1;  // es. "00E5FF"
+  string flight_code = 2;       // canonico "CARRIER|FLIGHT|yyyy-MM-dd" se nella Cabina di un volo, altrimenti vuoto
+  bool open_to_games = 3;       // accetta sfide a carte
+  int64 sent_at_ms = 4;
+}
+
+// "Saluta" / "Sfida" (CONTACT_REQUEST, release 1.3): diretto, chiave diretta, ttl 2, niente coda ne' ACK.
+// Android: nomi prefissati CONTACT_ACTION_ (protoc vieta ACCEPT duplicato nel package, e CONTACT_REQUEST e'
+// gia' un PacketType); numeri invariati = wire identico a iOS (REQUEST = 1, ACCEPT = 2, DECLINE = 3).
+enum ContactAction {
+  CONTACT_ACTION_UNSPECIFIED = 0;
+  CONTACT_ACTION_REQUEST = 1;
+  CONTACT_ACTION_ACCEPT = 2;
+  CONTACT_ACTION_DECLINE = 3;
+}
+
+message ContactRequest {
+  ContactAction action = 1;
+  bytes request_id = 2;     // 16 byte casuali scelti da chi chiede; ACCEPT/DECLINE lo ripetono
+  string greeting = 3;      // solo REQUEST, opzionale, <= 140 caratteri (filtro linguaggio, niente link)
+  int32 game_kind = 4;      // solo REQUEST: 0 = semplice "Saluta"; altrimenti GameKind (SCOPA, BRISCOLA...) = "Sfida"
+}

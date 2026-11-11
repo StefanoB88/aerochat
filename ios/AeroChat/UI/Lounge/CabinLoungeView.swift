@@ -300,6 +300,17 @@ struct CabinLoungeView: View {
             .navigationTitle("Cabina Pubblica")
             .toolbarBackground(AeroTheme.background, for: .navigationBar)
             .toolbar {
+                // "Sfida chi e' vicino": Persone vicine con solo chi accetta sfide.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Haptics.tap()
+                        environment.requestedNearby = .games
+                    } label: {
+                        Image(systemName: "suit.spade.fill")
+                            .foregroundStyle(AeroTheme.accentCyan)
+                    }
+                    .accessibilityLabel("Sfida chi è vicino")
+                }
                 // Radar sempre a portata di tocco: e' il modo piu' rapido per ritrovare un compagno in cabina.
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -324,6 +335,8 @@ struct CabinLoungeView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button { Haptics.tap(); environment.requestedNearby = .all } label: { Label("Persone vicine", systemImage: "person.wave.2") }
+                        Button { Haptics.tap(); environment.requestedNearby = .games } label: { Label("Sfida chi è vicino", systemImage: "suit.spade") }
                         if CabinAssistant.isAvailable {
                             Button { Haptics.tap(); showSummary = true } label: { Label("Riassunto della Cabina", systemImage: "sparkles") }
                         }
@@ -405,11 +418,21 @@ struct CabinLoungeView: View {
         HStack {
             Button {
                 Haptics.tap()
-                showRadar = true
+                environment.requestedNearby = .all
             } label: {
-                Label("\(environment.neighbors.count) passeggeri a portata", systemImage: "dot.radiowaves.left.and.right")
+                Label(PeopleStatus.text(neighbors: environment.neighbors.count, nearby: environment.presence.count,
+                                        radioState: environment.radioState),
+                      systemImage: "person.wave.2")
             }
-            .accessibilityHint("Apre il radar di prossimità")
+            .accessibilityHint("Apre Persone vicine")
+            Spacer()
+            Button {
+                Haptics.tap()
+                environment.requestedNearby = .games
+            } label: {
+                Label("Sfida chi è vicino", systemImage: "suit.spade.fill")
+                    .foregroundStyle(AeroTheme.accentCyan)
+            }
             Spacer()
             Text(viewModel.expiryText)
         }

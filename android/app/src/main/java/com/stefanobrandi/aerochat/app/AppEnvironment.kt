@@ -1,7 +1,12 @@
 package com.stefanobrandi.aerochat.app
 
 import android.app.Activity
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.provider.Settings
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -14,6 +19,13 @@ import com.stefanobrandi.aerochat.core.crypto.PairingPayload
 import com.stefanobrandi.aerochat.core.emergency.EmergencyAlert
 import com.stefanobrandi.aerochat.core.emergency.EmergencyService
 import com.stefanobrandi.aerochat.core.flight.BoardingPass
+import com.stefanobrandi.aerochat.core.flight.FlightTrip
+import com.stefanobrandi.aerochat.core.flight.TripMemory
+import com.stefanobrandi.aerochat.core.flight.TripMemoryStore
+import com.stefanobrandi.aerochat.core.games.GameOutcome
+import com.stefanobrandi.aerochat.core.games.GameStatus
+import com.stefanobrandi.aerochat.core.mesh.IncomingContactRequest
+import com.stefanobrandi.aerochat.core.mesh.NearbyPerson
 import com.stefanobrandi.aerochat.core.moderation.AppSettings
 import com.stefanobrandi.aerochat.core.quiz.QuizQuestionBank
 import com.stefanobrandi.aerochat.core.quiz.QuizService
@@ -61,6 +73,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -166,6 +180,63 @@ class AppEnvironment(
     private val _neighbors = MutableStateFlow<List<Neighbor>>(emptyList())
     val neighbors: StateFlow<List<Neighbor>> = _neighbors.asStateFlow()
 
+    // MARK: Persone vicine (NEARBY_SPEC.md)
+
+    /** Persone vicine annunciate da `PRESENCE` (cache del router, scade dopo 3 minuti). */
+    private val _nearbyPeople = MutableStateFlow<List<NearbyPerson>>(emptyList())
+    val nearbyPeople: StateFlow<List<NearbyPerson>> = _nearbyPeople.asStateFlow()
+
+    /** Richieste "Saluta"/"Sfida" ricevute in attesa di risposta. */
+    private val _contactRequests = MutableStateFlow<List<IncomingContactRequest>>(emptyList())
+    val contactRequests: StateFlow<List<IncomingContactRequest>> = _contactRequests.asStateFlow()
+
+    /** Avviso in app sulle persone vicine (richiesta arrivata, accettata, rifiutata); la UI lo chiude. */
+    sealed interface NearbyBanner {
+        data class Request(val request: IncomingContactRequest) : NearbyBanner
+        data class Accepted(val conversationID: String, val nickname: String) : NearbyBanner
+        data class Declined(val nickname: String) : NearbyBanner
+    }
+
+    private val _nearbyBanner = MutableStateFlow<NearbyBanner?>(null)
+    val nearbyBanner: StateFlow<NearbyBanner?> = _nearbyBanner.asStateFlow()
+
+    fun dismissNearbyBanner() {
+        _nearbyBanner.value = null
+    }
+
+    /** Modalita' aereo del telefono (scheda "Sei in volo" e fine del viaggio). */
+    private val _airplaneMode = MutableStateFlow(false)
+    val airplaneMode: StateFlow<Boolean> = _airplaneMode.asStateFlow()
+    private var airplaneReceiver: BroadcastReceiver? = null
+
+    /** Scheda contestuale in cima alla lista chat chiusa dall'utente (solo per questa sessione). */
+    private val _homeCardDismissed = MutableStateFlow(false)
+    val homeCardDismissed: StateFlow<Boolean> = _homeCardDismissed.asStateFlow()
+
+    fun dismissHomeCard() {
+        _homeCardDismissed.value = true
+    }
+
+    // MARK: Ricordo del viaggio
+
+    private val tripMemory: TripMemory by lazy { TripMemory(TripMemoryStore(this.context)) }
+
+    /** Volo in corso (contatori della classifica del volo), `null` a terra. */
+    private val _activeTrip = MutableStateFlow<FlightTrip?>(null)
+    val activeTrip: StateFlow<FlightTrip?> = _activeTrip.asStateFlow()
+
+    /** Viaggio da mostrare nella cartolina (tocco sulla notifica "cartolina pronta"); la UI lo azzera. */
+    private val _pendingTripCard = MutableStateFlow<FlightTrip?>(null)
+    val pendingTripCard: StateFlow<FlightTrip?> = _pendingTripCard.asStateFlow()
+
+    fun openTripCard(key: String) {
+        _pendingTripCard.value = tripMemory.trip(key) ?: tripMemory.lastEndedTrip()
+    }
+
+    fun dismissTripCard() {
+        _pendingTripCard.value = null
+    }
+
     private val _relayQueueCount = MutableStateFlow(0)
     val relayQueueCount: StateFlow<Int> = _relayQueueCount.asStateFlow()
 
@@ -194,6 +265,15 @@ class AppEnvironment(
 
     fun dismissIncomingLinkMessage() {
         _incomingLinkMessage.value = null
+    }
+
+    /** "Prova subito" dall'onboarding: aprire la chat demo appena parte la mesh. */
+    private var openDemoAfterStart = false
+
+    /** Completa l'onboarding e apre la chat con il passeggero virtuale ("Prova subito"). */
+    suspend fun completeOnboardingAndTryDemo(nickname: String, avatarColorHex: String) {
+        openDemoAfterStart = true
+        completeOnboarding(nickname = nickname, avatarColorHex = avatarColorHex)
     }
 
     /** Link arrivato prima che la mesh fosse accesa (avvio a freddo, onboarding): si abbina a `startMesh`. */
@@ -460,10 +540,18 @@ class AppEnvironment(
         }
         emergency.start()
 
+        router.setPresenceOptions(visible = AppSettings.isNearbyVisible, openToGames = AppSettings.isOpenToGames)
+        // `PRESENCE` solo in primo piano: un riavvio del servizio senza UI non si annuncia ai vicini.
+        val startsInForeground = withContext(Dispatchers.Main.immediate) {
+            ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        }
+        router.setPresenceForeground(startsInForeground)
         router.start()
         _radioState.value = router.radioState
         _neighbors.value = router.neighbors()
         observeProcessLifecycle()
+        observeNearby(router)
+        observeTrips(database)
 
         val entitlements = EntitlementManager(context, database)
         _entitlements.value = entitlements
@@ -504,6 +592,11 @@ class AppEnvironment(
 
         if (AppSettings.isDemoModeEnabled) {
             setDemoMode(true)
+        }
+        // "Prova subito" scelto alla fine dell'onboarding: la chat demo si apre appena la mesh e' pronta.
+        if (openDemoAfterStart) {
+            openDemoAfterStart = false
+            scope.launch { startDemo()?.let { AppNavigator.openConversation(it.id) } }
         }
 
         // Stato "a bordo" nella notifica del servizio: ogni cambio di conversazioni (non letti, Cabine del
@@ -589,7 +682,8 @@ class AppEnvironment(
         AppSettings.isDemoModeEnabled = enabled
         val database = _database.value ?: return
         if (enabled) {
-            val demo = demoPeer ?: DemoPeerService(database = database, context = context).also { demoPeer = it }
+            val demo = demoPeer ?: DemoPeerService(database = database, context = context, games = { _games.value })
+                .also { demoPeer = it }
             demo.enable()
         } else {
             demoPeer?.disable()
@@ -597,6 +691,151 @@ class AppEnvironment(
             demoPeer = null
         }
     }
+
+    /**
+     * "Prova subito": accende il passeggero virtuale e ritorna la sua chat (solo locale, nulla esce dalla
+     * radio). `null` se il database non e' pronto.
+     */
+    suspend fun startDemo(): ConversationRecord? {
+        setDemoMode(true)
+        return demoPeer?.enable()
+    }
+
+    // MARK: - Persone vicine
+
+    /** "Visibile alle persone vicine": spenta, smettiamo di inviare `PRESENCE` (gli altri restano visibili). */
+    suspend fun setNearbyVisible(visible: Boolean) {
+        AppSettings.isNearbyVisible = visible
+        _router.value?.setPresenceOptions(visible = visible, openToGames = AppSettings.isOpenToGames)
+    }
+
+    /** "Accetto sfide a carte" (`Presence.open_to_games`). */
+    suspend fun setOpenToGames(open: Boolean) {
+        AppSettings.isOpenToGames = open
+        _router.value?.setPresenceOptions(visible = AppSettings.isNearbyVisible, openToGames = open)
+    }
+
+    /**
+     * "Saluta": a un contatto apre direttamente la chat (ritornata); a uno sconosciuto invia la richiesta
+     * (ritorna `null`). Lancia [RouterError.NotRunning] se la mesh e' spenta.
+     */
+    suspend fun sayHello(person: NearbyPerson, greeting: String = ""): ConversationRecord? {
+        val router = _router.value ?: throw RouterError.NotRunning
+        contactConversation(person)?.let { return it }
+        router.sendContactRequest(to = person, greeting = greeting, gameKind = 0)
+        return null
+    }
+
+    /**
+     * "Sfida": a un contatto invia il normale invito di gioco nella chat (ritornata); a uno sconosciuto la
+     * richiesta con `game_kind` (ritorna `null`): se accetta, l'invito parte da solo.
+     */
+    suspend fun challenge(person: NearbyPerson, kind: com.stefanobrandi.aerochat.proto.GameKind): ConversationRecord? {
+        val router = _router.value ?: throw RouterError.NotRunning
+        contactConversation(person)?.let { conversation ->
+            _games.value?.invite(kind, conversation)
+            return conversation
+        }
+        router.sendContactRequest(to = person, gameKind = kind.number)
+        return null
+    }
+
+    /** Chat 1-a-1 con una persona vicina gia' nei contatti (stesse chiavi), creata se manca. */
+    private suspend fun contactConversation(person: NearbyPerson): ConversationRecord? {
+        val database = _database.value ?: return null
+        val peer = runCatching { database.peers.fetch(nodeID = person.nodeID) }.getOrNull() ?: return null
+        if (!peer.isTrusted || peer.isBlocked || !peer.x25519Pub.contentEquals(person.x25519Pub)) return null
+        return database.conversations.ensureDirectConversation(with = peer)
+    }
+
+    /** Accetta una richiesta: il mittente diventa un contatto e la chat (ritornata) compare in cima. */
+    suspend fun acceptContactRequest(request: IncomingContactRequest): ConversationRecord {
+        val router = _router.value ?: throw RouterError.NotRunning
+        (notifier as? LocalNotificationCenter)?.cancelContactRequest(request.id)
+        if ((_nearbyBanner.value as? NearbyBanner.Request)?.request?.id == request.id) _nearbyBanner.value = null
+        return router.acceptContactRequest(request.id)
+    }
+
+    suspend fun declineContactRequest(request: IncomingContactRequest) {
+        (notifier as? LocalNotificationCenter)?.cancelContactRequest(request.id)
+        if ((_nearbyBanner.value as? NearbyBanner.Request)?.request?.id == request.id) _nearbyBanner.value = null
+        _router.value?.declineContactRequest(request.id)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private fun observeNearby(router: MeshRouterActor) {
+        backgroundTasks += scope.launch {
+            router.nearby.people.collect { people ->
+                _nearbyPeople.value = people
+                // Ricordo del viaggio: ogni persona vicina durante il volo conta una volta.
+                if (_activeTrip.value != null) {
+                    people.forEach { tripMemory.recordPerson(it.id) }
+                    _activeTrip.value = tripMemory.activeTrip
+                }
+            }
+        }
+        backgroundTasks += scope.launch {
+            router.nearby.requests.collect { _contactRequests.value = it }
+        }
+        backgroundTasks += scope.launch {
+            _games.flatMapLatest { it?.events() ?: flowOf() }.collect { event ->
+                if (_activeTrip.value == null || event !is GameService.Event.Updated) return@collect
+                val state = runCatching { _games.value?.session(event.gameID) }.getOrNull() ?: return@collect
+                if (state.status != GameStatus.finished) return@collect
+                tripMemory.recordGameFinished(state.gameID, won = state.outcome == GameOutcome.iWon)
+                _activeTrip.value = tripMemory.activeTrip
+            }
+        }
+    }
+
+    // MARK: - Ricordo del viaggio
+
+    /**
+     * Inizio e fine dei voli: Cabine del volo attive (osservate e ricontrollate ogni minuto, perche' scadono
+     * col tempo) e modalita' aereo. A fine volo una sola notifica "cartolina pronta".
+     */
+    private fun observeTrips(database: AppDatabase) {
+        _airplaneMode.value = isAirplaneModeOn()
+        if (airplaneReceiver == null) {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    _airplaneMode.value = isAirplaneModeOn()
+                }
+            }
+            airplaneReceiver = receiver
+            runCatching {
+                ContextCompat.registerReceiver(
+                    context, receiver, IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED,
+                )
+            }
+        }
+        backgroundTasks += scope.launch {
+            database.conversations.observeActiveFlightLounges().collect { evaluateTrips(database) }
+        }
+        backgroundTasks += scope.launch {
+            _airplaneMode.collect { evaluateTrips(database) }
+        }
+        backgroundTasks += scope.launch {
+            while (true) {
+                delay(tripCheckIntervalMs)
+                evaluateTrips(database)
+            }
+        }
+    }
+
+    private suspend fun evaluateTrips(database: AppDatabase) {
+        val lounges = runCatching { database.conversations.activeFlightLounges() }.getOrNull() ?: return
+        val active = lounges.mapNotNull { lounge -> lounge.flightCode?.let { it to lounge.title } }.toMap()
+        val ended = tripMemory.update(active, airplaneMode = _airplaneMode.value, now = System.currentTimeMillis())
+        _activeTrip.value = tripMemory.activeTrip
+        for (trip in ended) {
+            (notifier as? LocalNotificationCenter)?.notifyTripMemory(trip.key, trip.flightCode)
+        }
+    }
+
+    private fun isAirplaneModeOn(): Boolean =
+        runCatching { Settings.Global.getInt(context.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) != 0 }
+            .getOrDefault(false)
 
     /** Ritorno in primo piano: riprova subito i messaggi in attesa di conferma di consegna. */
     suspend fun sceneDidBecomeActive() {
@@ -648,6 +887,8 @@ class AppEnvironment(
     /** Il processo passa in primo piano / in background: il trasporto adatta scansione, advertising e link. */
     private suspend fun setForeground(isForeground: Boolean) {
         bleTransport?.setForeground(isForeground)
+        // Persone vicine: `PRESENCE` solo con l'app in primo piano.
+        _router.value?.setPresenceForeground(isForeground)
         updateRSSIPolling()
     }
 
@@ -701,6 +942,10 @@ class AppEnvironment(
         _entitlements.value = null
         _router.value = null
         _neighbors.value = emptyList()
+        _nearbyPeople.value = emptyList()
+        _contactRequests.value = emptyList()
+        airplaneReceiver?.let { receiver -> runCatching { context.unregisterReceiver(receiver) } }
+        airplaneReceiver = null
         MeshForegroundService.stop(context)
     }
 
@@ -797,6 +1042,11 @@ class AppEnvironment(
     /** Elimina la chat (solo su questo dispositivo): messaggi in cascata e file media su disco. */
     suspend fun deleteConversation(conversation: ConversationRecord) {
         val database = _database.value ?: return
+        // Passeggero virtuale: eliminare la sua chat spegne la modalita' prova (e la sua chat).
+        if (DemoPeerService.isDemoConversation(conversation)) {
+            setDemoMode(false)
+            return
+        }
         val paths = runCatching { database.messages.mediaPaths(conversationID = conversation.id) }.getOrNull()
             ?: emptyList()
         database.conversations.delete(conversationID = conversation.id)
@@ -836,7 +1086,18 @@ class AppEnvironment(
             is RouterEvent.MessageReceived -> {
                 _lastReceivedMessageID.value = event.msgID
                 refreshLiveStatus()
+                recordTripMessage(event)
             }
+            is RouterEvent.MessageSent -> if (_activeTrip.value != null) {
+                tripMemory.recordMessage(outgoing = true)
+                _activeTrip.value = tripMemory.activeTrip
+            }
+            is RouterEvent.ContactRequestReceived -> _nearbyBanner.value = NearbyBanner.Request(event.request)
+            is RouterEvent.ContactAccepted -> if (event.requestedByMe) {
+                _nearbyBanner.value = NearbyBanner.Accepted(event.conversationID, event.nickname)
+                Haptics.success()
+            }
+            is RouterEvent.ContactDeclined -> _nearbyBanner.value = NearbyBanner.Declined(event.nickname)
             is RouterEvent.RelayQueueChanged -> _relayQueueCount.value = event.count
             // Qualcuno ha scansionato il nostro QR: la chat compare da sola nella lista (DB osservato).
             is RouterEvent.PeerPaired -> Unit
@@ -856,7 +1117,25 @@ class AppEnvironment(
         }
     }
 
+    /** Messaggio ricevuto durante il volo: contatore e, in Cabina, la persona incontrata. */
+    private suspend fun recordTripMessage(event: RouterEvent.MessageReceived) {
+        if (_activeTrip.value == null) return
+        tripMemory.recordMessage(outgoing = false)
+        val database = _database.value
+        if (database != null) {
+            val message = runCatching { database.messages.fetch(msgID = event.msgID) }.getOrNull()
+            val conversation = runCatching { database.conversations.fetch(id = event.conversationID) }.getOrNull()
+            if (message != null && conversation != null &&
+                (conversation.type == ConversationType.cabinLounge || conversation.isFlightLounge)
+            ) {
+                tripMemory.recordPerson(message.senderNodeID.toHex())
+            }
+        }
+        _activeTrip.value = tripMemory.activeTrip
+    }
+
     private companion object {
+        const val tripCheckIntervalMs = 60_000L
         const val liveStatusIntervalMs = 2_000L
         const val liveStatusMinDelayMs = 250L
     }

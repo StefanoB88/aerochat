@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.3: Persone vicine (PRESENCE / CONTACT_REQUEST), prova con il passeggero virtuale, schermata
+     principale contestuale, testi di consegna "umani", ricordo del viaggio, impostazioni raggruppate. -->
+<resources>
+    <!-- Persone vicine -->
+    <string name="nearby_title">Personer i nærheten</string>
+    <string name="nearby_challenge_title">Utfordre noen i nærheten</string>
+    <string name="nearby_requests">Forespørsler</string>
+    <string name="nearby_people_section">Nær deg</string>
+    <plurals name="nearby_people_count">
+        <item quantity="one">%d person i nærheten</item>
+        <item quantity="other">%d personer i nærheten</item>
+    </plurals>
+    <string name="nearby_visible_toggle">Synlig for personer i nærheten</string>
+    <string name="nearby_visible_on_hint">De som har AeroChat åpent nær deg, ser kallenavnet ditt og kan si hei.</string>
+    <string name="nearby_visible_off_hint">Du er usynlig: andre ser deg ikke, men du ser dem.</string>
+    <string name="nearby_only_games">Bare de som tar imot utfordringer</string>
+    <string name="nearby_say_hello">Si hei</string>
+    <string name="nearby_challenge">Utfordre</string>
+    <string name="nearby_open_chat">Åpne chatten</string>
+    <string name="nearby_waiting">Venter…</string>
+    <string name="nearby_pick_game">Utfordre %1$s i…</string>
+    <string name="nearby_same_flight">På flyet ditt</string>
+    <string name="nearby_already_contact">Allerede i kontaktene</string>
+    <string name="nearby_signal_very_close">Veldig nær</string>
+    <string name="nearby_signal_close">Nær</string>
+    <string name="nearby_signal_far">Litt unna</string>
+    <string name="nearby_signal_unknown">I nærheten</string>
+    <string name="nearby_accept">Godta</string>
+    <string name="nearby_decline">Avslå</string>
+    <string name="nearby_reply">Svar</string>
+    <string name="nearby_hello_sent">Hei sendt til %1$s</string>
+    <string name="nearby_challenge_sent">Utfordring sendt til %1$s</string>
+    <string name="nearby_send_failed">Kunne ikke sendes: kom nærmere og prøv igjen.</string>
+    <string name="nearby_accepted">%1$s sa ja!</string>
+    <string name="nearby_declined">Forespørselen ble avslått av %1$s</string>
+    <string name="nearby_empty_title">Ingen i nærheten akkurat nå</string>
+    <string name="nearby_empty_hint">De som har AeroChat åpent nær deg, dukker opp her. Jo flere dere er, jo lenger når meldingene.</string>
+    <string name="nearby_invite_friends">Inviter venner</string>
+    <string name="nearby_try_demo">Prøv med den virtuelle passasjeren</string>
+    <string name="nearby_game_scopa">Scopa</string>
+    <string name="nearby_game_briscola">Briscola</string>
+    <string name="nearby_game_tictactoe">Tre på rad</string>
+    <string name="nearby_game_battleship">Slagskip</string>
+
+    <!-- Notifiche -->
+    <string name="nearby_channel_name">Personer i nærheten</string>
+    <string name="nearby_notification_hello">%1$s sier hei 👋</string>
+    <string name="nearby_notification_challenge">%1$s utfordrer deg i %2$s</string>
+    <string name="nearby_notification_body">Trykk for å godta eller avslå.</string>
+    <string name="nearby_trip_ready_title">Flykortet ditt er klart ✈️</string>
+    <string name="nearby_trip_ready_body">Fly %1$s: folk du har møtt, meldinger og spill i ett bilde du kan dele.</string>
+    <string name="nearby_trip_card_header">Fly %1$s · %2$s</string>
+    <string name="nearby_leaderboard_title">Resultattavle for fly %1$s</string>
+    <plurals name="nearby_leaderboard_wins">
+        <item quantity="one">Vunnede spill: %1$d av %2$d</item>
+        <item quantity="other">Vunnede spill: %1$d av %2$d</item>
+    </plurals>
+
+    <!-- Primo avvio -->
+    <string name="nearby_onboarding_1_title">Fungerer uten internett</string>
+    <string name="nearby_onboarding_1_body">Ingen Wi-Fi, ikke noe nett: AeroChat bruker Bluetooth på telefonen. På flyet, i t-banen, på konserter.</string>
+    <string name="nearby_onboarding_2_title">Meldinger går fra telefon til telefon</string>
+    <string name="nearby_onboarding_2_body">Hver telefon med AeroChat fungerer som en bro: meldingen hopper fra person til person helt frem til mottakeren. Alltid kryptert.</string>
+    <string name="nearby_onboarding_3_title">Jo flere dere er, jo lenger når den</string>
+    <string name="nearby_onboarding_3_body">Inviter de du reiser med: hver ny person forlenger rekkevidden for alle.</string>
+    <string name="nearby_onboarding_next">Neste</string>
+    <string name="nearby_onboarding_skip">Hopp over</string>
+    <string name="nearby_onboarding_start">La oss starte</string>
+    <string name="nearby_onboarding_try">Prøv med en gang med en virtuell passasjer</string>
+
+    <!-- Prova con il passeggero virtuale -->
+    <string name="nearby_try_now">Prøv med en gang</string>
+    <string name="nearby_try_now_hint">En prøvechat med en virtuell passasjer: den svarer og spiller kort, og alt blir på denne telefonen.</string>
+    <string name="nearby_demo_nickname">Virtuell passasjer</string>
+    <string name="nearby_demo_header">Virtuell passasjer · bare på denne telefonen</string>
+    <string name="nearby_demo_banner">Prøvechat: den virtuelle passasjeren finnes bare på denne telefonen, ingenting sendes.</string>
+    <string name="nearby_demo_delete">Slett</string>
+    <string name="nearby_demo_welcome">Hei! Jeg er den virtuelle passasjeren 👋 Jeg finnes bare på denne telefonen: skriv noe til meg eller utfordre meg i kort. Jeg har nettopp foreslått en Scopa her nedenfor!</string>
+    <string name="nearby_demo_cards_only">Jeg spiller bare kortspill: prøv å utfordre meg i Scopa eller Briscola! 🃏</string>
+    <string name="nearby_demo_game_over">Fint spilt! 🎉 Med ekte folk fungerer det på samme måte: inviter noen i nærheten.</string>
+    <string name="nearby_demo_invite_hint">Det morsomme begynner med ekte folk: inviter noen i nærheten og chat selv uten nett.</string>
+    <string name="nearby_demo_invite_cta">Inviter noen i nærheten</string>
+
+    <!-- Schermata principale contestuale -->
+    <string name="nearby_home_on_flight">Du er på fly %1$s</string>
+    <string name="nearby_home_on_flight_hint">Chat og spill med de som er om bord, også i flymodus.</string>
+    <string name="nearby_home_in_flight">Er du i luften? ✈️</string>
+    <string name="nearby_home_in_flight_hint">Legg til boardingkortet for å komme inn i Kabinen på flyet ditt.</string>
+    <string name="nearby_home_enter_lounge">Gå inn i flyets Kabin</string>
+    <string name="nearby_home_play_aboard">Spill med de som er om bord</string>
+    <string name="nearby_home_add_boarding">Legg til boardingkort</string>
+    <string name="nearby_home_ground_title">Ta med vennene dine om bord</string>
+    <string name="nearby_home_ground_hint">AeroChat fungerer uten internett: jo flere dere er, jo lenger når meldingene.</string>
+    <string name="nearby_home_invite">Inviter venner</string>
+    <string name="nearby_home_group">Opprett en gruppe</string>
+    <string name="nearby_empty_chats_hint">Si hei til noen i nærheten, legg til en venn med QR-kode eller prøv appen med en gang med en virtuell passasjer.</string>
+
+    <!-- Testi di consegna -->
+    <string name="nearby_queued_line">Leveres når dere er nær hverandre</string>
+    <plurals name="nearby_via_people_badge">
+        <item quantity="one">via %d person</item>
+        <item quantity="other">via %d personer</item>
+    </plurals>
+    <string name="nearby_status_near_you">Nær deg</string>
+    <string name="nearby_status_nobody">Ingen i nærheten akkurat nå</string>
+    <plurals name="nearby_status_people_nearby">
+        <item quantity="one">%d person i nærheten</item>
+        <item quantity="other">%d personer i nærheten</item>
+    </plurals>
+    <plurals name="nearby_status_via_people">
+        <item quantity="one">Kan nås via %d person</item>
+        <item quantity="other">Kan nås via %d personer</item>
+    </plurals>
+    <plurals name="nearby_status_via_people_short">
+        <item quantity="one">Via %d person</item>
+        <item quantity="other">Via %d personer</item>
+    </plurals>
+    <string name="nearby_status_out_of_range_waiting">Utenfor rekkevidde — meldingen venter</string>
+
+    <!-- Impostazioni -->
+    <string name="nearby_settings_profile">Profil</string>
+    <string name="nearby_settings_privacy">Personvern</string>
+    <string name="nearby_settings_notifications">Varsler</string>
+    <string name="nearby_settings_subscription">Abonnement</string>
+    <string name="nearby_settings_about">Info og juridisk</string>
+    <string name="nearby_settings_visible_short">Synlig</string>
+    <string name="nearby_settings_hidden_short">Usynlig</string>
+    <string name="nearby_settings_pro_active">Aktiv</string>
+    <string name="nearby_settings_open_to_games">Jeg tar imot kortutfordringer</string>
+    <string name="nearby_settings_visibility_footer">Når du er synlig, ser folk i nærheten kallenavnet og avatarfargen din og kan si hei eller utfordre deg. Ingen blir en kontakt uten ditt samtykke.</string>
+    <string name="nearby_settings_notifications_status">Appens varsler</string>
+    <string name="nearby_settings_on">På</string>
+    <string name="nearby_settings_off">Av</string>
+    <string name="nearby_settings_notifications_open">Åpne systeminnstillinger</string>
+    <string name="nearby_settings_notifications_footer">Meldinger, forespørsler fra personer i nærheten, nødvarsler og flykortet etter turen.</string>
+    <string name="nearby_settings_subscription_footer">Flight Group Pass låser opp Pro-funksjoner for deg og reisegruppen din.</string>
+</resources>

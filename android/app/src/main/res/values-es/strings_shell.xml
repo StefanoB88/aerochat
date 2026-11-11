@@ -11,9 +11,7 @@
     <string name="shell_banner_unauthorized_message">Permite el Bluetooth a AeroChat en Ajustes › Privacidad para hablar con tus compañeros de viaje.</string>
     <string name="shell_banner_unsupported_message">Este dispositivo no es compatible con el Bluetooth LE necesario para la red mesh.</string>
     <string name="shell_banner_off_message">Puedes volver a activar el Bluetooth con total seguridad (como con los auriculares inalámbricos) manteniendo apagada la señal móvil.</string>
-    <string name="shell_radio_direct">Conexión directa</string>
     <string name="shell_radio_out_of_range">Fuera de alcance</string>
-    <string name="shell_radio_out_of_range_queued">Fuera de alcance — envío en cola</string>
     <string name="shell_radio_status_a11y">Estado de la radio: %1$s</string>
     <string name="shell_onboarding_tagline">Mensajes entre asientos, sin Wi‑Fi y sin cuenta. Solo un apodo.</string>
     <string name="shell_onboarding_question">¿CÓMO TE LLAMAN A BORDO?</string>
@@ -65,11 +63,6 @@
     <string name="shell_paywall_buy">Comprar</string>
     <string name="shell_paywall_thanks">¡Gracias! El Pass está activo y se está compartiendo con tus grupos.</string>
     <string name="shell_paywall_failed">Compra no completada: %1$s</string>
-    <plurals name="shell_radio_via_bridge">
-        <item quantity="zero">Vía puente (%1$d saltos)</item>
-        <item quantity="one">Vía puente (%1$d salto)</item>
-        <item quantity="other">Vía puente (%1$d saltos)</item>
-    </plurals>
     <string name="shell_permission_bluetooth_rationale">AeroChat usa el Bluetooth para intercambiar mensajes cifrados con los compañeros de viaje cercanos, incluso sin Wi‑Fi ni red móvil.</string>
     <string name="shell_permission_camera_rationale">AeroChat usa la cámara para escanear el código QR de tus compañeros de viaje y para hacer las fotos que quieras enviar.</string>
     <string name="shell_permission_microphone_rationale">AeroChat usa el micrófono para grabar las notas de voz que envías a tus compañeros de viaje.</string>

@@ -27,6 +27,8 @@ enum PacketType {
   MESSAGE_REVISION = 14; // modifica/cancellazione di un proprio messaggio, stessa conversazione dell'originale, in coda: extra_data = MessageRevision
   PAIR_HELLO = 15;    // chi ha scansionato il QR si presenta a chi l'ha mostrato: chiave HKDF(token `pt` del QR), chiavi dichiarate nel payload, in coda fino al DELIVERY_ACK
   TYPING = 16;        // "sta scrivendo": diretto o di gruppo (mai Cabina Pubblica/del volo), ttl 2, mai in coda: extra_data = TypingIndicator
+  PRESENCE = 17;      // "chi e' vicino": recipient = Lounge (8 zeri), chiave della Lounge, ttl 1, mai in coda/DB/notifiche: extra_data = Presence
+  CONTACT_REQUEST = 18; // "Saluta"/"Sfida": diretto, chiave diretta, ttl 2, mai in coda, niente ACK: extra_data = ContactRequest
 }
 
 message MeshEnvelope {

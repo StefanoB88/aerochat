@@ -1,5 +1,10 @@
 package com.stefanobrandi.aerochat.ui.chat
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.runtime.produceState
 import android.app.KeyguardManager
 import android.content.Context
 import android.net.Uri
@@ -132,6 +137,7 @@ import com.stefanobrandi.aerochat.ui.components.ImageViewer
 import com.stefanobrandi.aerochat.ui.components.MessageBubble
 import com.stefanobrandi.aerochat.ui.components.PendingPhotoBubble
 import com.stefanobrandi.aerochat.ui.components.RadioStatusView
+import com.stefanobrandi.aerochat.core.review.DemoPeerService
 import com.stefanobrandi.aerochat.ui.components.rememberMicrophonePermission
 import com.stefanobrandi.aerochat.ui.groups.GroupInfoSheet
 import com.stefanobrandi.aerochat.ui.pairing.QRPairingSheet
@@ -889,6 +895,9 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
     val reportTarget by viewModel.reportTarget.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val typingNames by viewModel.typingNames.collectAsStateWithLifecycle()
+    val neighbors by LocalAppEnvironment.current.neighbors.collectAsStateWithLifecycle()
+    /** Chat con il passeggero virtuale (modalita' prova): tutto resta sul telefono. */
+    val isDemo = DemoPeerService.isDemoConversation(conversation)
     // Ricomposizione quando cambia lo stato Pro (abilita il pulsante di chiamata).
     LocalAppEnvironment.current.entitlementState.collectAsStateWithLifecycle()
 
@@ -965,8 +974,18 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
                                 }
                             }
                             // Al posto dello stato radio: "sta scrivendo…" (gruppo: chi, o quanti).
-                            if (typingNames.isEmpty()) {
-                                RadioStatusView(reachability = reachability)
+                            if (isDemo) {
+                                Text(
+                                    stringResource(R.string.nearby_demo_header),
+                                    style = AeroTheme.caption,
+                                    color = AeroTheme.accentEmerald,
+                                    maxLines = 1,
+                                )
+                            } else if (typingNames.isEmpty()) {
+                                RadioStatusView(
+                                    reachability = reachability,
+                                    nearbyCount = if (conversation.type == ConversationType.direct) null else neighbors.size,
+                                )
                             } else {
                                 TypingLabel(typingLabel(typingNames, isGroup = isGroup))
                             }
@@ -974,7 +993,7 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
                     }
                 },
                 actions = {
-                    if (conversation.type == ConversationType.direct) {
+                    if (conversation.type == ConversationType.direct && !isDemo) {
                         val canCall = viewModel.canCallNow(reachability)
                         val label = stringResource(R.string.chat_voice_call)
                         val hint = if (canCall) "" else stringResource(R.string.chat_call_hint)
@@ -1006,6 +1025,7 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
             Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
                 // Viste separate: i tick da 100 ms di registrazione/riproduzione ricompongono solo
                 // l'indicatore e la bolla in riproduzione, non l'intera lista dei messaggi.
+                if (isDemo) DemoChatBanner()
                 MessageListView(viewModel, Modifier.weight(1f))
                 if (suggestions.isNotEmpty()) {
                     SmartReplyBar(suggestions = suggestions, onPick = viewModel::useSuggestion)
@@ -1290,3 +1310,66 @@ private fun SmartReplyBar(suggestions: List<String>, onPick: (String) -> Unit) {
 
 private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean =
     if (this == null || other == null) this === other else contentEquals(other)
+
+/**
+ * Fascia della chat con il passeggero virtuale: chiarisce che e' una prova solo locale e, dopo la prima
+ * partita, invita a cercare chi e' vicino davvero.
+ */
+@Composable
+private fun DemoChatBanner() {
+    val environment = LocalAppEnvironment.current
+    val navController = LocalNavController.current
+    val scope = rememberCoroutineScope()
+    val database by environment.database.collectAsStateWithLifecycle()
+    // Dopo una partita finita compare l'invito "Invita chi e' vicino a te".
+    val finishedGame by produceState(false, database) {
+        val db = database ?: return@produceState
+        db.messages.observe(conversationID = DemoPeerService.conversationID).collect { list ->
+            value = list.any { message ->
+                message.contentType == com.stefanobrandi.aerochat.data.records.MessageContentType.game &&
+                    message.gameState?.let { runCatching { com.stefanobrandi.aerochat.core.games.GameSessionState.decode(it) }.getOrNull() }
+                        ?.status == com.stefanobrandi.aerochat.core.games.GameStatus.finished
+            }
+        }
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .background(AeroTheme.accentEmerald.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Outlined.SmartToy, contentDescription = null, tint = AeroTheme.accentEmerald, modifier = Modifier.size(18.dp))
+            Text(
+                stringResource(R.string.nearby_demo_banner),
+                style = AeroTheme.caption,
+                color = AeroTheme.textPrimary,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = {
+                Haptics.tap()
+                scope.launch {
+                    environment.setDemoMode(false)
+                    navController.popBackStack()
+                }
+            }) {
+                Text(stringResource(R.string.nearby_demo_delete), color = Color.Red, style = AeroTheme.captionSemibold)
+            }
+        }
+        if (finishedGame) {
+            Button(
+                onClick = {
+                    Haptics.tap()
+                    navController.navigate(AeroRoutes.nearby()) { popUpTo(AeroRoutes.tabs) }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AeroTheme.accentCyan, contentColor = Color.Black),
+            ) {
+                Text(stringResource(R.string.nearby_demo_invite_cta), fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}

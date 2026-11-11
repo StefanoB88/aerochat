@@ -52,12 +52,6 @@
     <string name="chat_passenger">Passasjer</string>
     <string name="chat_block_mute">Blokker / demp %s</string>
     <string name="chat_lounge_title">Offentlig kabin</string>
-    <plurals name="chat_passengers_in_range">
-        <item quantity="zero">Ingen passasjerer innen rekkevidde</item>
-        <item quantity="one">%d passasjer innen rekkevidde</item>
-        <item quantity="other">%d passasjerer innen rekkevidde</item>
-    </plurals>
-    <string name="chat_passengers_in_range_zero">Ingen passasjerer innen rekkevidde</string>
     <string name="chat_lounge_empty_hint">Bytt sete, del en taxi ved ankomst, klag på forsinkelsen. Anonymt, bare kallenavn, forsvinner etter 12 timer.</string>
     <string name="chat_group_name_placeholder">Gruppenavn (f.eks. Fly FR1234)</string>
     <string name="chat_travel_buddies">Reisekamerater</string>
@@ -66,10 +60,6 @@
     <string name="chat_new_group">Ny gruppe</string>
     <string name="chat_create">Opprett</string>
     <string name="chat_group_create_failed">Kunne ikke opprette gruppen: %s</string>
-    <plurals name="chat_hops">
-        <item quantity="one">%d hopp</item>
-        <item quantity="other">%d hopp</item>
-    </plurals>
     <string name="chat_save_to_photos">Lagre i Bilder</string>
     <string name="chat_photo">Bilde</string>
     <string name="chat_open_photo">Åpne bildet i fullskjerm</string>

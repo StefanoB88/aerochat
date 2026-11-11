@@ -36,7 +36,6 @@
     <string name="flight_card_slogan">Chat at 33,000 feet.</string>
     <string name="flight_card_slogan2">No Wi-Fi, no account, just Bluetooth.</string>
     <string name="flight_menu_boarding">Flight Cabin (Boarding Pass)</string>
-    <string name="flight_empty_hint">Scan your boarding pass to join your flight’s chat, or add your travel buddies at the gate: once on board, you’ll find each other over Bluetooth.</string>
     <string name="flight_paywall_pass24_title">24-Hour Single Flight Pass</string>
     <string name="flight_paywall_pass24_subtitle">One flight, one day. Photos, voice notes, and games for you and your group until landing.</string>
     <string name="flight_paywall_terms">Terms of Use</string>

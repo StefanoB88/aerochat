@@ -208,7 +208,8 @@ fun MessageBubble(
             val hops = message.hopCountReceived
             if (hops != null && hops > 1 && !isOutgoing) {
                 Text(
-                    pluralStringResource(R.plurals.chat_hops, hops, hops),
+                    // "via 2 persone": i telefoni che hanno fatto da ponte (hops - 1).
+                    pluralStringResource(R.plurals.nearby_via_people_badge, hops - 1, hops - 1),
                     fontSize = 9.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.Black,
@@ -565,6 +566,16 @@ private fun ColumnScope.BubbleFooter(message: MessageRecord) {
         }
         Text(timeLabel(message.createdAtMs), fontSize = 11.sp, color = AeroTheme.textSecondary)
         if (message.isOutgoing) StatusIcon(message.deliveryStatus)
+    }
+    // In coda: detto con parole umane, invece del solo orologio.
+    if (message.isOutgoing && message.deliveryStatus == DeliveryStatus.queued && !message.isDeleted) {
+        Text(
+            stringResource(R.string.nearby_queued_line),
+            fontSize = 11.sp,
+            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+            color = AeroTheme.textSecondary,
+            modifier = Modifier.align(Alignment.End),
+        )
     }
 }
 

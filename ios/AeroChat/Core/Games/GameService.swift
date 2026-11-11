@@ -91,6 +91,11 @@ actor GameService {
     /// ai punti di sospensione dell'actor.
     private var cardLockBusy = false
     private var cardLockWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Passeggero virtuale: le mosse verso di lui non vanno in radio, risponde `DemoGameBot` in locale.
+    private var localBot: DemoGameBot?
+    /// Pausa prima di ogni risposta del passeggero virtuale (come un avversario vero).
+    private var localBotDelay: Duration = .milliseconds(900)
+    private var routerEventsTask: Task<Void, Never>?
 
     init(router: MeshRouterActor, database: AppDatabase, identity: IdentityKeys, nickname: String) {
         self.router = router
@@ -108,11 +113,35 @@ actor GameService {
                 await self.handle(packet)
             }
         }
+        // "Sfida" accettata dall'altro (CONTACT_REQUEST ACCEPT con game_kind): parte subito l'invito.
+        let events = await router.events()
+        routerEventsTask = Task { [weak self] in
+            for await event in events {
+                guard let self else { break }
+                if case .contactRequestAnswered(_, _, _, .accepted(let conversationID), let gameKind) = event, gameKind != 0 {
+                    await self.inviteAfterAcceptedChallenge(conversationID: conversationID, gameKind: gameKind)
+                }
+            }
+        }
     }
 
     func stop() {
         inboundTask?.cancel()
         inboundTask = nil
+        routerEventsTask?.cancel()
+        routerEventsTask = nil
+    }
+
+    /// Attiva (o spegne con nil) l'avversario locale del passeggero virtuale.
+    func setLocalBot(_ bot: DemoGameBot?, delay: Duration = .milliseconds(900)) {
+        localBot = bot
+        localBotDelay = delay
+    }
+
+    private func inviteAfterAcceptedChallenge(conversationID: String, gameKind: Int32) async {
+        guard let kind = GameKind(rawValue: Int(gameKind)), NearbyProtocol.challengeKinds.contains(kind),
+              let conversation = try? await database.conversations.fetch(id: conversationID) else { return }
+        _ = try? await invite(kind: kind, in: conversation)
     }
 
     func setNickname(_ nickname: String) {
@@ -185,6 +214,7 @@ actor GameService {
                                                  retainUntilAck: true)
         try await database.messages.updateDeliveryStatus(result.reached ? .sentMesh : .queued, msgID: msgID)
         emit(.updated(gameID: state.gameID, conversationID: conversation.id))
+        forwardToLocalBot(move, opponent: opponent, conversationID: conversation.id)
         return state
     }
 
@@ -339,6 +369,10 @@ actor GameService {
                                     hopCountReceived: packet.hopCount, createdAtMs: packet.envelope.createdAtMs)
         _ = try? await database.messages.insert(message)
         emit(.updated(gameID: state.gameID, conversationID: packet.conversation.id))
+        // "Sfida" gia' accettata con CONTACT_REQUEST: l'ACCEPT vale come consenso.
+        if await router.consumeAcceptedChallenge(from: packet.sender.nodeID, kind: move.kind) {
+            _ = try? await accept(gameID: move.gameID)
+        }
     }
 
     private func handleOpponentMove(_ move: GameMove, state incoming: GameSessionState) async {
@@ -416,6 +450,43 @@ actor GameService {
         await persist(state)
         // In coda fino al DELIVERY_ACK dell'avversario: una mossa persa non blocca piu' la partita.
         _ = try await router.sendPacket(type: .gameMove, payload: payload(for: move), in: conversation, retainUntilAck: true)
+        forwardToLocalBot(move, opponent: state.opponentNodeID, conversationID: state.conversationID)
+    }
+
+    // MARK: - Passeggero virtuale
+
+    /// La mossa per il passeggero virtuale non e' uscita in radio (il router la scarta): la riceve il bot,
+    /// le sue risposte rientrano come mosse ricevute (stesso percorso dei pacchetti veri).
+    private func forwardToLocalBot(_ move: GameMove, opponent: Data, conversationID: String) {
+        guard let bot = localBot, bot.botNodeID == opponent else { return }
+        let me = identity.nodeID
+        let delay = localBotDelay
+        // Fuori dal lock delle carte (siamo dentro `send`): le risposte arrivano dopo una pausa.
+        Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            let replies = await bot.respond(to: move, from: me)
+            for reply in replies {
+                guard let self else { return }
+                await self.receiveFromLocalBot(reply, botNodeID: bot.botNodeID, conversationID: conversationID)
+                try? await Task.sleep(for: delay / 2)
+            }
+        }
+    }
+
+    private func receiveFromLocalBot(_ move: GameMove, botNodeID: Data, conversationID: String) async {
+        guard let conversation = try? await database.conversations.fetch(id: conversationID),
+              let peer = try? await database.peers.fetch(nodeID: botNodeID),
+              let data = try? MeshWire.serialize(move) else { return }
+        var envelope = MeshEnvelope()
+        envelope.msgID = CryptoEngine.randomMessageID()
+        envelope.senderNodeID = botNodeID
+        envelope.recipientID = identity.nodeID
+        envelope.packetType = .gameMove
+        envelope.createdAtMs = Date.nowUnixMilliseconds
+        var payload = InnerPayload()
+        payload.senderNickname = peer.nickname
+        payload.extraData = data
+        await handle(InboundPacket(envelope: envelope, payload: payload, conversation: conversation, sender: peer, hopCount: 1))
     }
 
     private func persist(_ state: GameSessionState) async {
@@ -615,6 +686,10 @@ extension GameService {
         // Mosse della stessa partita arrivate prima dell'invito.
         for orphan in orphanCardMoves.removeValue(forKey: move.gameID) ?? [] {
             await handleCardMove(orphan.move, packet: orphan.packet)
+        }
+        // "Sfida" gia' accettata con CONTACT_REQUEST (siamo gia' dentro il lock delle carte).
+        if move.kind != .scopone, await router.consumeAcceptedChallenge(from: sender, kind: move.kind) {
+            _ = try? await acceptCardGame(gameID: move.gameID)
         }
     }
 

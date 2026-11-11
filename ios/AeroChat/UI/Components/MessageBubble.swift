@@ -46,7 +46,7 @@ struct MessageBubble: View {
                         in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(alignment: .topLeading) {
                 if let hops = message.hopCountReceived, hops > 1, !isOutgoing {
-                    Text("\(hops) salti")
+                    Text("via \(max(1, hops - 1)) persone")
                         .font(.system(size: 9, weight: .semibold))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
@@ -170,17 +170,26 @@ struct MessageBubble: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 4) {
-            if message.editedAtMs != nil, !message.isDeleted {
-                Text("modificato")
+        VStack(alignment: .trailing, spacing: 2) {
+            HStack(spacing: 4) {
+                if message.editedAtMs != nil, !message.isDeleted {
+                    Text("modificato")
+                        .font(.caption2)
+                        .foregroundStyle(AeroTheme.textSecondary)
+                }
+                Text(Date(unixMilliseconds: message.createdAtMs), style: .time)
                     .font(.caption2)
                     .foregroundStyle(AeroTheme.textSecondary)
+                if isOutgoing {
+                    statusIcon
+                }
             }
-            Text(Date(unixMilliseconds: message.createdAtMs), style: .time)
-                .font(.caption2)
-                .foregroundStyle(AeroTheme.textSecondary)
-            if isOutgoing {
-                statusIcon
+            // In attesa: spiegato a parole, non solo con l'orologio.
+            if isOutgoing, message.deliveryStatus == .queued, !message.isDeleted,
+               message.conversationID != ConversationRecord.cabinLoungeID {
+                Text("Arriverà quando sarete vicini")
+                    .font(.caption2)
+                    .foregroundStyle(AeroTheme.textSecondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -195,13 +204,13 @@ struct MessageBubble: View {
             Image(systemName: "clock")
                 .font(.caption2)
                 .foregroundStyle(AeroTheme.textSecondary)
-                .accessibilityLabel("Non ancora inviato")
+                .accessibilityLabel("In attesa: arriverà quando sarete vicini")
         case .sentMesh:
             DeliveryTicks(count: 1, color: AeroTheme.textSecondary)
-                .accessibilityLabel("Inviato")
+                .accessibilityLabel("Partito verso i telefoni vicini")
         case .deliveredAck:
             DeliveryTicks(count: 2, color: AeroTheme.textSecondary)
-                .accessibilityLabel("Consegnato")
+                .accessibilityLabel("Arrivato")
         case .read:
             DeliveryTicks(count: 2, color: AeroTheme.accentCyan)
                 .accessibilityLabel("Letto")

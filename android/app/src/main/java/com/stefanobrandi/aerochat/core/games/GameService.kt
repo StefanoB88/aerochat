@@ -6,6 +6,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import com.stefanobrandi.aerochat.core.crypto.CryptoEngine
 import com.stefanobrandi.aerochat.core.crypto.IdentityKeys
 import com.stefanobrandi.aerochat.core.mesh.InboundPacket
+import com.stefanobrandi.aerochat.core.mesh.RouterEvent
 import com.stefanobrandi.aerochat.core.mesh.MeshRouterActor
 import com.stefanobrandi.aerochat.core.protocol.InnerPayloadFactory
 import com.stefanobrandi.aerochat.core.protocol.MeshWire
@@ -304,6 +305,7 @@ class GameService(
 
     private var nickname: String = nickname
     private var inboundTask: Job? = null
+    private var routerEventsTask: Job? = null
     private val subscriberIDs = AtomicLong(0)
     private val subscribers = ConcurrentHashMap<Long, Channel<Event>>()
     /** Carte: mosse arrivate prima dell'invito della loro partita (rigiocate quando arriva l'invito). */
@@ -324,12 +326,38 @@ class GameService(
                 if (packet.envelope.packetType == PacketType.GAME_MOVE) handle(packet)
             }
         }
+        // "Sfida" accettata da una persona vicina: chi ha chiesto manda subito l'invito nella nuova chat
+        // (dall'altra parte si accetta da solo: l'ACCEPT vale come consenso).
+        val routerEvents = router.events()
+        routerEventsTask = scope.launch {
+            routerEvents.collect { event ->
+                if (event is RouterEvent.ContactAccepted && event.requestedByMe && event.gameKind != 0) {
+                    runCatching { startChallenge(event.conversationID, event.gameKind) }
+                        .onFailure { if (it is CancellationException) throw it }
+                }
+            }
+        }
     }
 
     fun stop() {
         inboundTask?.cancel()
         inboundTask = null
+        routerEventsTask?.cancel()
+        routerEventsTask = null
     }
+
+    /** Invito della sfida accettata (`CONTACT_REQUEST` con `game_kind`) nella chat appena creata. */
+    private suspend fun startChallenge(conversationID: String, kind: Int) {
+        val gameKind = GameKind.forNumber(kind) ?: return
+        val conversation = database.conversations.fetch(id = conversationID) ?: return
+        invite(gameKind, conversation)
+    }
+
+    /**
+     * Modalita' prova: mossa del passeggero virtuale consegnata come se arrivasse dalla radio (stessa
+     * validazione); niente esce dal telefono.
+     */
+    internal suspend fun injectLocal(packet: InboundPacket): Unit = withContext(actorContext) { handle(packet) }
 
     suspend fun setNickname(nickname: String): Unit = withContext(actorContext) {
         this@GameService.nickname = nickname
@@ -573,6 +601,10 @@ class GameService(
         )
         runCatching { database.messages.insert(message) }
         emit(Event.Updated(gameID = state.gameID, conversationID = packet.conversation.id))
+        // Sfida appena accettata da noi tra le persone vicine: l'invito si accetta da solo.
+        if (router.consumeAcceptedChallenge(from = packet.sender.nodeID, kind = move.kind.number)) {
+            runCatching { accept(state.gameID) }.onFailure { if (it is CancellationException) throw it }
+        }
     }
 
     private suspend fun handleOpponentMove(move: GameMove, state: GameSessionState) {
@@ -858,6 +890,12 @@ class GameService(
         )
         if (runCatching { database.messages.insert(message) }.isFailure) return
         emit(Event.Updated(gameID = state.gameID, conversationID = packet.conversation.id))
+        // Sfida appena accettata da noi tra le persone vicine: l'invito si accetta da solo (siamo gia' nel cardLock).
+        if (move.kind != GameKind.SCOPONE &&
+            router.consumeAcceptedChallenge(from = sender, kind = move.kind.number)
+        ) {
+            runCatching { acceptCardGame(state.gameID) }.onFailure { if (it is CancellationException) throw it }
+        }
 
         // Mosse della stessa partita arrivate prima dell'invito.
         for ((orphan, orphanPacket) in orphanCardMoves.remove(move.gameId) ?: emptyList()) {

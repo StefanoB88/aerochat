@@ -38,6 +38,10 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Radar
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.ChevronRight
+import com.stefanobrandi.aerochat.ui.AeroRoutes
+import com.stefanobrandi.aerochat.ui.LocalNavController
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Quiz
@@ -366,6 +370,7 @@ fun CabinLoungeView() {
     val quizState by environment.quizState.collectAsStateWithLifecycle()
     val settings by AppSettings.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val navController = LocalNavController.current
     val focusManager = LocalFocusManager.current
     // Regole della Cabina: finche' non sono accettate, il foglio si apre a ogni visita della bacheca.
     var showRules by remember { mutableStateOf(!AppSettings.hasAcceptedLoungeRules) }
@@ -465,6 +470,14 @@ fun CabinLoungeView() {
                             tint = AeroTheme.accentCyan,
                         )
                     }
+                    // "Sfida chi e' vicino": Persone vicine filtrate su chi accetta sfide a carte.
+                    IconButton(onClick = { Haptics.tap(); navController.navigate(AeroRoutes.nearby(gamesOnly = true)) }) {
+                        Icon(
+                            Icons.Filled.SportsEsports,
+                            contentDescription = stringResource(R.string.nearby_challenge_title),
+                            tint = AeroTheme.accentEmerald,
+                        )
+                    }
                     QuizToolbarButton(state = quizState, onClick = {
                         Haptics.tap()
                         showQuiz = true
@@ -517,9 +530,9 @@ fun CabinLoungeView() {
                 LoungeHeader(
                     neighborCount = neighbors.size,
                     expiryText = lounge?.let { viewModel.expiryText(now) } ?: "",
-                    onOpenRadar = {
+                    onOpenNearby = {
                         Haptics.tap()
-                        showRadar = true
+                        navController.navigate(AeroRoutes.nearby())
                     },
                 )
                 LazyColumn(
@@ -673,8 +686,8 @@ private fun LoungeMessage(
 }
 
 @Composable
-private fun LoungeHeader(neighborCount: Int, expiryText: String, onOpenRadar: () -> Unit) {
-    val radarHint = stringResource(R.string.lounge11_open_radar_hint)
+private fun LoungeHeader(neighborCount: Int, expiryText: String, onOpenNearby: () -> Unit) {
+    val nearbyHint = stringResource(R.string.nearby_title)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -682,9 +695,9 @@ private fun LoungeHeader(neighborCount: Int, expiryText: String, onOpenRadar: ()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Numero dei vicini: un tocco apre il radar di prossimita'.
+        // Numero dei vicini: un tocco apre "Persone vicine".
         Row(
-            modifier = Modifier.clickable(onClickLabel = radarHint, onClick = onOpenRadar),
+            modifier = Modifier.clickable(onClickLabel = nearbyHint, onClick = onOpenNearby),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -696,10 +709,16 @@ private fun LoungeHeader(neighborCount: Int, expiryText: String, onOpenRadar: ()
             )
             Text(
                 // Android ignora quantity="zero" (it/en/...): lo zero ha una stringa propria, come la variante "zero" di iOS.
-                if (neighborCount == 0) stringResource(R.string.chat_passengers_in_range_zero)
-                else pluralStringResource(R.plurals.chat_passengers_in_range, neighborCount, neighborCount),
+                if (neighborCount == 0) stringResource(R.string.nearby_status_nobody)
+                else pluralStringResource(R.plurals.nearby_status_people_nearby, neighborCount, neighborCount),
                 style = AeroTheme.caption,
                 color = AeroTheme.textSecondary,
+            )
+            Icon(
+                Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = AeroTheme.textSecondary,
+                modifier = Modifier.size(14.dp),
             )
         }
         Spacer(Modifier.weight(1f))

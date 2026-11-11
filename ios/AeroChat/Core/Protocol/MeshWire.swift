@@ -24,6 +24,9 @@ typealias EmergencyStatus = Aeromesh_V1_EmergencyStatus
 typealias MessageRevision = Aeromesh_V1_MessageRevision
 typealias RevisionAction = Aeromesh_V1_RevisionAction
 typealias TypingIndicator = Aeromesh_V1_TypingIndicator
+typealias Presence = Aeromesh_V1_Presence
+typealias ContactAction = Aeromesh_V1_ContactAction
+typealias ContactRequest = Aeromesh_V1_ContactRequest
 
 /// Punto unico di (de)serializzazione Protobuf, cosi' il resto dell'app (e i test)
 /// non dipendono direttamente dalle API di SwiftProtobuf.
@@ -75,6 +78,22 @@ enum MeshWire {
 
     static func serialize(_ typing: TypingIndicator) throws -> Data {
         try typing.serializedBytes()
+    }
+
+    static func serialize(_ presence: Presence) throws -> Data {
+        try presence.serializedBytes()
+    }
+
+    static func serialize(_ request: ContactRequest) throws -> Data {
+        try request.serializedBytes()
+    }
+
+    static func parsePresence(_ data: Data) throws -> Presence {
+        try Presence(serializedBytes: data)
+    }
+
+    static func parseContactRequest(_ data: Data) throws -> ContactRequest {
+        try ContactRequest(serializedBytes: data)
     }
 
     static func parseTypingIndicator(_ data: Data) throws -> TypingIndicator {

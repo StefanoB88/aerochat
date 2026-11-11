@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.3: Persone vicine (PRESENCE / CONTACT_REQUEST), prova con il passeggero virtuale, schermata
+     principale contestuale, testi di consegna "umani", ricordo del viaggio, impostazioni raggruppate. -->
+<resources>
+    <!-- Persone vicine -->
+    <string name="nearby_title">Personnes à proximité</string>
+    <string name="nearby_challenge_title">Défie quelqu’un à proximité</string>
+    <string name="nearby_requests">Demandes</string>
+    <string name="nearby_people_section">Près de toi</string>
+    <plurals name="nearby_people_count">
+        <item quantity="one">%d personne à proximité</item>
+        <item quantity="many">%d personnes à proximité</item>
+        <item quantity="other">%d personnes à proximité</item>
+    </plurals>
+    <string name="nearby_visible_toggle">Visible par les personnes à proximité</string>
+    <string name="nearby_visible_on_hint">Ceux qui ont AeroChat ouvert près de toi voient ton pseudo et peuvent te saluer.</string>
+    <string name="nearby_visible_off_hint">Tu es invisible : les autres ne te verront pas, mais tu continues à les voir.</string>
+    <string name="nearby_only_games">Seulement ceux qui acceptent les défis</string>
+    <string name="nearby_say_hello">Saluer</string>
+    <string name="nearby_challenge">Défier</string>
+    <string name="nearby_open_chat">Ouvrir la discussion</string>
+    <string name="nearby_waiting">En attente…</string>
+    <string name="nearby_pick_game">Défier %1$s à…</string>
+    <string name="nearby_same_flight">Sur ton vol</string>
+    <string name="nearby_already_contact">Déjà dans tes contacts</string>
+    <string name="nearby_signal_very_close">Très proche</string>
+    <string name="nearby_signal_close">Proche</string>
+    <string name="nearby_signal_far">Un peu loin</string>
+    <string name="nearby_signal_unknown">Dans les parages</string>
+    <string name="nearby_accept">Accepter</string>
+    <string name="nearby_decline">Refuser</string>
+    <string name="nearby_reply">Répondre</string>
+    <string name="nearby_hello_sent">Salut envoyé à %1$s</string>
+    <string name="nearby_challenge_sent">Défi envoyé à %1$s</string>
+    <string name="nearby_send_failed">Échec de l’envoi : rapproche-toi et réessaie.</string>
+    <string name="nearby_accepted">%1$s a accepté !</string>
+    <string name="nearby_declined">Demande refusée par %1$s</string>
+    <string name="nearby_empty_title">Personne à proximité pour l’instant</string>
+    <string name="nearby_empty_hint">Ceux qui ont AeroChat ouvert près de toi apparaîtront ici. Plus vous êtes nombreux, plus les messages vont loin.</string>
+    <string name="nearby_invite_friends">Inviter des amis</string>
+    <string name="nearby_try_demo">Essayer avec le passager virtuel</string>
+    <string name="nearby_game_scopa">Scopa</string>
+    <string name="nearby_game_briscola">Briscola</string>
+    <string name="nearby_game_tictactoe">Morpion</string>
+    <string name="nearby_game_battleship">Bataille navale</string>
+
+    <!-- Notifiche -->
+    <string name="nearby_channel_name">Personnes à proximité</string>
+    <string name="nearby_notification_hello">%1$s te salue 👋</string>
+    <string name="nearby_notification_challenge">%1$s te défie à %2$s</string>
+    <string name="nearby_notification_body">Touche pour accepter ou refuser.</string>
+    <string name="nearby_trip_ready_title">Ta carte postale de vol est prête ✈️</string>
+    <string name="nearby_trip_ready_body">Vol %1$s : personnes rencontrées, messages et parties dans une image à partager.</string>
+    <string name="nearby_trip_card_header">Vol %1$s · %2$s</string>
+    <string name="nearby_leaderboard_title">Classement du vol %1$s</string>
+    <plurals name="nearby_leaderboard_wins">
+        <item quantity="one">Parties gagnées : %1$d sur %2$d</item>
+        <item quantity="many">Parties gagnées : %1$d sur %2$d</item>
+        <item quantity="other">Parties gagnées : %1$d sur %2$d</item>
+    </plurals>
+
+    <!-- Primo avvio -->
+    <string name="nearby_onboarding_1_title">Fonctionne sans internet</string>
+    <string name="nearby_onboarding_1_body">Pas de Wi-Fi, pas de réseau : AeroChat utilise le Bluetooth de ton téléphone. En avion, dans le métro, aux concerts.</string>
+    <string name="nearby_onboarding_2_title">Les messages passent de téléphone en téléphone</string>
+    <string name="nearby_onboarding_2_body">Chaque téléphone avec AeroChat sert de relais : le message saute de personne en personne jusqu’à son destinataire. Toujours chiffré.</string>
+    <string name="nearby_onboarding_3_title">Plus vous êtes nombreux, plus ça va loin</string>
+    <string name="nearby_onboarding_3_body">Invite ceux qui voyagent avec toi : chaque personne en plus allonge la portée pour tout le monde.</string>
+    <string name="nearby_onboarding_next">Suivant</string>
+    <string name="nearby_onboarding_skip">Passer</string>
+    <string name="nearby_onboarding_start">C’est parti</string>
+    <string name="nearby_onboarding_try">Essaie tout de suite avec un passager virtuel</string>
+
+    <!-- Prova con il passeggero virtuale -->
+    <string name="nearby_try_now">Essayer maintenant</string>
+    <string name="nearby_try_now_hint">Une discussion d’essai avec un passager virtuel : il répond et joue aux cartes, tout reste sur ce téléphone.</string>
+    <string name="nearby_demo_nickname">Passager virtuel</string>
+    <string name="nearby_demo_header">Passager virtuel · uniquement sur ce téléphone</string>
+    <string name="nearby_demo_banner">Discussion d’essai : le passager virtuel vit uniquement sur ce téléphone, rien n’est envoyé.</string>
+    <string name="nearby_demo_delete">Supprimer</string>
+    <string name="nearby_demo_welcome">Salut ! Je suis le passager virtuel 👋 Je vis uniquement sur ce téléphone : écris-moi quelque chose ou défie-moi aux cartes. Je viens de te proposer une Scopa juste en dessous !</string>
+    <string name="nearby_demo_cards_only">Je ne joue qu’aux cartes : essaie de me défier à la Scopa ou à la Briscola ! 🃏</string>
+    <string name="nearby_demo_game_over">Belle partie ! 🎉 Avec de vraies personnes, ça marche pareil : invite quelqu’un près de toi.</string>
+    <string name="nearby_demo_invite_hint">Le plus fun arrive avec de vraies personnes : invite quelqu’un près de toi et discutez même sans réseau.</string>
+    <string name="nearby_demo_invite_cta">Inviter quelqu’un près de toi</string>
+
+    <!-- Schermata principale contestuale -->
+    <string name="nearby_home_on_flight">Tu es sur le vol %1$s</string>
+    <string name="nearby_home_on_flight_hint">Discute et joue avec ceux qui sont à bord, même en mode avion.</string>
+    <string name="nearby_home_in_flight">Tu es en vol ? ✈️</string>
+    <string name="nearby_home_in_flight_hint">Ajoute ta carte d’embarquement pour entrer dans la Cabine de ton vol.</string>
+    <string name="nearby_home_enter_lounge">Entrer dans la Cabine du vol</string>
+    <string name="nearby_home_play_aboard">Jouer avec ceux qui sont à bord</string>
+    <string name="nearby_home_add_boarding">Ajouter la carte d’embarquement</string>
+    <string name="nearby_home_ground_title">Emmène tes amis à bord</string>
+    <string name="nearby_home_ground_hint">AeroChat fonctionne sans internet : plus vous êtes nombreux, plus les messages vont loin.</string>
+    <string name="nearby_home_invite">Inviter des amis</string>
+    <string name="nearby_home_group">Créer un groupe</string>
+    <string name="nearby_empty_chats_hint">Salue quelqu’un près de toi, ajoute un ami avec le QR code ou essaie tout de suite l’app avec un passager virtuel.</string>
+
+    <!-- Testi di consegna -->
+    <string name="nearby_queued_line">Arrivera quand vous serez proches</string>
+    <plurals name="nearby_via_people_badge">
+        <item quantity="one">via %d personne</item>
+        <item quantity="many">via %d personnes</item>
+        <item quantity="other">via %d personnes</item>
+    </plurals>
+    <string name="nearby_status_near_you">Près de toi</string>
+    <string name="nearby_status_nobody">Personne à proximité pour l’instant</string>
+    <plurals name="nearby_status_people_nearby">
+        <item quantity="one">%d personne à proximité</item>
+        <item quantity="many">%d personnes à proximité</item>
+        <item quantity="other">%d personnes à proximité</item>
+    </plurals>
+    <plurals name="nearby_status_via_people">
+        <item quantity="one">Joignable via %d personne</item>
+        <item quantity="many">Joignable via %d personnes</item>
+        <item quantity="other">Joignable via %d personnes</item>
+    </plurals>
+    <plurals name="nearby_status_via_people_short">
+        <item quantity="one">Via %d personne</item>
+        <item quantity="many">Via %d personnes</item>
+        <item quantity="other">Via %d personnes</item>
+    </plurals>
+    <string name="nearby_status_out_of_range_waiting">Hors de portée — le message attendra</string>
+
+    <!-- Impostazioni -->
+    <string name="nearby_settings_profile">Profil</string>
+    <string name="nearby_settings_privacy">Confidentialité</string>
+    <string name="nearby_settings_notifications">Notifications</string>
+    <string name="nearby_settings_subscription">Abonnement</string>
+    <string name="nearby_settings_about">Infos &amp; mentions légales</string>
+    <string name="nearby_settings_visible_short">Visible</string>
+    <string name="nearby_settings_hidden_short">Invisible</string>
+    <string name="nearby_settings_pro_active">Actif</string>
+    <string name="nearby_settings_open_to_games">J’accepte les défis aux cartes</string>
+    <string name="nearby_settings_visibility_footer">Si tu es visible, les personnes à proximité voient ton pseudo et la couleur de ton avatar, et peuvent te saluer ou te défier. Personne ne devient un contact sans ton accord.</string>
+    <string name="nearby_settings_notifications_status">Notifications de l’app</string>
+    <string name="nearby_settings_on">Activées</string>
+    <string name="nearby_settings_off">Désactivées</string>
+    <string name="nearby_settings_notifications_open">Ouvrir les réglages système</string>
+    <string name="nearby_settings_notifications_footer">Messages, demandes des personnes à proximité, alertes d’urgence et la carte postale de fin de vol.</string>
+    <string name="nearby_settings_subscription_footer">Le Flight Group Pass débloque les fonctions Pro pour toi et ton groupe de voyage.</string>
+</resources>

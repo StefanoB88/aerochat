@@ -7,13 +7,10 @@
     <string name="core11_emergency_generic">Alert</string>
     <string name="core11_emergency_body_default">Alert from a nearby passenger.</string>
     <string name="core11_emergency_channel_name">Emergency Alert</string>
-    <string name="core11_demo_nickname">Demo Crew</string>
-    <string name="core11_demo_reply_1">Hi! I’m the simulated travel buddy: I reply from this same device, no Bluetooth needed. 👋</string>
     <string name="core11_demo_reply_2">With a second phone, messages would travel over the BLE mesh, encrypted end-to-end.</string>
     <string name="core11_demo_reply_3">Try touching and holding one of my messages: you can report it or block me.</string>
     <string name="core11_demo_reply_4">In the Cabin tab you’ll find the 12-hour public board, with the rules to accept.</string>
     <string name="core11_demo_reply_5">Photos you receive from people you haven’t scanned in person stay blurred until you tap them.</string>
-    <string name="core11_demo_reply_6">Have a good flight! ✈️ You can turn me off anytime from Settings › About.</string>
     <string name="core11_demo_lounge_1">Anyone know if the snack cart comes by before or after takeoff? 🍫</string>
     <string name="core11_demo_lounge_2">Row 12 here: there’s an amazing sunset out the window.</string>
     <string name="core11_report_spam">Spam or advertising</string>

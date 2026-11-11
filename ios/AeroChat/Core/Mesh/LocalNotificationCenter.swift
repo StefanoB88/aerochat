@@ -1,6 +1,7 @@
 import Foundation
 import UserNotifications
 import UIKit
+import Observation
 
 /// Chat attualmente sullo schermo: solo per quella (con iPhone sbloccato e app attiva) il banner e' superfluo.
 @MainActor
@@ -91,6 +92,32 @@ struct LocalNotificationCenter: MeshNotifier {
         try? await UNUserNotificationCenter.current().add(request)
     }
 
+    /// "Marco ti saluta" / "Marco ti sfida a Scopa": il tocco apre "Persone vicine".
+    func notifyContactRequest(_ request: IncomingContactRequest) async {
+        let content = UNMutableNotificationContent()
+        content.title = await MainActor.run { ContactRequestStore.title(for: request) }
+        content.body = request.greeting.isEmpty
+            ? String(localized: "Tocca per rispondere: Accetta o Rifiuta in Persone vicine.")
+            : request.greeting
+        content.sound = .default
+        content.threadIdentifier = "contact-requests"
+        content.userInfo = [DeepLink.userInfoKey: DeepLink.nearbyValue]
+        let request = UNNotificationRequest(identifier: "contact-\(request.requestID.hexString)", content: content, trigger: nil)
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+
+    /// Volo finito: una sola notifica per volo, il tocco apre la cartolina gia' compilata.
+    func notifyTripCard(_ trip: FlightTrip) async {
+        let content = UNMutableNotificationContent()
+        content.title = String(localized: "La tua cartolina di volo è pronta ✈️")
+        content.body = String(localized: "Il volo \(trip.flightNumber) in numeri: persone incontrate, messaggi e partite. Tocca per vederla.")
+        content.sound = .default
+        content.threadIdentifier = "trip-card"
+        content.userInfo = [DeepLink.userInfoKey: DeepLink.tripCardPrefix + trip.flightCode]
+        let request = UNNotificationRequest(identifier: "trip-\(trip.flightCode)", content: content, trigger: nil)
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+
     static func preview(for message: MessageRecord) -> String {
         switch message.contentType {
         case .text: return message.text ?? ""
@@ -123,4 +150,39 @@ final class NotificationPresentationDelegate: NSObject, UNUserNotificationCenter
         }
         return isShowing ? [] : [.banner, .list, .sound]
     }
+
+    /// Tocco su una notifica: richieste di contatto -> "Persone vicine", volo finito -> cartolina.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        guard let value = response.notification.request.content.userInfo[DeepLink.userInfoKey] as? String,
+              let link = DeepLink(userInfoValue: value) else { return }
+        await MainActor.run { DeepLinkCenter.shared.pending = link }
+    }
+}
+
+/// Destinazioni aperte dal tocco su una notifica locale.
+enum DeepLink: Equatable, Sendable {
+    case nearby
+    case tripCard(flightCode: String)
+
+    static let userInfoKey = "deep_link"
+    static let nearbyValue = "nearby"
+    static let tripCardPrefix = "trip:"
+
+    init?(userInfoValue value: String) {
+        if value == Self.nearbyValue {
+            self = .nearby
+        } else if value.hasPrefix(Self.tripCardPrefix) {
+            self = .tripCard(flightCode: String(value.dropFirst(Self.tripCardPrefix.count)))
+        } else {
+            return nil
+        }
+    }
+}
+
+/// Ultimo deep link da aprire (osservato dalla schermata principale).
+@MainActor
+@Observable
+final class DeepLinkCenter {
+    static let shared = DeepLinkCenter()
+    var pending: DeepLink?
 }

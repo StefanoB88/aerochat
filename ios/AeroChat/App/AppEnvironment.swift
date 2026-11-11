@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import Network
 
 /// Composition root dell'app: apre il database, carica (o crea) l'identita', avvia radio BLE, router
 /// mesh e servizi (media, giochi, monetizzazione) e riflette il loro stato verso SwiftUI.
@@ -52,6 +53,26 @@ final class AppEnvironment {
     private(set) var unreadTotal = 0
     /// "Sta scrivendo" ricevuti, per conversazione (intestazione della chat e riga della lista).
     let typing = TypingStore()
+    /// "Persone vicine" (PRESENCE) e "Richieste" (CONTACT_REQUEST), solo in memoria.
+    let presence = PresenceStore()
+    let contactRequests = ContactRequestStore()
+    /// Chat da aprire (dopo Accetta, "Saluta" a un contatto, "Prova subito"): la lista chat la apre.
+    var requestedConversation: ConversationRecord?
+    /// "Persone vicine" da aprire (banner, notifica, Cabina, schermata principale) con il filtro scelto.
+    var requestedNearby: NearbyFilter?
+    /// Cartolina di un volo finito da mostrare (notifica del ricordo del viaggio).
+    var requestedTripCard: FlightTrip?
+    /// Card contestuale della schermata principale chiusa per questa sessione.
+    var isHomeCardDismissed = false
+    /// Cabina del volo attiva (carta d'imbarco), aggiornata ogni minuto e quando si entra in un volo.
+    private(set) var activeFlightLounge: ConversationRecord?
+    /// Rete cellulare assente su un iPhone che di solito ce l'ha: con ogni probabilita' modalita' aereo.
+    private(set) var isCellularMissing = false
+    /// Ricordo del viaggio (contatori per volo, notifica una sola volta).
+    @ObservationIgnored private var tripMemory: TripMemory
+    @ObservationIgnored private let tripStore: TripMemoryStore
+    @ObservationIgnored private var presenceTask: Task<Void, Never>?
+    @ObservationIgnored private var pathMonitor: NWPathMonitor?
 
     private let identityStore: IdentityStore
     private let databaseFactory: @Sendable () throws -> AppDatabase
@@ -70,12 +91,18 @@ final class AppEnvironment {
          databaseFactory: @escaping @Sendable () throws -> AppDatabase = { try AppDatabase.makeShared() },
          transportFactory: @escaping @Sendable (Data) -> any TransportProvider = { BLETransportActor(localNodeID: $0) },
          mediaStoreFactory: @escaping @Sendable () throws -> MediaStore = { try MediaStore.makeShared() },
-         notifier: any MeshNotifier = LocalNotificationCenter()) {
+         notifier: any MeshNotifier = LocalNotificationCenter(),
+         tripStore: TripMemoryStore = TripMemoryStore()) {
         self.identityStore = identityStore
         self.databaseFactory = databaseFactory
         self.transportFactory = transportFactory
         self.mediaStoreFactory = mediaStoreFactory
         self.notifier = notifier
+        self.tripStore = tripStore
+        self.tripMemory = tripStore.load()
+        presence.onPersonSeen = { [weak self] person in
+            self?.tripMemory.recordMet(person.nodeID)
+        }
     }
 
     /// `true` dopo che l'utente ha completato l'onboarding (nickname salvato).
@@ -212,6 +239,8 @@ final class AppEnvironment {
                 await self.apply(event)
             }
         })
+        activeFlightLounge = try? await database.conversations.activeFlightLounges().first
+        await router.setPresenceSettings(currentPresenceSettings)
         await router.start()
         await router.setProximityRanging(isRadarVisible && isSceneActive)
         radioState = await router.radioState
@@ -302,6 +331,8 @@ final class AppEnvironment {
         if AppSettings.isDemoModeEnabled {
             await setDemoMode(true)
         }
+        startConnectivityMonitor()
+        startPresenceLoop()
 
         if let pending = pendingPairingURI {
             pendingPairingURI = nil
@@ -331,16 +362,178 @@ final class AppEnvironment {
         if enabled {
             if demoPeer == nil { demoPeer = DemoPeerService(database: database) }
             await demoPeer?.enable()
+            await games?.setLocalBot(DemoGameBot())
         } else {
+            await games?.setLocalBot(nil)
             await demoPeer?.disable()
             demoPeer = nil
         }
+    }
+
+    /// "Prova subito": accende il passeggero virtuale e apre la sua chat (nulla passa dalla radio).
+    @discardableResult
+    func startDemo() async -> ConversationRecord? {
+        UserDefaults.standard.set(true, forKey: AppSettings.Key.demoMode)
+        await setDemoMode(true)
+        let conversation = await demoPeer?.conversation()
+        if let conversation { requestedConversation = conversation }
+        return conversation
+    }
+
+    // MARK: - Persone vicine
+
+    private var currentPresenceSettings: PresenceSettings {
+        PresenceSettings(isVisible: AppSettings.isNearbyVisible, openToGames: AppSettings.isOpenToGames,
+                         flightCode: activeFlightLounge?.flightCode)
+    }
+
+    /// Impostazioni "Visibile alle persone vicine" / "Accetto sfide" cambiate: il PRESENCE si adegua subito.
+    func nearbySettingsChanged() {
+        Task {
+            await router?.setPresenceSettings(currentPresenceSettings)
+            if AppSettings.isNearbyVisible, isSceneActive { await router?.sendPresence() }
+        }
+    }
+
+    /// PRESENCE ogni 60 s, solo con l'app in primo piano; nello stesso giro si aggiorna il volo attivo.
+    private func startPresenceLoop() {
+        presenceTask?.cancel()
+        guard isSceneActive, router != nil else { return }
+        presenceTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, let router = self.router else { break }
+                await self.refreshFlightState()
+                await router.setPresenceSettings(self.currentPresenceSettings)
+                await router.sendPresence()
+                try? await Task.sleep(for: .seconds(NearbyProtocol.presenceInterval))
+            }
+        }
+    }
+
+    /// "Saluta" / "Sfida" un vicino. Contatto gia' noto: "Saluta" apre la chat, "Sfida" manda l'invito di
+    /// gioco normale; altrimenti parte un CONTACT_REQUEST.
+    enum NearbyActionResult: Equatable {
+        case openedChat
+        case requestSent
+    }
+
+    @discardableResult
+    func greet(_ person: NearbyPerson, game: GameKind? = nil) async throws -> NearbyActionResult {
+        guard let router, let database else { throw RouterError.notRunning }
+        if let peer = try await database.peers.fetch(nodeID: person.nodeID), peer.isTrusted, !peer.isBlocked {
+            let conversation = try await database.conversations.ensureDirectConversation(with: peer, showAtTop: true)
+            if let game, let games {
+                try await games.invite(kind: game, in: conversation)
+            }
+            requestedConversation = conversation
+            return .openedChat
+        }
+        let requestID = try await router.sendContactRequest(to: person.asPeerRecord, gameKind: game)
+        contactRequests.sent(requestID, to: person.nodeID)
+        return .requestSent
+    }
+
+    /// Accetta (apre la nuova chat) o rifiuta una richiesta ricevuta.
+    @discardableResult
+    func respond(to request: IncomingContactRequest, accept: Bool) async -> ConversationRecord? {
+        contactRequests.remove(request.requestID)
+        guard let router else { return nil }
+        do {
+            if let conversation = try await router.respondToContactRequest(request.requestID, accept: accept) {
+                Haptics.success()
+                requestedConversation = conversation
+                return conversation
+            }
+        } catch {
+            Haptics.error()
+        }
+        return nil
+    }
+
+    /// `true` se il nodo e' gia' tra i contatti fidati (QR o richiesta accettata).
+    func isContact(_ nodeID: Data, peers: [Data: PeerRecord]) -> Bool {
+        peers[nodeID].map { $0.isTrusted && !$0.isBlocked } ?? false
+    }
+
+    // MARK: - Volo e ricordo del viaggio
+
+    /// In volo: Cabina del volo attiva, Bluetooth spento (logica del banner modalita' aereo) o rete
+    /// cellulare sparita su un iPhone che di solito ce l'ha.
+    var isLikelyInFlight: Bool {
+        activeFlightLounge != nil || isAirplaneModeLikely
+    }
+
+    var isAirplaneModeLikely: Bool {
+        radioState == .poweredOff || isCellularMissing
+    }
+
+    /// "AZ204" della Cabina del volo attiva.
+    var activeFlightNumber: String? {
+        NearbyProtocol.displayFlightNumber(fromCanonical: activeFlightLounge?.flightCode)
+    }
+
+    /// Rilegge la Cabina del volo attiva e fa avanzare il ricordo del viaggio.
+    func refreshFlightState() async {
+        guard let database else { return }
+        let lounge = try? await database.conversations.activeFlightLounges().first
+        if lounge?.id != activeFlightLounge?.id || lounge?.expiresAtMs != activeFlightLounge?.expiresAtMs {
+            activeFlightLounge = lounge
+            await router?.setPresenceSettings(currentPresenceSettings)
+        }
+        await advanceTripMemory()
+    }
+
+    private func advanceTripMemory() async {
+        let active = activeFlightLounge.flatMap { lounge in
+            lounge.flightCode.map { TripMemory.ActiveFlight(flightCode: $0, title: lounge.title) }
+        }
+        let ended = tripMemory.observe(activeFlight: active, airplaneMode: isAirplaneModeLikely)
+        tripStore.save(tripMemory)
+        guard let ended, let database, let identityKeys else { return }
+        let computed = (try? await ended.withComputedCounters(database: database, myNodeID: identityKeys.nodeID, myName: nickname)) ?? ended
+        tripMemory.updateFinished(computed)
+        tripStore.save(tripMemory)
+        if let localNotifier = notifier as? LocalNotificationCenter {
+            await localNotifier.notifyTripCard(computed)
+        }
+    }
+
+    /// Volo (in corso o finito) con i numeri aggiornati, per la cartolina.
+    func trip(flightCode: String) async -> FlightTrip? {
+        guard var trip = tripMemory.trip(flightCode: flightCode) else { return nil }
+        if let database, let identityKeys {
+            trip = (try? await trip.withComputedCounters(database: database, myNodeID: identityKeys.nodeID, myName: nickname)) ?? trip
+        }
+        return trip
+    }
+
+    /// Volo in corso (per la classifica del volo nella cartolina).
+    var currentTrip: FlightTrip? { tripMemory.current }
+
+    /// Rete cellulare: sparita dopo essere stata vista = modalita' aereo; tornata = possibile atterraggio.
+    private func startConnectivityMonitor() {
+        guard pathMonitor == nil else { return }
+        let monitor = NWPathMonitor()
+        pathMonitor = monitor
+        monitor.pathUpdateHandler = { [weak self] path in
+            let hasCellular = path.availableInterfaces.contains { $0.type == .cellular }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if hasCellular { UserDefaults.standard.set(true, forKey: AppSettings.Key.hasSeenCellular) }
+                let missing = !hasCellular && UserDefaults.standard.bool(forKey: AppSettings.Key.hasSeenCellular)
+                guard missing != self.isCellularMissing else { return }
+                self.isCellularMissing = missing
+                await self.advanceTripMemory()
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "aerochat.connectivity"))
     }
 
     /// Ritorno in primo piano: riprova subito i messaggi in attesa di conferma di consegna.
     func sceneDidBecomeActive() async {
         isSceneActive = true
         await updateProximityRanging()
+        startPresenceLoop()
         await router?.flushRelayQueue()
     }
 
@@ -359,6 +552,9 @@ final class AppEnvironment {
     func sceneDidEnterBackground() async {
         // Il foglio del radar resta "aperto" in background, ma nessuno lo guarda: niente polling RSSI.
         isSceneActive = false
+        // PRESENCE periodico solo in primo piano.
+        presenceTask?.cancel()
+        presenceTask = nil
         await updateProximityRanging()
         guard let database else { return }
         let total = (try? await database.conversations.totalUnread()) ?? unreadTotal
@@ -390,6 +586,12 @@ final class AppEnvironment {
         router = nil
         neighbors = []
         typing.removeAll()
+        presenceTask?.cancel()
+        presenceTask = nil
+        pathMonitor?.cancel()
+        pathMonitor = nil
+        presence.removeAll()
+        contactRequests.removeAll()
     }
 
     // MARK: - Azioni di alto livello
@@ -452,6 +654,9 @@ final class AppEnvironment {
         guard let router else { throw RouterError.notRunning }
         let lounge = try await router.joinFlightLounge(pass)
         _ = try? await proPass?.broadcastGrantIfEntitled(for: lounge)
+        await refreshFlightState()
+        // I vicini scoprono subito che siamo sullo stesso volo.
+        await router.sendPresence()
         return lounge
     }
 
@@ -557,6 +762,12 @@ final class AppEnvironment {
     /// Elimina la chat (solo su questo iPhone): messaggi in cascata e file media su disco.
     func deleteConversation(_ conversation: ConversationRecord) async throws {
         guard let database else { return }
+        // La chat del passeggero virtuale si elimina spegnendo la prova (non ricompare al riavvio).
+        if DemoPeerIdentity.isDemoPeer(conversation.peerNodeID) {
+            UserDefaults.standard.set(false, forKey: AppSettings.Key.demoMode)
+            await setDemoMode(false)
+            return
+        }
         let paths = (try? await database.messages.mediaPaths(conversationID: conversation.id)) ?? []
         try await database.conversations.delete(conversationID: conversation.id)
         if let mediaStore {
@@ -569,16 +780,24 @@ final class AppEnvironment {
         // Assegnare solo se cambia: `@Observable` invalida chi legge la proprieta' anche con lo stesso
         // valore (banner modalita' aereo, contatore della Cabina) e i due manager BLE ripetono lo stato.
         case .radioStateChanged(let state):
-            if state != radioState { radioState = state }
+            if state != radioState {
+                radioState = state
+                await advanceTripMemory()
+            }
         case .neighborsChanged(let list):
             if list != neighbors {
                 let countChanged = list.count != neighbors.count
                 neighbors = list
                 if countChanged { refreshLiveActivity() }
             }
-        case .messageReceived(_, let msgID):
+        case .messageReceived(let conversationID, let msgID):
             lastReceivedMessageID = msgID
             refreshLiveActivity()
+            // Ricordo del viaggio: chi scrive in Cabina durante il volo e' una persona incontrata.
+            if tripMemory.current != nil, conversationID == ConversationRecord.cabinLoungeID || conversationID == activeFlightLounge?.id,
+               let message = try? await database?.messages.fetch(msgID: msgID) {
+                tripMemory.recordMet(message.senderNodeID)
+            }
         case .relayQueueChanged(let count):
             if count != relayQueueCount { relayQueueCount = count }
         case .typingChanged(let conversationID, let senderNodeID, let nickname, let isTyping):
@@ -586,6 +805,14 @@ final class AppEnvironment {
         case .pairedByHello:
             // La nuova chat compare da sola in cima alla lista (osservazione del DB): niente notifica.
             Haptics.success()
+        case .presenceUpdated(let person):
+            presence.update(person)
+        case .contactRequestReceived(let request):
+            contactRequests.received(request)
+            Haptics.warning()
+        case .contactRequestAnswered(_, let peerNodeID, let nickname, let outcome, _):
+            contactRequests.answered(peerNodeID: peerNodeID, nickname: nickname, outcome: outcome)
+            if case .accepted = outcome { Haptics.success() }
         case .groupMembersChanged(let conversationID):
             // Nuovi membri nel gruppo: se siamo Pro, il pass li raggiunge subito.
             guard isPro, let database, let proPass,

@@ -3,6 +3,9 @@ import SwiftUI
 /// Cartolina di volo: i numeri del viaggio in formato Storie (1080x1920) da condividere.
 struct FlightCardSheet: View {
 
+    /// Volo finito (notifica del ricordo del viaggio): cartolina gia' compilata, niente scelta del periodo.
+    var trip: FlightTrip?
+
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
     @State private var period: FlightStats.Period = .trip
@@ -13,12 +16,15 @@ struct FlightCardSheet: View {
         NavigationStack {
             ZStack {
                 AeroTheme.background.ignoresSafeArea()
+                ScrollView {
                 VStack(spacing: 18) {
-                    Picker("Periodo", selection: $period) {
-                        ForEach(FlightStats.Period.allCases) { Text($0.title).tag($0) }
+                    if trip == nil {
+                        Picker("Periodo", selection: $period) {
+                            ForEach(FlightStats.Period.allCases) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
                     }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
                     if let stats {
                         FlightCardContent(stats: stats, nickname: environment.nickname)
                             .frame(width: 360, height: 640)
@@ -47,9 +53,13 @@ struct FlightCardSheet: View {
                         .foregroundStyle(AeroTheme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
+                    if let stats, stats.leaderboard.contains(where: { $0.played > 0 }) {
+                        leaderboardView(stats.leaderboard)
+                    }
                     Spacer(minLength: 0)
                 }
                 .padding(.top, 8)
+                }
             }
             .navigationTitle("Cartolina di volo")
             .navigationBarTitleDisplayMode(.inline)
@@ -60,10 +70,45 @@ struct FlightCardSheet: View {
         .task(id: period) { await reload() }
     }
 
+    /// Classifica del volo: solo nell'app, non nella cartolina condivisa (che resta senza nomi altrui).
+    private func leaderboardView(_ entries: [FlightLeaderboard.Entry]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Classifica del volo", systemImage: "trophy.fill")
+                .font(AeroTheme.title(17, weight: .semibold))
+                .foregroundStyle(AeroTheme.textPrimary)
+            ForEach(Array(entries.prefix(5).enumerated()), id: \.element.id) { index, entry in
+                HStack {
+                    Text("\(index + 1).")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(AeroTheme.textSecondary)
+                    Text(entry.isMe ? String(localized: "Tu") : entry.name)
+                        .font(.subheadline.weight(entry.isMe ? .bold : .regular))
+                        .foregroundStyle(AeroTheme.textPrimary)
+                    Spacer()
+                    Text("\(entry.wins) vinte su \(entry.played)")
+                        .font(.subheadline)
+                        .foregroundStyle(AeroTheme.textSecondary)
+                }
+            }
+        }
+        .padding(16)
+        .background(AeroTheme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 24)
+    }
+
     private func reload() async {
         guard let database = environment.database else { return }
         rendered = nil
-        let computed = try? await FlightStats.compute(database: database, period: period)
+        var computed: FlightStats?
+        if let trip {
+            computed = FlightStats(trip: trip)
+        } else {
+            computed = try? await FlightStats.compute(database: database, period: period)
+            // Volo in corso: classifica delle partite giocate da quando siamo nella Cabina del volo.
+            if let current = environment.currentTrip, let live = await environment.trip(flightCode: current.flightCode) {
+                computed?.leaderboard = live.leaderboard
+            }
+        }
         stats = computed
         guard let computed else { return }
         let renderer = ImageRenderer(content: FlightCardContent(stats: computed, nickname: environment.nickname).frame(width: 360, height: 640))
@@ -99,7 +144,7 @@ struct FlightCardContent: View {
                         .font(.system(size: 26, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                     Spacer()
-                    Text(stats.period.title.uppercased())
+                    Text((stats.headline ?? stats.period.title).uppercased())
                         .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(.black)
                         .padding(.horizontal, 10)
@@ -125,7 +170,11 @@ struct FlightCardContent: View {
                     tile(icon: "photo.fill", value: stats.photos, label: String(localized: "foto via Bluetooth"))
                     tile(icon: "waveform", value: stats.voiceNotes, label: String(localized: "note vocali"))
                     tile(icon: "dot.radiowaves.left.and.right", value: stats.longestHop, label: String(localized: "telefoni in catena (record)"))
-                    tile(icon: "bubble.left.and.text.bubble.right.fill", value: stats.loungeMessages, label: String(localized: "voci in Cabina"))
+                    if let rank = stats.myRank {
+                        tile(icon: "trophy.fill", value: rank, label: String(localized: "posto nella classifica del volo"))
+                    } else {
+                        tile(icon: "bubble.left.and.text.bubble.right.fill", value: stats.loungeMessages, label: String(localized: "voci in Cabina"))
+                    }
                 }
                 Spacer()
                 HStack(alignment: .bottom) {

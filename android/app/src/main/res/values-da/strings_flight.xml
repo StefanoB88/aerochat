@@ -36,7 +36,6 @@
     <string name="flight_card_slogan">Chat i 10.000 meters højde.</string>
     <string name="flight_card_slogan2">Uden Wi-Fi, uden konto, kun Bluetooth.</string>
     <string name="flight_menu_boarding">Flykabine (boardingkort)</string>
-    <string name="flight_empty_hint">Scan dit boardingkort for at komme ind i chatten for dit fly, eller tilføj dine rejsekammerater ved gaten: om bord finder I hinanden helt af jer selv via Bluetooth.</string>
     <string name="flight_paywall_pass24_title">24-timers Enkeltfly-Pass</string>
     <string name="flight_paywall_pass24_subtitle">Ét fly, én dag. Billeder, talebeskeder og spil til dig og din gruppe indtil landing.</string>
     <string name="flight_paywall_terms">Vilkår for brug</string>

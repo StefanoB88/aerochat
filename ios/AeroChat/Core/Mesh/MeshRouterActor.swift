@@ -80,6 +80,17 @@ actor MeshRouterActor {
     private var pendingHellos: [Data: Data] = [:]
     /// File media da rimuovere quando un messaggio viene cancellato per tutti (impostato dall'app).
     private var mediaStore: MediaStore?
+    /// PRESENCE: cosa annunciamo (spento finche' l'app non applica l'impostazione) e chi e' vicino.
+    private var presenceSettings = PresenceSettings()
+    private var presenceCache = PresenceCache()
+    /// CONTACT_REQUEST inviati in attesa di ACCEPT / DECLINE, per `request_id`.
+    private var outgoingContactRequests: [Data: OutgoingContactRequest] = [:]
+    /// CONTACT_REQUEST ricevuti in attesa di Accetta / Rifiuta, per `request_id`.
+    private var incomingContactRequests: [Data: IncomingContactRequest] = [:]
+    /// Ultima REQUEST accettata in ingresso per mittente (limite di una ogni 10 minuti).
+    private var lastContactRequestAt: [Data: Date] = [:]
+    /// "Sfida" accettata da noi: il primo invito di quel gioco da quel peer parte gia' accettato.
+    private var acceptedChallenges: [Data: (kind: Int32, expiresAt: Date)] = [:]
     private(set) var stats = RouterStats()
     private(set) var radioState: RadioState = .unknown
 
@@ -609,6 +620,8 @@ actor MeshRouterActor {
     private func dispatch(_ envelope: MeshEnvelope, storeIfUnreachable: Bool, retainUntilAck: Bool = false,
                           excluding: Set<LinkID> = []) async -> Bool {
         _ = seen.insertIfNew(envelope.msgID)
+        // Passeggero virtuale (prova dell'app): vive solo in locale, nulla esce mai sulla radio.
+        if DemoPeerIdentity.isLocalOnly(envelope.recipientID) { return true }
         guard let bytes = try? MeshWire.serialize(envelope) else { return false }
 
         let eligible = envelope.packetType.isStoreAndForwardEligible
@@ -698,6 +711,8 @@ actor MeshRouterActor {
         }
         // Secondo link (dual-role) verso un vicino gia' online: coda e profilo sono gia' partiti.
         guard !links.values.contains(where: { $0.nodeID == nodeID && $0.id != link.id }) else { return }
+        // "Persone vicine": ci annunciamo subito al nuovo vicino (se la visibilita' e' attiva).
+        await sendPresence(toNode: nodeID)
         await flushRelayQueue(toward: nodeID)
         if let peer = try? await database.peers.fetch(nodeID: nodeID) {
             await sendProfile(to: peer)
@@ -802,6 +817,12 @@ actor MeshRouterActor {
         stats.received += 1
         let hops = Int(envelope.hopCount) + 1
 
+        // PRESENCE: solo vicini diretti (ttl 1), mai ritrasmesso ne' salvato.
+        if envelope.packetType == .presence {
+            await handlePresence(envelope, via: link)
+            return
+        }
+
         // 3. Routing.
         let target = await resolveTarget(envelope.recipientID)
         switch target {
@@ -904,6 +925,8 @@ actor MeshRouterActor {
                 try await forwardToSubsystems(envelope, hops: hops, target: target)
             case (.pairHello, .me):
                 try await handlePairHello(envelope, hops: hops, via: link)
+            case (.contactRequest, .me):
+                try await handleContactRequest(envelope, hops: hops, via: link)
             case (.typing, .me), (.typing, .group):
                 try await handleTyping(envelope, target: target)
             case (.messageRevision, .me), (.messageRevision, .group), (.messageRevision, .lounge):
@@ -1475,6 +1498,249 @@ actor MeshRouterActor {
         }
     }
 
+    // MARK: - Persone vicine (PRESENCE) e "Saluta" / "Sfida" (CONTACT_REQUEST)
+
+    struct OutgoingContactRequest: Sendable {
+        let requestID: Data
+        let peer: PeerRecord
+        let gameKind: Int32
+        let sentAt: Date
+    }
+
+    func setPresenceSettings(_ settings: PresenceSettings) {
+        presenceSettings = settings
+    }
+
+    func currentPresenceSettings() -> PresenceSettings { presenceSettings }
+
+    /// Vicini annunciati con PRESENCE ancora validi (ordinati per segnale / ultimo visto).
+    func nearbyPeople(now: Date = Date()) -> [NearbyPerson] {
+        presenceCache.sorted(now: now)
+    }
+
+    func pendingContactRequests(now: Date = Date()) -> [IncomingContactRequest] {
+        purgeNearbyState(now: now)
+        return incomingContactRequests.values.sorted { $0.receivedAt > $1.receivedAt }
+    }
+
+    /// PRESENCE: chiave della Lounge, `recipient_id` = 8 zeri, ttl 1. Con `toNode` solo a quel vicino
+    /// (apertura del link), altrimenti a tutti i vicini diretti. Niente invio con la visibilita' spenta.
+    @discardableResult
+    func sendPresence(toNode nodeID: Data? = nil, now: Date = Date()) async -> Bool {
+        guard isRunning, presenceSettings.isVisible, !links.isEmpty else { return false }
+        var presence = Presence()
+        presence.avatarColorHex = profile?.avatarColorHex ?? ""
+        presence.flightCode = presenceSettings.flightCode ?? ""
+        presence.openToGames = presenceSettings.openToGames
+        presence.sentAtMs = now.unixMilliseconds
+        guard let data = try? MeshWire.serialize(presence),
+              let envelope = try? EnvelopeBuilder(identity: identity).build(
+                packetType: .presence, recipientID: MeshProtocol.loungeRecipientID,
+                payload: InnerPayload.extra(data, identity: identity, nickname: nickname),
+                key: CryptoEngine.publicCabinKey, ttl: NearbyProtocol.presenceTTL),
+              let bytes = try? MeshWire.serialize(envelope) else { return false }
+        _ = seen.insertIfNew(envelope.msgID)
+        if let nodeID {
+            return (try? await transport.send(bytes, toNode: nodeID)) ?? false
+        }
+        return await transport.broadcast(bytes, excluding: []) > 0
+    }
+
+    /// PRESENCE ricevuto: `openShared` con la chiave della Lounge, `node_id` derivato dalla X25519
+    /// dichiarata, mittenti bloccati ignorati, nickname filtrato. Solo cache in memoria.
+    private func handlePresence(_ envelope: MeshEnvelope, via link: LinkID) async {
+        let senderID = envelope.senderNodeID
+        guard envelope.recipientID == MeshProtocol.loungeRecipientID, envelope.hopCount == 0,
+              senderID != identity.nodeID, !blocked.contains(senderID) else { return }
+        guard let opened = try? await openShared(envelope, key: CryptoEngine.publicCabinKey),
+              opened.0.senderX25519Pub.count == MeshProtocol.publicKeyLength,
+              let presence = try? MeshWire.parsePresence(opened.0.extraData) else {
+            stats.undecryptable += 1
+            return
+        }
+        let (payload, sender) = opened
+        let known = try? await database.peers.fetch(nodeID: senderID)
+        if known?.isBlocked == true { return }
+        let declared = String(payload.senderNickname.trimmingCharacters(in: .whitespacesAndNewlines).prefix(MeshProtocol.maxNicknameLength))
+        var nickname = declared.isEmpty ? (known?.nickname ?? sender.nickname) : declared
+        if AppSettings.isLanguageFilterEnabled { nickname = ContentFilter.masked(nickname) }
+        let color = Self.isValidColorHex(presence.avatarColorHex) ? presence.avatarColorHex.uppercased() : known?.avatarColorHex
+        let flight = presence.flightCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let person = NearbyPerson(nodeID: senderID, x25519Pub: payload.senderX25519Pub, ed25519Pub: payload.senderEd25519Pub,
+                                  nickname: nickname, avatarColorHex: color,
+                                  flightCode: flight.isEmpty || flight.count > NearbyProtocol.maxFlightCodeLength ? nil : flight,
+                                  openToGames: presence.openToGames, rssi: links[link]?.rssi, lastSeen: Date())
+        presenceCache.upsert(person)
+        if known != nil {
+            await markSeenThrottled(nodeID: senderID, hopCount: 1, rssi: links[link]?.rssi)
+        }
+        stats.delivered += 1
+        emit(.presenceUpdated(presenceCache.person(senderID) ?? person))
+    }
+
+    /// "Saluta" (`gameKind` nil) o "Sfida": REQUEST diretta, cifrata con la chiave 1-a-1 calcolata dalla
+    /// X25519 del PRESENCE (o del DB), ttl 2, niente coda ne' ACK. Ritorna il `request_id`.
+    @discardableResult
+    func sendContactRequest(to peer: PeerRecord, greeting: String = "", gameKind: GameKind? = nil,
+                            now: Date = Date()) async throws -> Data {
+        guard isRunning else { throw RouterError.notRunning }
+        guard peer.nodeID != identity.nodeID, !blocked.contains(peer.nodeID),
+              peer.x25519Pub.count == MeshProtocol.publicKeyLength,
+              CryptoEngine.nodeID(forX25519PublicKey: peer.x25519Pub) == peer.nodeID else {
+            throw RouterError.contactRequestNotAllowed
+        }
+        purgeNearbyState(now: now)
+        var request = ContactRequest()
+        request.action = .request
+        request.requestID = CryptoEngine.randomMessageID()
+        request.greeting = NearbyProtocol.sanitizedGreeting(greeting, maskProfanity: true)
+        request.gameKind = gameKind.map { Int32($0.rawValue) } ?? 0
+        outgoingContactRequests[request.requestID] = OutgoingContactRequest(requestID: request.requestID, peer: peer,
+                                                                            gameKind: request.gameKind, sentAt: now)
+        _ = try await sendContactPacket(request, to: peer)
+        return request.requestID
+    }
+
+    /// Accetta (ACCEPT) o rifiuta (DECLINE) una richiesta ricevuta. Con Accetta il peer diventa un contatto
+    /// fidato e la chat 1-a-1 compare in cima; se era una "Sfida", il primo invito di quel gioco da quel
+    /// peer viene accettato da solo (l'ACCEPT vale come consenso).
+    @discardableResult
+    func respondToContactRequest(_ requestID: Data, accept: Bool, now: Date = Date()) async throws -> ConversationRecord? {
+        guard isRunning else { throw RouterError.notRunning }
+        purgeNearbyState(now: now)
+        guard let request = incomingContactRequests.removeValue(forKey: requestID) else {
+            throw RouterError.contactRequestNotFound
+        }
+        var response = ContactRequest()
+        response.action = accept ? .accept : .decline
+        response.requestID = requestID
+        guard accept else {
+            _ = try? await sendContactPacket(response, to: request.sender)
+            return nil
+        }
+        if request.gameKind != 0 {
+            acceptedChallenges[request.sender.nodeID] = (request.gameKind, now.addingTimeInterval(NearbyProtocol.requestLifetime))
+        }
+        let conversation = try await establishContact(request.sender, nickname: request.sender.nickname,
+                                                      avatarColorHex: request.avatarColorHex)
+        // Prima l'ACCEPT (chi ha chiesto ci registra), poi il profilo che ora sa decifrare.
+        _ = try? await sendContactPacket(response, to: request.sender)
+        profileSentTo.remove(request.sender.nodeID)
+        await sendProfile(to: request.sender)
+        return conversation
+    }
+
+    /// `true` (una sola volta) se abbiamo accettato una "Sfida" a quel gioco da quel peer.
+    func consumeAcceptedChallenge(from nodeID: Data, kind: GameKind, now: Date = Date()) -> Bool {
+        guard let challenge = acceptedChallenges[nodeID], challenge.expiresAt > now,
+              challenge.kind == Int32(kind.rawValue) else { return false }
+        acceptedChallenges.removeValue(forKey: nodeID)
+        return true
+    }
+
+    private func sendContactPacket(_ request: ContactRequest, to peer: PeerRecord) async throws -> Bool {
+        let key = try identity.directChatKey(peerX25519PublicKeyRaw: peer.x25519Pub)
+        let payload = InnerPayload.extra(try MeshWire.serialize(request), identity: identity, nickname: nickname)
+        let envelope = try EnvelopeBuilder(identity: identity).build(packetType: .contactRequest, recipientID: peer.nodeID,
+                                                                     payload: payload, key: key,
+                                                                     ttl: NearbyProtocol.contactRequestTTL)
+        return await dispatch(envelope, storeIfUnreachable: false)
+    }
+
+    /// Peer fidato (come dopo il QR, senza sovrascrivere un nickname da PROFILE_UPDATE) con la chat in cima.
+    private func establishContact(_ peer: PeerRecord, nickname: String, avatarColorHex: String?) async throws -> ConversationRecord {
+        var trusted = peer
+        trusted.isTrusted = true
+        trusted.isBlocked = false
+        trusted.nickname = nickname.isEmpty ? String(localized: "Passeggero") : nickname
+        if trusted.avatarColorHex == nil { trusted.avatarColorHex = avatarColorHex }
+        let stored = try await database.peers.upsert(trusted)
+        let conversation = try await database.conversations.ensureDirectConversation(with: stored, showAtTop: true)
+        await refreshTrustedPeers()
+        return conversation
+    }
+
+    /// CONTACT_REQUEST ricevuto: chiavi del mittente note (DB, cache PRESENCE o nostra richiesta in
+    /// corso) altrimenti scartato; firma verificata con la Ed25519 nota e chiavi dichiarate coincidenti.
+    private func handleContactRequest(_ envelope: MeshEnvelope, hops: Int, via link: LinkID) async throws {
+        let senderID = envelope.senderNodeID
+        guard senderID != identity.nodeID, !blocked.contains(senderID) else { return }
+        let now = Date()
+        purgeNearbyState(now: now)
+        let known = try await database.peers.fetch(nodeID: senderID)
+        if known?.isBlocked == true { return }
+        let cached = presenceCache.person(senderID, now: now)
+        let pending = outgoingContactRequests.values.first { $0.peer.nodeID == senderID }
+        let senderKeys: (x25519: Data, ed25519: Data)
+        if let known {
+            senderKeys = (known.x25519Pub, known.ed25519Pub)
+        } else if let cached {
+            senderKeys = (cached.x25519Pub, cached.ed25519Pub)
+        } else if let pending {
+            senderKeys = (pending.peer.x25519Pub, pending.peer.ed25519Pub)
+        } else {
+            throw RouterError.unknownPeer(senderID)
+        }
+        let key = try identity.directChatKey(peerX25519PublicKeyRaw: senderKeys.x25519)
+        let payload = try EnvelopeVerifier.open(envelope, key: key, expectedSenderEd25519PublicKeyRaw: senderKeys.ed25519)
+        guard payload.senderX25519Pub == senderKeys.x25519, payload.senderEd25519Pub == senderKeys.ed25519 else {
+            throw RouterError.senderMismatch
+        }
+        let request = try MeshWire.parseContactRequest(payload.extraData)
+        guard request.requestID.count == NearbyProtocol.requestIDLength else { return }
+        let declared = String(payload.senderNickname.trimmingCharacters(in: .whitespacesAndNewlines).prefix(MeshProtocol.maxNicknameLength))
+        var nickname = declared.isEmpty ? (known?.nickname ?? cached?.nickname ?? pending?.peer.nickname ?? String(localized: "Passeggero")) : declared
+        if AppSettings.isLanguageFilterEnabled { nickname = ContentFilter.masked(nickname) }
+        let color = known?.avatarColorHex ?? cached?.avatarColorHex
+
+        switch request.action {
+        case .request:
+            if let last = lastContactRequestAt[senderID], now.timeIntervalSince(last) < NearbyProtocol.requestRateLimit { return }
+            guard incomingContactRequests.count < NearbyProtocol.maxPendingRequests,
+                  incomingContactRequests[request.requestID] == nil else { return }
+            lastContactRequestAt[senderID] = now
+            let sender = PeerRecord(nodeID: senderID, x25519Pub: senderKeys.x25519, ed25519Pub: senderKeys.ed25519, nickname: nickname)
+            let gameKind = NearbyProtocol.isChallengeKind(request.gameKind) ? request.gameKind : 0
+            let incoming = IncomingContactRequest(requestID: request.requestID, sender: sender, avatarColorHex: color,
+                                                  greeting: NearbyProtocol.sanitizedGreeting(request.greeting,
+                                                                                             maskProfanity: AppSettings.isLanguageFilterEnabled),
+                                                  gameKind: gameKind, receivedAt: now)
+            incomingContactRequests[request.requestID] = incoming
+            emit(.contactRequestReceived(incoming))
+            await notifier.notifyContactRequest(incoming)
+        case .accept:
+            guard let outgoing = outgoingContactRequests[request.requestID], outgoing.peer.nodeID == senderID else { return }
+            outgoingContactRequests.removeValue(forKey: request.requestID)
+            let conversation = try await establishContact(outgoing.peer, nickname: nickname, avatarColorHex: color)
+            await markSeenThrottled(nodeID: senderID, hopCount: hops, rssi: links[link]?.rssi)
+            profileSentTo.remove(senderID)
+            if let stored = try? await database.peers.fetch(nodeID: senderID) {
+                await sendProfile(to: stored)
+            }
+            emit(.contactRequestAnswered(requestID: request.requestID, peerNodeID: senderID, nickname: nickname,
+                                         outcome: .accepted(conversationID: conversation.id), gameKind: outgoing.gameKind))
+        case .decline:
+            guard let outgoing = outgoingContactRequests.removeValue(forKey: request.requestID) else { return }
+            guard outgoing.peer.nodeID == senderID else {
+                outgoingContactRequests[request.requestID] = outgoing
+                return
+            }
+            emit(.contactRequestAnswered(requestID: request.requestID, peerNodeID: senderID, nickname: nickname,
+                                         outcome: .declined, gameKind: outgoing.gameKind))
+        default:
+            return
+        }
+    }
+
+    private func purgeNearbyState(now: Date = Date()) {
+        presenceCache.purgeExpired(now: now)
+        let lifetime = NearbyProtocol.requestLifetime
+        incomingContactRequests = incomingContactRequests.filter { !$0.value.isExpired(now: now) }
+        outgoingContactRequests = outgoingContactRequests.filter { now.timeIntervalSince($0.value.sentAt) < lifetime }
+        lastContactRequestAt = lastContactRequestAt.filter { now.timeIntervalSince($0.value) < NearbyProtocol.requestRateLimit }
+        acceptedChallenges = acceptedChallenges.filter { $0.value.expiresAt > now }
+    }
+
     // MARK: - Manutenzione
 
     func runMaintenance(now: Date = Date()) async {
@@ -1484,6 +1750,7 @@ actor MeshRouterActor {
         let seenInterval = configuration.lastSeenWriteInterval
         lastSeenWrites = lastSeenWrites.filter { now.timeIntervalSince($0.value.date) < seenInterval }
         purgeExpiredPendingRevisions(now: now)
+        purgeNearbyState(now: now)
         try? await database.runMaintenance(now: now)
         if !links.isEmpty {
             await flushRelayQueue()

@@ -1,0 +1,66 @@
+# Release 1.3 — Persone vicine, "Saluta" e "Sfida" — contratto iOS ↔ Android
+
+## 1. PRESENCE = 17 (chi e' vicino)
+- Cifrato con la chiave della Cabina Pubblica (`SHA256("AeroMesh-Public-Cabin-v1")`), `recipient_id` = 8 zeri,
+  **ttl 1** (solo vicini diretti), mai store-and-forward, mai salvato nel DB, mai notificato.
+- `InnerPayload` con il mittente dichiarato (`sender_x25519_pub`, `sender_ed25519_pub`, `sender_nickname`) come
+  i pacchetti di Lounge; `extra_data = Presence` (aeromesh_ext.proto):
+
+```proto
+message Presence {
+  string avatar_color_hex = 1;  // es. "00E5FF"
+  string flight_code = 2;       // canonico "CARRIER|FLIGHT|yyyy-MM-dd" se nella Cabina di un volo, altrimenti vuoto
+  bool open_to_games = 3;       // accetta sfide a carte
+  int64 sent_at_ms = 4;
+}
+```
+
+- Invio: all'apertura di ogni link e poi ogni **60 s** solo con app in primo piano, se l'impostazione
+  "Visibile alle persone vicine" e' attiva (default: attiva). Spegnendola si smette di inviare (e di
+  comparire); si continua a vedere gli altri.
+- Ricezione: `openShared(lounge key)` + controllo `SHA256(sender_x25519_pub)[0..<8] == sender_node_id`; mittenti
+  bloccati ignorati. Cache in memoria per node_id: chiavi, nickname (filtro linguaggio), colore, volo, RSSI
+  dal trasporto se disponibile, `last_seen`. Scade **3 min** dopo l'ultimo PRESENCE. Max 64 voci.
+- UI "Persone vicine": lista ordinata per segnale/ultimo visto, con avatar a colore + nickname, "Sul tuo volo"
+  se `flight_code` coincide, stato "Gia' nei contatti" per peer gia' presenti, pulsanti **Saluta** e
+  **Sfida** (se `open_to_games`).
+
+## 2. CONTACT_REQUEST = 18 ("Saluta" / "Sfida")
+- Pacchetto diretto: `recipient_id` = node_id del destinatario, cifrato con la **normale chiave diretta**
+  (HKDF(ECDH) con salt "AeroMesh-Salt-v1", info "AeroMesh-Msg-v1") calcolata con la `x25519` presa dal
+  PRESENCE (o dal DB se gia' noto). `InnerPayload` con mittente dichiarato. **ttl 2**, niente store-and-
+  forward, niente ACK di consegna (la risposta e' un altro CONTACT_REQUEST).
+- `extra_data = ContactRequest`:
+
+```proto
+enum ContactAction {
+  CONTACT_ACTION_UNSPECIFIED = 0;
+  REQUEST = 1;
+  ACCEPT = 2;
+  DECLINE = 3;
+}
+
+message ContactRequest {
+  ContactAction action = 1;
+  bytes request_id = 2;     // 16 byte casuali scelti da chi chiede; ACCEPT/DECLINE lo ripetono
+  string greeting = 3;      // solo REQUEST, opzionale, <= 140 caratteri (filtro linguaggio, niente link)
+  int32 game_kind = 4;      // solo REQUEST: 0 = semplice "Saluta"; altrimenti GameKind (SCOPA, BRISCOLA...) = "Sfida"
+}
+```
+
+- Ricezione: il destinatario deve conoscere le chiavi del mittente (DB o cache PRESENCE), altrimenti
+  scarta; verifica firma con la ed25519 nota e che le chiavi dichiarate coincidano. Bloccati ignorati.
+  Limite: una REQUEST per mittente ogni **10 min** (le altre scartate); max 20 richieste pendenti.
+- REQUEST ricevuta: entra in "Richieste" (in memoria, scade dopo **30 min**) + notifica locale ("Marco ti
+  saluta" / "Marco ti sfida a Scopa") + banner in app. Azioni: **Accetta** / **Rifiuta** (DECLINE) / ignora.
+- ACCEPT inviato o ricevuto (con request_id valido): entrambi fanno upsert del peer come **fidato** (stesso
+  livello del QR, non sovrascrivere un nickname da PROFILE_UPDATE), `ensureDirectConversation` in cima,
+  `sendProfile`, `refreshTrustedPeers`. Se la REQUEST aveva `game_kind != 0`, **chi ha chiesto** (il
+  ricevente dell'ACCEPT) invia subito l'invito di gioco gia' accettato nella nuova chat (flusso esistente
+  di invito + accettazione automatica lato chi ha accettato la sfida: l'ACCEPT vale come consenso).
+- DECLINE: chi ha chiesto vede "Richiesta rifiutata" (nessun altro effetto).
+- Peer gia' nei contatti: "Saluta" apre direttamente la chat; "Sfida" invia l'invito di gioco normale.
+
+## 3. Cose solo locali (nessun wire)
+- Ricordo del viaggio, classifica del volo (partite vinte durante il volo), testi di consegna "umani",
+  schermata principale contestuale, modalita' prova col passeggero virtuale: vedi README delle due app.

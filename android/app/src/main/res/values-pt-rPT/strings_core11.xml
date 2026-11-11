@@ -7,13 +7,10 @@
     <string name="core11_emergency_generic">Alerta</string>
     <string name="core11_emergency_body_default">Alerta de um passageiro próximo.</string>
     <string name="core11_emergency_channel_name">Alerta de emergência</string>
-    <string name="core11_demo_nickname">Tripulação Demo</string>
-    <string name="core11_demo_reply_1">Olá! Sou o companheiro de viagem simulado: respondo a partir do mesmo dispositivo, sem Bluetooth. 👋</string>
     <string name="core11_demo_reply_2">Com um segundo telemóvel, as mensagens passariam pela rede mesh BLE, cifradas de ponta a ponta.</string>
     <string name="core11_demo_reply_3">Experimenta manter premida uma mensagem minha: podes denunciá-la ou bloquear-me.</string>
     <string name="core11_demo_reply_4">No separador Cabine encontras o mural público de 12 horas, com as regras a aceitar.</string>
     <string name="core11_demo_reply_5">As fotografias que recebes de quem não digitalizaste pessoalmente ficam desfocadas até lhes tocares.</string>
-    <string name="core11_demo_reply_6">Boa viagem! ✈️ Quando quiseres, desativa-me em Definições › Informações.</string>
     <string name="core11_demo_lounge_1">Alguém sabe se o carrinho passa antes ou depois da descolagem? 🍫</string>
     <string name="core11_demo_lounge_2">Fila 12 aqui: vê-se um pôr do sol incrível pela janela.</string>
     <string name="core11_report_spam">Spam ou publicidade</string>

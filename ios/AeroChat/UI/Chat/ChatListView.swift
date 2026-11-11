@@ -93,6 +93,8 @@ struct ChatListView: View {
     @State private var pendingFlightLounge: ConversationRecord?
     @State private var conversationToDelete: ConversationRecord?
     @State private var actionError: String?
+    /// Chat aperta su richiesta (Accetta, "Saluta" a un contatto, "Prova subito", Cabina del volo).
+    @State private var openedConversation: ConversationRecord?
 
     /// Avatar (profilo) e Pass/Pro affiancati nella barra in alto a sinistra.
     private var profileAndPassButtons: some View {
@@ -132,6 +134,7 @@ struct ChatListView: View {
                 }
             }
             .navigationTitle("AeroChat")
+            .modifier(PeopleSubtitle(text: peopleStatusText))
             .toolbar {
                 // Avatar + Pass/Pro in un'unica capsula di vetro disegnata da noi: la capsula condivisa
                 // della barra veniva dimensionata sulle sole icone e tagliava "Pro"/"Pass".
@@ -162,10 +165,12 @@ struct ChatListView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button { Haptics.tap(); showBoardingPass = true } label: { Label("Cabina del volo (carta d'imbarco)", systemImage: "airplane.departure") }
                         Button { Haptics.tap(); showNewGroup = true } label: { Label("Nuovo gruppo di viaggio", systemImage: "person.3") }
-                        Button { Haptics.tap(); showStoreQR = true } label: { Label("Fai scaricare l'app al gate", systemImage: "arrow.down.app") }
+                        Button { Haptics.tap(); environment.requestedNearby = .all } label: { Label("Persone vicine", systemImage: "person.wave.2") }
+                        Button { Haptics.tap(); showBoardingPass = true } label: { Label("Cabina del volo (carta d'imbarco)", systemImage: "airplane.departure") }
                         Divider()
+                        // Voci usate di rado: in fondo.
+                        Button { Haptics.tap(); showStoreQR = true } label: { Label("Fai scaricare l'app al gate", systemImage: "arrow.down.app") }
                         Button { Haptics.tap(); showFlightCard = true } label: { Label("Cartolina di volo", systemImage: "sparkles.rectangle.stack") }
                     } label: {
                         Image(systemName: "plus.circle.fill")
@@ -179,6 +184,12 @@ struct ChatListView: View {
             .navigationDestination(item: $joinedFlightLounge) { lounge in
                 ConversationView(conversation: lounge)
             }
+            .navigationDestination(item: $openedConversation) { conversation in
+                ConversationView(conversation: conversation)
+            }
+        }
+        .onChange(of: environment.requestedConversation) { _, conversation in
+            openRequested(conversation)
         }
         .sheet(isPresented: $showPairing) { QRPairingSheet() }
         .sheet(isPresented: $showBoardingPass, onDismiss: {
@@ -202,12 +213,31 @@ struct ChatListView: View {
         .onAppear {
             viewModel.setFrozen(false)
             viewModel.start(environment: environment)
+            openRequested(environment.requestedConversation)
         }
         .onDisappear { viewModel.stop() }
     }
 
+    private func openRequested(_ conversation: ConversationRecord?) {
+        guard let conversation else { return }
+        environment.requestedConversation = nil
+        openedConversation = conversation
+    }
+
+    /// "3 persone vicine" sotto il titolo (iOS 26) al posto degli stati radio tecnici.
+    private var peopleStatusText: String {
+        PeopleStatus.text(neighbors: environment.neighbors.count, nearby: environment.presence.count,
+                          radioState: environment.radioState)
+    }
+
     private var list: some View {
         List {
+            if !environment.isHomeCardDismissed {
+                homeCard
+                    .listRowBackground(AeroTheme.background)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            }
             ForEach(viewModel.conversations, id: \.id) { conversation in
                 NavigationLink(value: conversation) {
                     row(conversation)
@@ -374,26 +404,71 @@ struct ChatListView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            Image(systemName: "airplane.circle")
-                .font(.system(size: 64))
-                .foregroundStyle(AeroTheme.accentCyan)
-            Text("Pronti al decollo, \(environment.nickname)")
-                .font(AeroTheme.title(26))
-                .foregroundStyle(AeroTheme.textPrimary)
-            Text("Inquadra la carta d'imbarco per entrare nella chat del tuo volo, o aggiungi i compagni al gate: a bordo vi troverete da soli via Bluetooth.")
-                .font(.footnote)
-                .foregroundStyle(AeroTheme.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            Spacer()
-            ctaButton("Inquadra la carta d'imbarco", systemImage: "airplane.departure", tint: AeroTheme.accentCyan) { showBoardingPass = true }
-            ctaButton("Aggiungi compagni di volo (QR)", systemImage: "qrcode.viewfinder", tint: AeroTheme.accentCyan) { showPairing = true }
-            ctaButton("Fai scaricare l'app al Gate", systemImage: "arrow.down.app.fill", tint: AeroTheme.accentEmerald) { showStoreQR = true }
-            Spacer(minLength: 24)
+        ScrollView {
+            VStack(spacing: 18) {
+                Text("Pronti al decollo, \(environment.nickname)")
+                    .font(AeroTheme.title(26))
+                    .foregroundStyle(AeroTheme.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 12)
+                if !environment.isHomeCardDismissed {
+                    homeCard
+                }
+                // Prova con il passeggero virtuale: tutto da questo iPhone, nulla passa dalla radio.
+                Button {
+                    Haptics.tap()
+                    Task { await environment.startDemo() }
+                } label: {
+                    VStack(spacing: 4) {
+                        Label("Prova subito", systemImage: "sparkles")
+                            .font(AeroTheme.title(18, weight: .bold))
+                        Text("Chatta e gioca con un passeggero virtuale, senza un secondo telefono")
+                            .font(.footnote)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                }
+                .buttonStyle(.bordered)
+                .tint(AeroTheme.accentEmerald)
+                Button {
+                    Haptics.tap()
+                    environment.requestedNearby = .all
+                } label: {
+                    Label("Guarda chi è vicino", systemImage: "person.wave.2")
+                        .font(.body.weight(.semibold))
+                }
+                .tint(AeroTheme.accentCyan)
+                Text("A bordo vi troverete da soli via Bluetooth: niente Wi-Fi, niente account.")
+                    .font(.footnote)
+                    .foregroundStyle(AeroTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
         }
-        .padding(.horizontal, 20)
+    }
+
+    // MARK: Card contestuale
+
+    /// Card grande in cima: si adatta a "in volo" / "a terra"; si chiude per questa sessione.
+    private var homeCard: some View {
+        HomeContextCard(
+            isInFlight: environment.isLikelyInFlight,
+            flightNumber: environment.activeFlightNumber,
+            hasFlightCabin: environment.activeFlightLounge != nil,
+            nearbyCount: environment.presence.count,
+            onOpenFlightCabin: {
+                if let lounge = environment.activeFlightLounge { openedConversation = lounge }
+            },
+            onPlayOnBoard: { environment.requestedNearby = .flight },
+            onAddBoardingPass: { showBoardingPass = true },
+            onInvite: { showPairing = true },
+            onNewGroup: { showNewGroup = true },
+            onNearby: { environment.requestedNearby = .all },
+            onDismiss: { withAnimation { environment.isHomeCardDismissed = true } }
+        )
     }
 
     private func ctaButton(_ title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {

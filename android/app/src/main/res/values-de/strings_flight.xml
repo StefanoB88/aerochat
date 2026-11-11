@@ -36,7 +36,6 @@
     <string name="flight_card_slogan">Chatten in 10.000 Metern Höhe.</string>
     <string name="flight_card_slogan2">Ohne Wi-Fi, ohne Konto, nur Bluetooth.</string>
     <string name="flight_menu_boarding">Flugkabine (Bordkarte)</string>
-    <string name="flight_empty_hint">Scanne deine Bordkarte, um dem Chat deines Flugs beizutreten, oder füge deine Mitreisenden am Gate hinzu: An Bord findet ihr euch dann von selbst über Bluetooth.</string>
     <string name="flight_paywall_pass24_title">24-Stunden-Einzelflug-Pass</string>
     <string name="flight_paywall_pass24_subtitle">Ein Flug, ein Tag. Fotos, Sprachnachrichten und Spiele für dich und deine Gruppe bis zur Landung.</string>
     <string name="flight_paywall_terms">Nutzungsbedingungen</string>

@@ -47,6 +47,22 @@ enum RouterEvent: Sendable, Equatable {
     case typingChanged(conversationID: String, senderNodeID: Data, nickname: String, isTyping: Bool)
     /// Un QR con token e' stato scansionato da un nuovo contatto (PAIR_HELLO): la sua chat e' pronta.
     case pairedByHello(conversationID: String, peerNodeID: Data)
+    /// PRESENCE ricevuto da un vicino diretto (solo cache in memoria, mai nel DB).
+    case presenceUpdated(NearbyPerson)
+    /// "Saluta" / "Sfida" ricevuto (CONTACT_REQUEST REQUEST): entra in "Richieste".
+    case contactRequestReceived(IncomingContactRequest)
+    /// Risposta (ACCEPT / DECLINE) a una nostra richiesta. Con ACCEPT la chat 1-a-1 e' gia' pronta.
+    case contactRequestAnswered(requestID: Data, peerNodeID: Data, nickname: String, outcome: ContactRequestOutcome, gameKind: Int32)
+}
+
+/// Cosa annunciamo con il PRESENCE (impostazione "Visibile alle persone vicine", Cabina del volo, sfide).
+struct PresenceSettings: Sendable, Equatable {
+    /// Spento: niente PRESENCE in uscita (si continua a vedere gli altri). Il router parte spento:
+    /// lo accende l'app secondo l'impostazione dell'utente (default attiva).
+    var isVisible = false
+    var openToGames = true
+    /// Codice canonico della Cabina del volo attiva ("CARRIER|FLIGHT|yyyy-MM-dd").
+    var flightCode: String?
 }
 
 /// Pacchetto decifrato e verificato che il router non gestisce da solo (media, giochi, Pro Pass):
@@ -97,6 +113,10 @@ enum RouterError: Error, Equatable {
     case revisionWindowExpired
     /// `PAIR_HELLO` che non si apre con nessuno dei nostri token validi (sconosciuto o scaduto).
     case pairHelloRejected
+    /// CONTACT_REQUEST verso noi stessi o un utente bloccato.
+    case contactRequestNotAllowed
+    /// Richiesta ricevuta inesistente o scaduta (Accetta / Rifiuta).
+    case contactRequestNotFound
 }
 
 /// Consegna notifiche locali a schermo spento. Implementato con `UNUserNotificationCenter`.
@@ -106,6 +126,8 @@ protocol MeshNotifier: Sendable {
     func notify(message: MessageRecord, conversation: ConversationRecord, badgeCount: Int?) async
     /// Messaggio cancellato per tutti dal mittente: la sua notifica va tolta dal Centro Notifiche.
     func removeNotification(msgID: Data) async
+    /// "Marco ti saluta" / "Marco ti sfida a Scopa" (CONTACT_REQUEST ricevuto).
+    func notifyContactRequest(_ request: IncomingContactRequest) async
 }
 
 extension MeshNotifier {
@@ -114,6 +136,8 @@ extension MeshNotifier {
     }
 
     func removeNotification(msgID: Data) async {}
+
+    func notifyContactRequest(_ request: IncomingContactRequest) async {}
 }
 
 struct NoopNotifier: MeshNotifier {
@@ -128,7 +152,9 @@ extension PacketType {
         case .chatText, .deliveryAck, .readReceipt, .groupKeyGossip, .proPassGrant, .gameMove, .emergency, .messageRevision, .pairHello: return true
         // Il profilo viene ripetuto a ogni nuovo link: non serve tenerlo in coda.
         // Le chiamate, il quiz e il "sta scrivendo" hanno senso solo in tempo reale: niente coda.
-        case .publicLounge, .mediaHeader, .mediaChunk, .profileUpdate, .callSignal, .callAudio, .quiz, .typing, .UNRECOGNIZED: return false
+        // PRESENCE e CONTACT_REQUEST valgono solo tra vicini, adesso.
+        case .publicLounge, .mediaHeader, .mediaChunk, .profileUpdate, .callSignal, .callAudio, .quiz, .typing,
+             .presence, .contactRequest, .UNRECOGNIZED: return false
         }
     }
 

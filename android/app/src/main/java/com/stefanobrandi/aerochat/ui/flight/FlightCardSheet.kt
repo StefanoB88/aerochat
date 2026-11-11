@@ -77,6 +77,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stefanobrandi.aerochat.R
 import com.stefanobrandi.aerochat.app.LocalAppEnvironment
 import com.stefanobrandi.aerochat.core.flight.FlightStats
+import com.stefanobrandi.aerochat.core.flight.FlightTrip
+import androidx.compose.ui.res.pluralStringResource
 import com.stefanobrandi.aerochat.ui.AeroColors
 import com.stefanobrandi.aerochat.ui.AeroTheme
 import com.stefanobrandi.aerochat.ui.components.AeroSheet
@@ -105,7 +107,7 @@ private const val previewHeightDp = 462
  * La cartolina mostrata in anteprima e' la stessa che viene catturata (GraphicsLayer) e condivisa come PNG.
  */
 @Composable
-fun FlightCardSheet(onDismiss: () -> Unit) {
+fun FlightCardSheet(onDismiss: () -> Unit, trip: FlightTrip? = null) {
     val environment = LocalAppEnvironment.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -116,7 +118,13 @@ fun FlightCardSheet(onDismiss: () -> Unit) {
     var isSharing by remember { mutableStateOf(false) }
     val layer = rememberGraphicsLayer()
 
-    LaunchedEffect(database, period) {
+    val activeTrip by environment.activeTrip.collectAsStateWithLifecycle()
+    LaunchedEffect(database, period, trip) {
+        // Cartolina di fine volo: i contatori del viaggio, gia' pronti.
+        if (trip != null) {
+            stats = trip.stats()
+            return@LaunchedEffect
+        }
         val database = database ?: return@LaunchedEffect
         stats = null
         stats = try {
@@ -161,14 +169,29 @@ fun FlightCardSheet(onDismiss: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            FlightSegmentedPicker(
-                options = FlightStats.Period.entries,
-                selected = period,
-                label = { stringResource(it.titleRes) },
-                onSelect = { period = it },
-                modifier = Modifier.padding(horizontal = 16.dp),
-                contentDescription = stringResource(R.string.flight_card_period),
-            )
+            if (trip != null) {
+                Text(
+                    stringResource(R.string.nearby_trip_card_header, trip.flightCode, trip.flightDate),
+                    style = AeroTheme.title(17f, FontWeight.SemiBold),
+                    color = AeroTheme.textPrimary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            } else {
+                FlightSegmentedPicker(
+                    options = FlightStats.Period.entries,
+                    selected = period,
+                    label = { stringResource(it.titleRes) },
+                    onSelect = { period = it },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    contentDescription = stringResource(R.string.flight_card_period),
+                )
+            }
+            // Classifica del volo: partite vinte durante il volo in corso.
+            val leaderboard = trip ?: activeTrip
+            if (leaderboard != null && leaderboard.gamesPlayed > 0) {
+                FlightLeaderboard(leaderboard)
+            }
             val current = stats
             if (current != null) {
                 Box(
@@ -349,5 +372,44 @@ private fun StatTile(icon: ImageVector, value: Int, label: String, modifier: Mod
             minLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/** Numeri della cartolina dai contatori del viaggio (persone incontrate, messaggi, partite, volo). */
+private fun FlightTrip.stats(): FlightStats = FlightStats(
+    period = FlightStats.Period.trip,
+    messagesSent = messagesSent,
+    messagesReceived = messagesReceived,
+    peopleMet = people.size,
+    gamesPlayed = gamesPlayed,
+    gamesWon = gamesWon,
+    flightTitles = listOf(title.ifEmpty { "$flightCode · $flightDate" }),
+)
+
+/** "Classifica del volo": partite vinte su quelle giocate durante il volo. */
+@Composable
+private fun FlightLeaderboard(trip: FlightTrip) {
+    Row(
+        Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth()
+            .background(AeroTheme.surface, RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(Icons.Filled.SportsEsports, contentDescription = null, tint = AeroTheme.accentEmerald)
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.nearby_leaderboard_title, trip.flightCode),
+                style = AeroTheme.captionSemibold,
+                color = AeroTheme.textSecondary,
+            )
+            Text(
+                pluralStringResource(R.plurals.nearby_leaderboard_wins, trip.gamesPlayed, trip.gamesWon, trip.gamesPlayed),
+                style = AeroTheme.title(16f, FontWeight.SemiBold),
+                color = AeroTheme.textPrimary,
+            )
+        }
     }
 }

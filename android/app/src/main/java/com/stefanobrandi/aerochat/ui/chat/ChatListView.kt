@@ -36,6 +36,12 @@ import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.WavingHand
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.WavingHand
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -289,6 +295,22 @@ fun ChatListView() {
         }
     }
 
+    fun startDemo() {
+        scope.launch {
+            val chat = runCatching { environment.startDemo() }.getOrNull() ?: return@launch
+            navController.navigate(AeroRoutes.conversation(chat.id))
+        }
+    }
+
+    val homeActions = HomeCardActions(
+        openLounge = { navController.navigate(AeroRoutes.conversation(it.id)) },
+        playAboard = { navController.navigate(AeroRoutes.nearby(gamesOnly = true)) },
+        addBoardingPass = { showBoardingPass = true },
+        inviteFriends = { showPairing = true },
+        createGroup = { showNewGroup = true },
+        openNearby = { navController.navigate(AeroRoutes.nearby()) },
+    )
+
     Scaffold(
         containerColor = AeroTheme.background,
         contentWindowInsets = WindowInsets(0),
@@ -339,30 +361,41 @@ fun ChatListView() {
                         AeroDropdownMenu(
                             expanded = showAddMenu,
                             onDismissRequest = { showAddMenu = false },
+                            // Le voci piu' usate in alto; condivisione dell'app, cartolina e prova in fondo.
                             items = listOf(
-                                AeroMenuItem(stringResource(R.string.flight_menu_boarding), Icons.Outlined.FlightTakeoff) {
+                                AeroMenuItem(stringResource(R.string.nearby_title), Icons.Outlined.WavingHand) {
                                     Haptics.tap()
                                     showAddMenu = false
-                                    showBoardingPass = true
+                                    navController.navigate(AeroRoutes.nearby())
                                 },
                                 AeroMenuItem(stringResource(R.string.chat_new_travel_group), Icons.Outlined.Groups) {
                                     Haptics.tap()
                                     showAddMenu = false
                                     showNewGroup = true
                                 },
-                                AeroMenuItem(stringResource(R.string.chat_share_app_gate), Icons.Outlined.GetApp) {
+                                AeroMenuItem(stringResource(R.string.flight_menu_boarding), Icons.Outlined.FlightTakeoff) {
                                     Haptics.tap()
                                     showAddMenu = false
-                                    showStoreQR = true
+                                    showBoardingPass = true
                                 },
                                 AeroMenuItem(
-                                    stringResource(R.string.flight_card_title),
-                                    Icons.Outlined.AutoAwesome,
+                                    stringResource(R.string.chat_share_app_gate),
+                                    Icons.Outlined.GetApp,
                                     dividerBefore = true,
                                 ) {
                                     Haptics.tap()
                                     showAddMenu = false
+                                    showStoreQR = true
+                                },
+                                AeroMenuItem(stringResource(R.string.flight_card_title), Icons.Outlined.AutoAwesome) {
+                                    Haptics.tap()
+                                    showAddMenu = false
                                     showFlightCard = true
+                                },
+                                AeroMenuItem(stringResource(R.string.nearby_try_demo), Icons.Outlined.SmartToy) {
+                                    Haptics.tap()
+                                    showAddMenu = false
+                                    startDemo()
                                 },
                             ),
                         )
@@ -378,12 +411,16 @@ fun ChatListView() {
             } else if (loaded.isEmpty()) {
                 EmptyState(
                     nickname = nickname,
-                    onBoardingPass = { showBoardingPass = true },
+                    homeActions = homeActions,
+                    onNearby = { navController.navigate(AeroRoutes.nearby()) },
                     onPairing = { showPairing = true },
+                    onTryDemo = ::startDemo,
+                    onBoardingPass = { showBoardingPass = true },
                     onStoreQR = { showStoreQR = true },
                 )
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
+                    item(key = "home-card") { HomeCard(homeActions) }
                     items(loaded, key = { it.id }) { conversation ->
                         ConversationRow(
                             conversation = conversation,
@@ -656,37 +693,64 @@ private fun fallbackColorHex(conversation: ConversationRecord): String {
 }
 
 @Composable
-private fun EmptyState(nickname: String, onBoardingPass: () -> Unit, onPairing: () -> Unit, onStoreQR: () -> Unit) {
+private fun EmptyState(
+    nickname: String,
+    homeActions: HomeCardActions,
+    onNearby: () -> Unit,
+    onPairing: () -> Unit,
+    onTryDemo: () -> Unit,
+    onBoardingPass: () -> Unit,
+    onStoreQR: () -> Unit,
+) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Spacer(Modifier.weight(1f))
-        Box(
-            Modifier.size(64.dp).border(3.dp, AeroTheme.accentCyan, CircleShape),
-            contentAlignment = Alignment.Center,
+        HomeCard(homeActions)
+        Column(
+            Modifier.padding(horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Icon(Icons.Filled.Flight, contentDescription = null, tint = AeroTheme.accentCyan, modifier = Modifier.size(36.dp))
+            Box(
+                Modifier.size(56.dp).border(3.dp, AeroTheme.accentCyan, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Flight, contentDescription = null, tint = AeroTheme.accentCyan, modifier = Modifier.size(30.dp))
+            }
+            Text(
+                stringResource(R.string.chat_ready_takeoff, nickname),
+                style = AeroTheme.title(24f),
+                color = AeroTheme.textPrimary,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                stringResource(R.string.nearby_empty_chats_hint),
+                style = AeroTheme.footnote,
+                color = AeroTheme.textSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            CtaButton(stringResource(R.string.nearby_title), Icons.Filled.WavingHand, AeroTheme.accentCyan, onNearby)
+            CtaButton(stringResource(R.string.chat_cta_add_buddies), Icons.Filled.QrCodeScanner, AeroTheme.accentCyan, onPairing)
+            CtaButton(stringResource(R.string.nearby_try_now), Icons.Filled.SmartToy, AeroTheme.accentEmerald, onTryDemo)
+            Text(
+                stringResource(R.string.nearby_try_now_hint),
+                style = AeroTheme.caption,
+                color = AeroTheme.textSecondary,
+                textAlign = TextAlign.Center,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onBoardingPass, modifier = Modifier.hapticOnTap()) {
+                    Text(stringResource(R.string.flight_cta_boarding), color = AeroTheme.accentCyan)
+                }
+                TextButton(onClick = onStoreQR, modifier = Modifier.hapticOnTap()) {
+                    Text(stringResource(R.string.chat_cta_share_app), color = AeroTheme.accentEmerald)
+                }
+            }
+            Spacer(Modifier.height(24.dp))
         }
-        Text(
-            stringResource(R.string.chat_ready_takeoff, nickname),
-            style = AeroTheme.title(26f),
-            color = AeroTheme.textPrimary,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            stringResource(R.string.flight_empty_hint),
-            style = AeroTheme.footnote,
-            color = AeroTheme.textSecondary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 32.dp),
-        )
-        Spacer(Modifier.weight(1f))
-        CtaButton(stringResource(R.string.flight_cta_boarding), Icons.Filled.FlightTakeoff, AeroTheme.accentCyan, onBoardingPass)
-        CtaButton(stringResource(R.string.chat_cta_add_buddies), Icons.Filled.QrCodeScanner, AeroTheme.accentCyan, onPairing)
-        CtaButton(stringResource(R.string.chat_cta_share_app), Icons.Filled.GetApp, AeroTheme.accentEmerald, onStoreQR)
-        Spacer(Modifier.height(24.dp))
     }
 }
 

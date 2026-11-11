@@ -7,13 +7,10 @@
     <string name="core11_emergency_generic">Alerte</string>
     <string name="core11_emergency_body_default">Alerte d’un passager à proximité.</string>
     <string name="core11_emergency_channel_name">Alerte d’urgence</string>
-    <string name="core11_demo_nickname">Équipage Démo</string>
-    <string name="core11_demo_reply_1">Salut ! Je suis le compagnon de voyage simulé : je réponds depuis ce même appareil, sans Bluetooth. 👋</string>
     <string name="core11_demo_reply_2">Avec un second téléphone, les messages passeraient par le réseau mesh BLE, chiffrés de bout en bout.</string>
     <string name="core11_demo_reply_3">Essaie de maintenir le doigt sur l’un de mes messages : tu peux le signaler ou me bloquer.</string>
     <string name="core11_demo_reply_4">Dans l’onglet Cabine, tu trouveras le tableau public de 12 heures, avec les règles à accepter.</string>
     <string name="core11_demo_reply_5">Les photos que tu reçois de personnes que tu n’as pas scannées en personne restent floutées jusqu’à ce que tu les touches.</string>
-    <string name="core11_demo_reply_6">Bon vol ! ✈️ Tu peux me désactiver quand tu veux depuis Réglages › À propos.</string>
     <string name="core11_demo_lounge_1">Quelqu’un sait si le chariot passe avant ou après le décollage ? 🍫</string>
     <string name="core11_demo_lounge_2">Rangée 12 ici : le coucher de soleil par le hublot est dingue.</string>
     <string name="core11_report_spam">Spam ou publicité</string>

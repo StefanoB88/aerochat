@@ -7,13 +7,10 @@
     <string name="core11_emergency_generic">Larm</string>
     <string name="core11_emergency_body_default">Larm från en passagerare i närheten.</string>
     <string name="core11_emergency_channel_name">Nödlarm</string>
-    <string name="core11_demo_nickname">Demobesättning</string>
-    <string name="core11_demo_reply_1">Hej! Jag är den simulerade resekamraten: jag svarar från samma enhet, utan Bluetooth. 👋</string>
     <string name="core11_demo_reply_2">Med en andra telefon skulle meddelandena gå via BLE-meshnätet, totalsträckskrypterade.</string>
     <string name="core11_demo_reply_3">Testa att hålla fingret på ett av mina meddelanden: du kan rapportera det eller blockera mig.</string>
     <string name="core11_demo_reply_4">I fliken Kabin hittar du den offentliga 12-timmarsanslagstavlan med reglerna du behöver godkänna.</string>
     <string name="core11_demo_reply_5">Foton du får från personer du inte har skannat personligen förblir suddiga tills du trycker på dem.</string>
-    <string name="core11_demo_reply_6">Trevlig flygresa! ✈️ Du kan stänga av mig när du vill under Inställningar › Om.</string>
     <string name="core11_demo_lounge_1">Är det någon som vet om vagnen kommer före eller efter start? 🍫</string>
     <string name="core11_demo_lounge_2">Rad 12 här: det är en helt galen solnedgång utanför fönstret.</string>
     <string name="core11_report_spam">Spam eller reklam</string>

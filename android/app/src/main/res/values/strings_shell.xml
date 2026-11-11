@@ -11,9 +11,7 @@
     <string name="shell_banner_unauthorized_message">Consenti il Bluetooth ad AeroChat in Impostazioni › Privacy per parlare con i compagni di volo.</string>
     <string name="shell_banner_unsupported_message">Questo dispositivo non supporta il Bluetooth LE necessario alla mesh.</string>
     <string name="shell_banner_off_message">Puoi riattivare il Bluetooth in totale sicurezza (come per le cuffie wireless) mantenendo spento il segnale cellulare.</string>
-    <string name="shell_radio_direct">Connessione diretta</string>
     <string name="shell_radio_out_of_range">Fuori portata</string>
-    <string name="shell_radio_out_of_range_queued">Fuori portata — invio in coda</string>
     <string name="shell_radio_status_a11y">Stato radio: %1$s</string>
     <string name="shell_onboarding_tagline">Messaggi tra sedili, senza Wi-Fi e senza account. Solo un nickname.</string>
     <string name="shell_onboarding_question">COME TI CHIAMANO A BORDO?</string>
@@ -66,10 +64,6 @@
     <string name="shell_paywall_thanks">Grazie! Il pass è attivo e viene propagato ai tuoi gruppi.</string>
     <string name="shell_paywall_failed">Acquisto non completato: %1$s</string>
     <string name="shell_mic_settings">Consenti il microfono in Impostazioni</string>
-    <plurals name="shell_radio_via_bridge">
-        <item quantity="one">Tramite ponte (%1$d salto)</item>
-        <item quantity="other">Tramite ponte (%1$d salti)</item>
-    </plurals>
     <string name="shell_permission_bluetooth_rationale">AeroChat usa il Bluetooth per scambiare messaggi cifrati con i compagni di volo vicini, anche senza Wi-Fi o rete cellulare.</string>
     <string name="shell_permission_camera_rationale">AeroChat usa la fotocamera per inquadrare il QR Code dei compagni di volo e per scattare le foto da inviare.</string>
     <string name="shell_permission_microphone_rationale">AeroChat usa il microfono per registrare le note vocali da inviare ai compagni di volo.</string>

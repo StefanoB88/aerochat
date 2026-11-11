@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.3: Persone vicine (PRESENCE / CONTACT_REQUEST), prova con il passeggero virtuale, schermata
+     principale contestuale, testi di consegna "umani", ricordo del viaggio, impostazioni raggruppate. -->
+<resources>
+    <!-- Persone vicine -->
+    <string name="nearby_title">Mensen in de buurt</string>
+    <string name="nearby_challenge_title">Daag iemand in de buurt uit</string>
+    <string name="nearby_requests">Verzoeken</string>
+    <string name="nearby_people_section">Bij jou in de buurt</string>
+    <plurals name="nearby_people_count">
+        <item quantity="one">%d persoon in de buurt</item>
+        <item quantity="other">%d mensen in de buurt</item>
+    </plurals>
+    <string name="nearby_visible_toggle">Zichtbaar voor mensen in de buurt</string>
+    <string name="nearby_visible_on_hint">Wie AeroChat open heeft in jouw buurt ziet je nickname en kan je begroeten.</string>
+    <string name="nearby_visible_off_hint">Je bent onzichtbaar: anderen zien jou niet, maar jij ziet hen nog wel.</string>
+    <string name="nearby_only_games">Alleen wie uitdagingen accepteert</string>
+    <string name="nearby_say_hello">Zeg hoi</string>
+    <string name="nearby_challenge">Uitdagen</string>
+    <string name="nearby_open_chat">Chat openen</string>
+    <string name="nearby_waiting">Wachten…</string>
+    <string name="nearby_pick_game">Daag %1$s uit voor…</string>
+    <string name="nearby_same_flight">Op jouw vlucht</string>
+    <string name="nearby_already_contact">Al in je contacten</string>
+    <string name="nearby_signal_very_close">Heel dichtbij</string>
+    <string name="nearby_signal_close">Dichtbij</string>
+    <string name="nearby_signal_far">Een stukje verderop</string>
+    <string name="nearby_signal_unknown">In de buurt</string>
+    <string name="nearby_accept">Accepteren</string>
+    <string name="nearby_decline">Weigeren</string>
+    <string name="nearby_reply">Antwoorden</string>
+    <string name="nearby_hello_sent">Begroeting verstuurd naar %1$s</string>
+    <string name="nearby_challenge_sent">Uitdaging verstuurd naar %1$s</string>
+    <string name="nearby_send_failed">Versturen mislukt: kom dichterbij en probeer het opnieuw.</string>
+    <string name="nearby_accepted">%1$s heeft geaccepteerd!</string>
+    <string name="nearby_declined">Verzoek geweigerd door %1$s</string>
+    <string name="nearby_empty_title">Voorlopig niemand in de buurt</string>
+    <string name="nearby_empty_hint">Wie AeroChat open heeft in jouw buurt verschijnt hier. Hoe meer mensen, hoe verder je berichten komen.</string>
+    <string name="nearby_invite_friends">Vrienden uitnodigen</string>
+    <string name="nearby_try_demo">Probeer het met de virtuele passagier</string>
+    <string name="nearby_game_scopa">Scopa</string>
+    <string name="nearby_game_briscola">Briscola</string>
+    <string name="nearby_game_tictactoe">Boter-kaas-en-eieren</string>
+    <string name="nearby_game_battleship">Zeeslag</string>
+
+    <!-- Notifiche -->
+    <string name="nearby_channel_name">Mensen in de buurt</string>
+    <string name="nearby_notification_hello">%1$s zegt hoi 👋</string>
+    <string name="nearby_notification_challenge">%1$s daagt je uit voor %2$s</string>
+    <string name="nearby_notification_body">Tik om te accepteren of te weigeren.</string>
+    <string name="nearby_trip_ready_title">Je vluchtansichtkaart is klaar ✈️</string>
+    <string name="nearby_trip_ready_body">Vlucht %1$s: ontmoete mensen, berichten en potjes in één afbeelding om te delen.</string>
+    <string name="nearby_trip_card_header">Vlucht %1$s · %2$s</string>
+    <string name="nearby_leaderboard_title">Ranglijst van vlucht %1$s</string>
+    <plurals name="nearby_leaderboard_wins">
+        <item quantity="one">Gewonnen potjes: %1$d van %2$d</item>
+        <item quantity="other">Gewonnen potjes: %1$d van %2$d</item>
+    </plurals>
+
+    <!-- Primo avvio -->
+    <string name="nearby_onboarding_1_title">Werkt zonder internet</string>
+    <string name="nearby_onboarding_1_body">Geen wifi, geen netwerk: AeroChat gebruikt de Bluetooth van je telefoon. In het vliegtuig, in de metro, op concerten.</string>
+    <string name="nearby_onboarding_2_title">Berichten gaan van telefoon naar telefoon</string>
+    <string name="nearby_onboarding_2_body">Elke telefoon met AeroChat werkt als brug: het bericht springt van persoon naar persoon tot het bij de ontvanger is. Altijd versleuteld.</string>
+    <string name="nearby_onboarding_3_title">Hoe meer mensen, hoe verder het komt</string>
+    <string name="nearby_onboarding_3_body">Nodig mensen uit die met je meereizen: elke extra persoon vergroot het bereik voor iedereen.</string>
+    <string name="nearby_onboarding_next">Volgende</string>
+    <string name="nearby_onboarding_skip">Overslaan</string>
+    <string name="nearby_onboarding_start">Aan de slag</string>
+    <string name="nearby_onboarding_try">Probeer meteen met een virtuele passagier</string>
+
+    <!-- Prova con il passeggero virtuale -->
+    <string name="nearby_try_now">Probeer meteen</string>
+    <string name="nearby_try_now_hint">Een proefchat met een virtuele passagier: die antwoordt en speelt kaartspellen, alles blijft op deze telefoon.</string>
+    <string name="nearby_demo_nickname">Virtuele passagier</string>
+    <string name="nearby_demo_header">Virtuele passagier · alleen op deze telefoon</string>
+    <string name="nearby_demo_banner">Proefchat: de virtuele passagier bestaat alleen op deze telefoon, er wordt niets verstuurd.</string>
+    <string name="nearby_demo_delete">Verwijderen</string>
+    <string name="nearby_demo_welcome">Hoi! Ik ben de virtuele passagier 👋 Ik leef alleen op deze telefoon: schrijf me iets of daag me uit voor een kaartspel. Ik heb je hieronder net een potje Scopa voorgesteld!</string>
+    <string name="nearby_demo_cards_only">Ik speel alleen kaartspellen: probeer me uit te dagen voor Scopa of Briscola! 🃏</string>
+    <string name="nearby_demo_game_over">Mooi potje! 🎉 Met echte mensen werkt het precies zo: nodig mensen in je buurt uit.</string>
+    <string name="nearby_demo_invite_hint">Het leukste komt met echte mensen: nodig mensen in je buurt uit en chat samen, ook zonder netwerk.</string>
+    <string name="nearby_demo_invite_cta">Nodig mensen in je buurt uit</string>
+
+    <!-- Schermata principale contestuale -->
+    <string name="nearby_home_on_flight">Je zit op vlucht %1$s</string>
+    <string name="nearby_home_on_flight_hint">Chat en speel met wie aan boord is, ook in vliegtuigmodus.</string>
+    <string name="nearby_home_in_flight">Zit je in het vliegtuig? ✈️</string>
+    <string name="nearby_home_in_flight_hint">Voeg je instapkaart toe om de cabine van je vlucht te betreden.</string>
+    <string name="nearby_home_enter_lounge">Betreed de cabine van de vlucht</string>
+    <string name="nearby_home_play_aboard">Speel met wie aan boord is</string>
+    <string name="nearby_home_add_boarding">Instapkaart toevoegen</string>
+    <string name="nearby_home_ground_title">Neem je vrienden mee aan boord</string>
+    <string name="nearby_home_ground_hint">AeroChat werkt zonder internet: hoe meer mensen, hoe verder je berichten komen.</string>
+    <string name="nearby_home_invite">Vrienden uitnodigen</string>
+    <string name="nearby_home_group">Groep maken</string>
+    <string name="nearby_empty_chats_hint">Zeg hoi tegen iemand in de buurt, voeg een vriend toe met de QR-code of probeer de app meteen met een virtuele passagier.</string>
+
+    <!-- Testi di consegna -->
+    <string name="nearby_queued_line">Komt aan zodra jullie dichtbij zijn</string>
+    <plurals name="nearby_via_people_badge">
+        <item quantity="one">via %d persoon</item>
+        <item quantity="other">via %d personen</item>
+    </plurals>
+    <string name="nearby_status_near_you">Bij jou in de buurt</string>
+    <string name="nearby_status_nobody">Voorlopig niemand in de buurt</string>
+    <plurals name="nearby_status_people_nearby">
+        <item quantity="one">%d persoon in de buurt</item>
+        <item quantity="other">%d mensen in de buurt</item>
+    </plurals>
+    <plurals name="nearby_status_via_people">
+        <item quantity="one">Bereikbaar via %d persoon</item>
+        <item quantity="other">Bereikbaar via %d personen</item>
+    </plurals>
+    <plurals name="nearby_status_via_people_short">
+        <item quantity="one">Via %d persoon</item>
+        <item quantity="other">Via %d personen</item>
+    </plurals>
+    <string name="nearby_status_out_of_range_waiting">Buiten bereik — het bericht wacht</string>
+
+    <!-- Impostazioni -->
+    <string name="nearby_settings_profile">Profiel</string>
+    <string name="nearby_settings_privacy">Privacy</string>
+    <string name="nearby_settings_notifications">Meldingen</string>
+    <string name="nearby_settings_subscription">Abonnement</string>
+    <string name="nearby_settings_about">Info en juridisch</string>
+    <string name="nearby_settings_visible_short">Zichtbaar</string>
+    <string name="nearby_settings_hidden_short">Onzichtbaar</string>
+    <string name="nearby_settings_pro_active">Actief</string>
+    <string name="nearby_settings_open_to_games">Ik accepteer kaartuitdagingen</string>
+    <string name="nearby_settings_visibility_footer">Als je zichtbaar bent, zien mensen in de buurt je nickname en avatarkleur en kunnen ze je begroeten of uitdagen. Niemand wordt een contact zonder jouw toestemming.</string>
+    <string name="nearby_settings_notifications_status">Meldingen van de app</string>
+    <string name="nearby_settings_on">Aan</string>
+    <string name="nearby_settings_off">Uit</string>
+    <string name="nearby_settings_notifications_open">Systeeminstellingen openen</string>
+    <string name="nearby_settings_notifications_footer">Berichten, verzoeken van mensen in de buurt, noodmeldingen en de ansichtkaart na je vlucht.</string>
+    <string name="nearby_settings_subscription_footer">De Flight Group Pass ontgrendelt de Pro-functies voor jou en je reisgroep.</string>
+</resources>

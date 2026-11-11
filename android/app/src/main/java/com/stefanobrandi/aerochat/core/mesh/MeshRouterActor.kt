@@ -51,6 +51,12 @@ import com.stefanobrandi.aerochat.proto.PacketType
 import com.stefanobrandi.aerochat.proto.ProfileUpdate
 import com.stefanobrandi.aerochat.proto.RevisionAction
 import com.stefanobrandi.aerochat.proto.TypingIndicator
+import com.stefanobrandi.aerochat.proto.ContactAction
+import com.stefanobrandi.aerochat.proto.ContactRequest
+import com.stefanobrandi.aerochat.proto.GameKind
+import com.stefanobrandi.aerochat.proto.Presence
+import com.stefanobrandi.aerochat.core.review.DemoPeerService
+import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
@@ -123,6 +129,10 @@ class MeshRouterActor(
          * evita una transazione e un refresh della UI per ogni chunk ricevuto.
          */
         val lastSeenWriteInterval: Long = 15_000L,
+        /** `PRESENCE` ripetuto a tutti i vicini (solo in primo piano e se visibili). */
+        val presenceInterval: Long = MeshProtocol.presenceInterval,
+        /** Ogni quanto controllare la scadenza dei vicini e delle richieste. */
+        val nearbyTickInterval: Long = 15_000L,
     )
 
     /** Risultato di [sendPacket] (tupla `(msgID, reached)` su iOS). */
@@ -210,6 +220,25 @@ class MeshRouterActor(
     /** "Sta scrivendo" ricevuto (`TYPING`), solo in memoria. */
     val typing: TypingTracker = TypingTracker(scope)
 
+    /** Persone vicine (`PRESENCE`) e richieste "Saluta"/"Sfida" (`CONTACT_REQUEST`), solo in memoria. */
+    val nearby: NearbyTracker = NearbyTracker()
+
+    /** "Visibile alle persone vicine": se `false` non inviamo `PRESENCE` (ma vediamo gli altri). */
+    private var presenceVisible = true
+    private var presenceOpenToGames = true
+    /** `PRESENCE` solo con l'app in primo piano. */
+    private var presenceForeground = true
+    private var nearbyTask: Job? = null
+    /** Istante (ms monotoni) dell'ultimo `PRESENCE` a tutti i vicini. */
+    private var lastPresenceBroadcastAt = 0L
+    /**
+     * Sfide accettate da noi (ACCEPT di una REQUEST con `game_kind`): node hex -> (GameKind, istante). L'invito
+     * di gioco che chi ha chiesto manda subito dopo viene accettato da solo (l'ACCEPT vale come consenso).
+     */
+    private val acceptedChallenges = HashMap<String, Pair<Int, Long>>()
+    /** Passeggero virtuale della modalita' prova: nulla verso di lui esce dalla radio. */
+    private val demoNodeID: ByteArray = DemoPeerService.nodeID
+
     @Volatile
     private var currentStats = RouterStats()
 
@@ -270,6 +299,18 @@ class MeshRouterActor(
         ackRetryDelay = configuration.ackRetryInterval
         lastAckRetryAt = monotonicNowMs()
         scheduleAckRetry()
+
+        // Persone vicine: scadenza della cache e `PRESENCE` periodico (solo in primo piano).
+        nearbyTask = scope.launch {
+            while (isActive) {
+                delay(configuration.nearbyTickInterval)
+                if (!isActive) break
+                nearby.purge(nowUnixMilliseconds)
+                if (monotonicNowMs() - lastPresenceBroadcastAt >= configuration.presenceInterval) {
+                    attempt { broadcastPresence() }
+                }
+            }
+        }
     }
 
     /** (Ri)programma il prossimo giro di ritentativi a `lastAckRetryAt + ackRetryDelay`. */
@@ -324,9 +365,13 @@ class MeshRouterActor(
         eventTask?.cancel()
         maintenanceTask?.cancel()
         ackRetryTask?.cancel()
+        nearbyTask?.cancel()
         eventTask = null
         maintenanceTask = null
         ackRetryTask = null
+        nearbyTask = null
+        nearby.clear()
+        acceptedChallenges.clear()
         pendingRelays.values.forEach { it.cancel() }
         pendingRelays.clear()
         transport.stop()
@@ -590,6 +635,7 @@ class MeshRouterActor(
                 // Solo in avanti: l'ACK puo' essere gia' arrivato mentre `dispatch` era in corso.
                 database.messages.advanceDeliveryStatus(to = DeliveryStatus.sentMesh, msgID = message.msgID)
             }
+            emit(RouterEvent.MessageSent(conversationID = conversation.id))
             message
         }
 
@@ -744,6 +790,8 @@ class MeshRouterActor(
     ): Boolean {
         val msgID = envelope.msgId.toByteArray()
         val recipientID = envelope.recipientId.toByteArray()
+        // Modalita' prova: la chat con il passeggero virtuale resta sul telefono (niente radio, niente coda).
+        if (recipientID.contentEquals(demoNodeID)) return false
         seen.insertIfNew(msgID)
         val bytes = attempt { MeshWire.serialize(envelope) } ?: return false
 
@@ -842,6 +890,8 @@ class MeshRouterActor(
         if (links.values.any { it.nodeID?.contentEquals(nodeID) == true && it.id != link.id }) return
         flushRelayQueue(toward = nodeID)
         attempt { database.peers.fetch(nodeID = nodeID) }?.let { sendProfile(it) }
+        // Persone vicine: ci presentiamo a ogni nuovo link (se visibili e in primo piano).
+        attempt { sendPresence(toNode = nodeID) }
     }
 
     /**
@@ -969,7 +1019,8 @@ class MeshRouterActor(
         }
         // La cache in memoria puo' aver dimenticato l'id (riavvio, eviction): il DB e' la verita'.
         // "Sta scrivendo": niente DB (pacchetti frequenti ed effimeri, quelli vecchi vengono scartati comunque).
-        if (envelope.packetType != PacketType.TYPING &&
+        // Anche `PRESENCE` (ogni 60 s da ogni vicino): mai nel DB.
+        if (envelope.packetType != PacketType.TYPING && envelope.packetType != PacketType.PRESENCE &&
             attempt { database.seenPackets.markSeenIfNew(msgID = msgID) } == false
         ) {
             updateStats { it.copy(duplicates = it.duplicates + 1) }
@@ -977,6 +1028,18 @@ class MeshRouterActor(
         }
         updateStats { it.copy(received = it.received + 1) }
         val hops = envelope.hopCount + 1
+
+        // Persone vicine: solo vicini diretti (ttl 1), mai ritrasmesso ne' salvato, anche senza Cabina Pubblica.
+        if (envelope.packetType == PacketType.PRESENCE) {
+            try {
+                handlePresence(envelope, via = from)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                updateStats { it.copy(undecryptable = it.undecryptable + 1) }
+            }
+            return@withContext
+        }
 
         // 3. Routing.
         when (val target = resolveTarget(envelope.recipientId.toByteArray())) {
@@ -1074,6 +1137,7 @@ class MeshRouterActor(
                 type == PacketType.MESSAGE_REVISION && target !is Target.Other -> handleRevision(envelope, target)
                 type == PacketType.PAIR_HELLO && target is Target.Me -> handlePairHello(envelope, hops, via)
                 type == PacketType.TYPING && (target is Target.Me || target is Target.Group) -> handleTyping(envelope, target)
+                type == PacketType.CONTACT_REQUEST && target is Target.Me -> handleContactRequest(envelope, hops, via)
                 type == PacketType.CALL_SIGNAL && target is Target.Me -> {
                     // Solo dal vicino diretto: con un ponte di mezzo la chiamata non reggerebbe.
                     if (envelope.hopCount != 0) return
@@ -1313,6 +1377,284 @@ class MeshRouterActor(
         profileSentTo.remove(peer.nodeID.toHex())
         sendProfile(peer)
         sendAck(envelope, peer)
+    }
+
+    // MARK: - Persone vicine (PRESENCE)
+
+    /** Impostazioni di visibilita': "Visibile alle persone vicine" e "Accetto sfide a carte". */
+    suspend fun setPresenceOptions(visible: Boolean, openToGames: Boolean): Unit = withContext(actorContext) {
+        val becameVisible = visible && !presenceVisible
+        val changed = becameVisible || openToGames != presenceOpenToGames
+        presenceVisible = visible
+        presenceOpenToGames = openToGames
+        if (changed && visible) attempt { broadcastPresence() }
+    }
+
+    /** L'app passa in primo piano / in background: il `PRESENCE` parte solo in primo piano. */
+    suspend fun setPresenceForeground(foreground: Boolean): Unit = withContext(actorContext) {
+        val returned = foreground && !presenceForeground
+        presenceForeground = foreground
+        if (returned) attempt { broadcastPresence() }
+    }
+
+    /** Annuncia subito la nostra presenza a tutti i vicini diretti. Ritorna `true` se almeno uno e' raggiunto. */
+    suspend fun announcePresence(): Boolean = withContext(actorContext) { attempt { broadcastPresence() } ?: false }
+
+    private val shouldAnnouncePresence: Boolean
+        get() = isRunning && presenceVisible && presenceForeground
+
+    private suspend fun broadcastPresence(): Boolean {
+        lastPresenceBroadcastAt = monotonicNowMs()
+        if (!shouldAnnouncePresence || links.isEmpty()) return false
+        val envelope = makePresenceEnvelope() ?: return false
+        seen.insertIfNew(envelope.msgId.toByteArray())
+        val bytes = MeshWire.serialize(envelope)
+        return transport.broadcast(bytes, excluding = emptySet()) > 0
+    }
+
+    /** `PRESENCE` al solo vicino appena collegato. */
+    private suspend fun sendPresence(toNode: ByteArray): Boolean {
+        if (!shouldAnnouncePresence) return false
+        val envelope = makePresenceEnvelope() ?: return false
+        seen.insertIfNew(envelope.msgId.toByteArray())
+        return transport.send(MeshWire.serialize(envelope), toNode = toNode)
+    }
+
+    private suspend fun makePresenceEnvelope(): MeshEnvelope? {
+        val color = profile?.avatarColorHex?.takeIf { isValidColorHex(it) }?.uppercase() ?: ""
+        val flight = attempt { database.conversations.activeFlightLounges() }?.firstOrNull()?.flightCode ?: ""
+        val presence = Presence.newBuilder()
+            .setAvatarColorHex(color)
+            .setFlightCode(flight)
+            .setOpenToGames(presenceOpenToGames)
+            .setSentAtMs(nowUnixMilliseconds)
+            .build()
+        val payload = InnerPayloadFactory.extra(MeshWire.serialize(presence), identity = identity, nickname = nickname)
+        return attempt {
+            EnvelopeBuilder(identity).build(
+                packetType = PacketType.PRESENCE, recipientID = MeshProtocol.loungeRecipientID, payload = payload,
+                key = CryptoEngine.publicCabinKey, ttl = MeshProtocol.presenceTTL,
+            )
+        }
+    }
+
+    /**
+     * `PRESENCE` ricevuto: chiave della Lounge, mittente dichiarato coerente con il `node_id` (e con la chiave
+     * di firma nota, se il peer e' nel DB), mittenti bloccati ignorati. Aggiorna solo la cache in memoria.
+     */
+    private suspend fun handlePresence(envelope: MeshEnvelope, via: LinkID) {
+        if (!envelope.recipientId.toByteArray().contentEquals(MeshProtocol.loungeRecipientID)) return
+        val senderID = envelope.senderNodeId.toByteArray()
+        val senderHex = senderID.toHex()
+        if (senderID.contentEquals(myNodeID) || blocked.contains(senderHex)) return
+        val now = nowUnixMilliseconds
+        // Un annuncio vecchio (replay, coda di un ponte) non dice piu' chi c'e' adesso.
+        if (now - envelope.createdAtMs > MeshProtocol.presenceLifetime) return
+        val (payload, _) = openShared(envelope, CryptoEngine.publicCabinKey)
+        if (payload.senderEd25519Pub.size() != MeshProtocol.publicKeyLength) throw RouterError.SenderMismatch
+        val stored = database.peers.fetch(nodeID = senderID)
+        if (stored?.isBlocked == true) return
+        val presence = MeshWire.parsePresence(payload.extraData.toByteArray())
+        val declared = PairingPayload.prefixCharacters(
+            PairingPayload.trimWhitespacesAndNewlines(payload.senderNickname), MeshProtocol.maxNicknameLength,
+        ).ifEmpty { stored?.nickname ?: defaultPassengerNickname }
+        val isContact = stored?.isTrusted == true
+        // Contatti: il nome con cui li conosciamo; sconosciuti: nickname dichiarato, filtrato come in Cabina.
+        val nickname = when {
+            isContact -> stored?.nickname ?: declared
+            AppSettings.isLanguageFilterEnabled -> ContentFilter.masked(declared)
+            else -> declared
+        }
+        val flight = PairingPayload.trimWhitespacesAndNewlines(presence.flightCode).takeIf { it.isNotEmpty() && it.length <= 64 }
+        nearby.updatePresence(
+            NearbyPerson(
+                nodeID = senderID,
+                x25519Pub = payload.senderX25519Pub.toByteArray(),
+                ed25519Pub = payload.senderEd25519Pub.toByteArray(),
+                nickname = nickname,
+                avatarColorHex = presence.avatarColorHex.takeIf { isValidColorHex(it) }?.uppercase()
+                    ?: stored?.avatarColorHex,
+                flightCode = flight,
+                openToGames = presence.openToGames,
+                rssi = links[via]?.rssi,
+                lastSeenAtMs = now,
+                isContact = isContact,
+            ),
+            now = now,
+        )
+    }
+
+    // MARK: - "Saluta" / "Sfida" (CONTACT_REQUEST)
+
+    /**
+     * "Saluta" ([gameKind] 0) o "Sfida" ([gameKind] = `GameKind` a 2 giocatori) a una persona vicina: pacchetto
+     * diretto con la chiave diretta calcolata dalla sua X25519 (dal PRESENCE o dal DB), ttl 2, niente coda ne'
+     * ACK. Ritorna `true` se un vicino e' stato raggiunto.
+     */
+    suspend fun sendContactRequest(to: NearbyPerson, greeting: String = "", gameKind: Int = 0): Boolean =
+        withContext(actorContext) {
+            if (!isRunning) throw RouterError.NotRunning
+            val now = nowUnixMilliseconds
+            val requestID = ByteArray(MeshProtocol.contactRequestIDLength).also { secureRandom.nextBytes(it) }
+            var text = PairingPayload.prefixCharacters(PairingPayload.trimWhitespacesAndNewlines(greeting), MeshProtocol.maxGreetingLength)
+            if (containsLink(text)) text = ""
+            val kind = if (isChallengeKind(gameKind)) gameKind else 0
+            val stored = attempt { database.peers.fetch(nodeID = to.nodeID) }
+            val peer = if (stored != null && stored.x25519Pub.contentEquals(to.x25519Pub)) stored else to.transientPeer
+            nearby.addOutgoing(OutgoingContactRequest(requestID, peer, kind, now), now)
+            val request = ContactRequest.newBuilder()
+                .setAction(ContactAction.CONTACT_ACTION_REQUEST)
+                .setRequestId(requestID.toByteString())
+                .setGreeting(text)
+                .setGameKind(kind)
+                .build()
+            sendContactPacket(request, peer)
+        }
+
+    /**
+     * Accetta una richiesta ricevuta: il mittente diventa un contatto fidato (come dopo il QR), la chat 1-a-1
+     * compare in cima, gli mandiamo ACCEPT e il nostro profilo. Con una sfida, il suo invito di gioco verra'
+     * accettato da solo. Ritorna la chat.
+     */
+    suspend fun acceptContactRequest(requestHex: String): ConversationRecord = withContext(actorContext) {
+        if (!isRunning) throw RouterError.NotRunning
+        val request = nearby.takeIncoming(requestHex) ?: throw RouterError.UnknownContactRequest
+        val now = nowUnixMilliseconds
+        val peer = upsertContact(request.senderNodeID, request.x25519Pub, request.ed25519Pub, request.nickname)
+        val conversation = database.conversations.ensureDirectConversation(with = peer, touchedAtMs = now)
+        if (request.gameKind != 0) acceptedChallenges[peer.nodeID.toHex()] = request.gameKind to now
+        refreshTrustedPeers()
+        val reply = ContactRequest.newBuilder()
+            .setAction(ContactAction.CONTACT_ACTION_ACCEPT)
+            .setRequestId(request.requestID.toByteString())
+            .build()
+        attempt { sendContactPacket(reply, peer) }
+        nearby.markContact(peer.nodeID.toHex())
+        profileSentTo.remove(peer.nodeID.toHex())
+        sendProfile(peer)
+        emit(RouterEvent.ContactAccepted(conversation.id, peer.nickname, request.gameKind, requestedByMe = false))
+        conversation
+    }
+
+    /** Rifiuta una richiesta ricevuta: chi ha chiesto vede "Richiesta rifiutata". */
+    suspend fun declineContactRequest(requestHex: String): Unit = withContext(actorContext) {
+        val request = nearby.takeIncoming(requestHex) ?: return@withContext
+        if (!isRunning) return@withContext
+        val reply = ContactRequest.newBuilder()
+            .setAction(ContactAction.CONTACT_ACTION_DECLINE)
+            .setRequestId(request.requestID.toByteString())
+            .build()
+        val peer = PeerRecord(request.senderNodeID, request.x25519Pub, request.ed25519Pub, request.nickname)
+        attempt { sendContactPacket(reply, peer) }
+    }
+
+    /** Ignora una richiesta ricevuta (nessuna risposta). */
+    suspend fun dismissContactRequest(requestHex: String): Unit = withContext(actorContext) {
+        nearby.takeIncoming(requestHex)
+    }
+
+    /**
+     * Un invito di gioco ([kind]) da [from] e' la sfida che abbiamo appena accettato? Se si', viene consumata
+     * (vale una volta sola, entro la durata di una richiesta) e l'invito si accetta da solo.
+     */
+    suspend fun consumeAcceptedChallenge(from: ByteArray, kind: Int): Boolean = withContext(actorContext) {
+        val key = from.toHex()
+        val (accepted, at) = acceptedChallenges[key] ?: return@withContext false
+        if (accepted != kind || nowUnixMilliseconds - at > MeshProtocol.contactRequestLifetime) return@withContext false
+        acceptedChallenges.remove(key)
+        true
+    }
+
+    private suspend fun sendContactPacket(request: ContactRequest, peer: PeerRecord): Boolean {
+        val payload = InnerPayloadFactory.extra(MeshWire.serialize(request), identity = identity, nickname = nickname)
+        val key = identity.directChatKey(peerX25519PublicKeyRaw = peer.x25519Pub)
+        val envelope = EnvelopeBuilder(identity).build(
+            packetType = PacketType.CONTACT_REQUEST, recipientID = peer.nodeID, payload = payload, key = key,
+            ttl = MeshProtocol.contactRequestTTL,
+        )
+        return dispatch(envelope, storeIfUnreachable = false)
+    }
+
+    /** Peer fidato (stesso livello del QR) senza sovrascrivere un nickname arrivato con `PROFILE_UPDATE`. */
+    private suspend fun upsertContact(nodeID: ByteArray, x25519: ByteArray, ed25519: ByteArray, nickname: String): PeerRecord {
+        val known = database.peers.fetch(nodeID = nodeID)
+        return database.peers.upsert(
+            PeerRecord(
+                nodeID = nodeID, x25519Pub = x25519, ed25519Pub = ed25519,
+                nickname = nickname.ifEmpty { known?.nickname ?: defaultPassengerNickname }, isTrusted = true,
+            ),
+        )
+    }
+
+    /**
+     * `CONTACT_REQUEST` per noi: il mittente deve essere noto (DB o cache dei vicini), la firma verificata con
+     * la sua Ed25519 nota e le chiavi dichiarate devono coincidere. REQUEST: limite di una ogni 10 minuti per
+     * mittente e 20 in attesa. ACCEPT/DECLINE: valgono solo per una nostra richiesta con lo stesso id.
+     */
+    private suspend fun handleContactRequest(envelope: MeshEnvelope, hops: Int, via: LinkID) {
+        val senderID = envelope.senderNodeId.toByteArray()
+        val senderHex = senderID.toHex()
+        if (senderID.contentEquals(myNodeID)) return
+        val now = nowUnixMilliseconds
+        val known = database.peers.fetch(nodeID = senderID)
+        if (known?.isBlocked == true) return
+        val cached = nearby.person(senderHex, now)
+        // La risposta puo' arrivare quando il suo PRESENCE e' gia' scaduto: valgono le chiavi della nostra richiesta.
+        val pending = nearby.outgoingPeer(senderHex, now)
+        val x25519 = known?.x25519Pub ?: cached?.x25519Pub ?: pending?.x25519Pub ?: throw RouterError.UnknownPeer(senderID)
+        val ed25519 = known?.ed25519Pub ?: cached?.ed25519Pub ?: pending?.ed25519Pub ?: throw RouterError.UnknownPeer(senderID)
+        val payload = EnvelopeVerifier.open(
+            envelope, identity.directChatKey(peerX25519PublicKeyRaw = x25519), expectedSenderEd25519PublicKeyRaw = ed25519,
+        )
+        if (!payload.senderX25519Pub.toByteArray().contentEquals(x25519) ||
+            !payload.senderEd25519Pub.toByteArray().contentEquals(ed25519)
+        ) throw RouterError.SenderMismatch
+        val request = MeshWire.parseContactRequest(payload.extraData.toByteArray())
+        val requestID = request.requestId.toByteArray()
+        if (requestID.size != MeshProtocol.contactRequestIDLength) return
+        val declared = PairingPayload.prefixCharacters(
+            PairingPayload.trimWhitespacesAndNewlines(payload.senderNickname), MeshProtocol.maxNicknameLength,
+        )
+        val nickname = when {
+            known?.isTrusted == true -> known.nickname
+            cached != null -> cached.nickname
+            AppSettings.isLanguageFilterEnabled -> ContentFilter.masked(declared)
+            else -> declared
+        }.ifEmpty { pending?.nickname ?: defaultPassengerNickname }
+        when (request.action) {
+            ContactAction.CONTACT_ACTION_REQUEST -> {
+                var greeting = PairingPayload.prefixCharacters(
+                    PairingPayload.trimWhitespacesAndNewlines(request.greeting), MeshProtocol.maxGreetingLength,
+                )
+                if (containsLink(greeting)) greeting = ""
+                if (AppSettings.isLanguageFilterEnabled) greeting = ContentFilter.masked(greeting)
+                val incoming = IncomingContactRequest(
+                    requestID = requestID, senderNodeID = senderID, x25519Pub = x25519, ed25519Pub = ed25519,
+                    nickname = nickname, avatarColorHex = cached?.avatarColorHex ?: known?.avatarColorHex,
+                    greeting = greeting, gameKind = if (isChallengeKind(request.gameKind)) request.gameKind else 0,
+                    receivedAtMs = now,
+                )
+                if (!nearby.addIncoming(incoming, now)) return
+                emit(RouterEvent.ContactRequestReceived(incoming))
+                attempt { notifier.notifyContactRequest(incoming) }
+            }
+            ContactAction.CONTACT_ACTION_ACCEPT -> {
+                val outgoing = nearby.takeOutgoing(requestID.toHex(), senderHex, now) ?: return
+                val peer = upsertContact(senderID, x25519, ed25519, nickname)
+                val conversation = database.conversations.ensureDirectConversation(with = peer, touchedAtMs = now)
+                markSeenThrottled(peer.nodeID, hopCount = hops, rssi = links[via]?.rssi)
+                refreshTrustedPeers()
+                nearby.markContact(senderHex)
+                profileSentTo.remove(senderHex)
+                sendProfile(peer)
+                emit(RouterEvent.ContactAccepted(conversation.id, peer.nickname, outgoing.gameKind, requestedByMe = true))
+            }
+            ContactAction.CONTACT_ACTION_DECLINE -> {
+                nearby.takeOutgoing(requestID.toHex(), senderHex, now) ?: return
+                emit(RouterEvent.ContactDeclined(nickname))
+            }
+            else -> return
+        }
     }
 
     // MARK: - Sta scrivendo (TYPING)
@@ -1786,6 +2128,13 @@ class MeshRouterActor(
         const val placeholderGroupTitle = "Gruppo di viaggio"
 
         const val readReceiptBatch = 64
+
+        private val secureRandom = SecureRandom()
+
+        /** Giochi a 2 giocatori che si possono proporre con "Sfida" (`ContactRequest.game_kind`). */
+        fun isChallengeKind(kind: Int): Boolean =
+            kind == GameKind.TIC_TAC_TOE.number || kind == GameKind.BATTLESHIP.number ||
+                kind == GameKind.SCOPA.number || kind == GameKind.BRISCOLA.number
 
         /** Un `TYPING` piu' vecchio di cosi' (ms) viene ignorato. */
         const val typingMaxAge = 30_000L

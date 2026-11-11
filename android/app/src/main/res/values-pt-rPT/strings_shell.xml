@@ -11,9 +11,7 @@
     <string name="shell_banner_unauthorized_message">Permite que a AeroChat use o Bluetooth em Definições › Privacidade para falares com os teus companheiros de viagem.</string>
     <string name="shell_banner_unsupported_message">Este dispositivo não suporta o Bluetooth LE necessário para a rede mesh.</string>
     <string name="shell_banner_off_message">Podes voltar a ligar o Bluetooth em total segurança (como para os auscultadores sem fios) mantendo a rede móvel desligada.</string>
-    <string name="shell_radio_direct">Ligação direta</string>
     <string name="shell_radio_out_of_range">Fora de alcance</string>
-    <string name="shell_radio_out_of_range_queued">Fora de alcance — envio em fila</string>
     <string name="shell_radio_status_a11y">Estado do rádio: %1$s</string>
     <string name="shell_onboarding_tagline">Mensagens entre assentos, sem Wi‑Fi nem conta. Só um nickname.</string>
     <string name="shell_onboarding_question">COMO TE CHAMAM A BORDO?</string>
@@ -65,11 +63,6 @@
     <string name="shell_paywall_buy">Comprar</string>
     <string name="shell_paywall_thanks">Obrigado! O pass está ativo e está a ser partilhado com os teus grupos.</string>
     <string name="shell_paywall_failed">Compra não concluída: %1$s</string>
-    <plurals name="shell_radio_via_bridge">
-        <item quantity="zero">Via ponte (%1$d saltos)</item>
-        <item quantity="one">Via ponte (%1$d salto)</item>
-        <item quantity="other">Via ponte (%1$d saltos)</item>
-    </plurals>
     <string name="shell_permission_bluetooth_rationale">A AeroChat usa o Bluetooth para trocar mensagens cifradas com os companheiros de viagem por perto, mesmo sem Wi‑Fi nem rede móvel.</string>
     <string name="shell_permission_camera_rationale">A AeroChat usa a câmara para digitalizar o código QR dos teus companheiros de viagem e para tirar as fotos que queres enviar.</string>
     <string name="shell_permission_microphone_rationale">A AeroChat usa o microfone para gravar as notas de voz que envias aos teus companheiros de viagem.</string>

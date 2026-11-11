@@ -34,6 +34,14 @@ import androidx.compose.material.icons.outlined.Spellcheck
 import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.Visibility
+import android.content.Intent
+import android.provider.Settings as SystemSettings
+import androidx.core.app.NotificationManagerCompat
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -84,8 +92,15 @@ import kotlinx.coroutines.launch
 /** Termini di servizio di Google Play (equivalente Android della EULA standard di Apple citata su iOS). */
 private const val playTermsURL = "https://play.google.com/about/play-terms/"
 
-/** Pagine navigabili dentro le Impostazioni (Swift `NavigationLink`). */
-private enum class SettingsPage { main, blocked, reports, terms, privacy }
+/**
+ * Pagine navigabili dentro le Impostazioni (Swift `NavigationLink`): cinque gruppi (Profilo, Privacy,
+ * Notifiche, Abbonamento, Info e legale) e le loro sottopagine. [parent] = dove porta "Indietro".
+ */
+private enum class SettingsPage(val parent: SettingsPage?) {
+    main(null),
+    profile(main), privacyGroup(main), notifications(main), subscription(main), about(main),
+    blocked(privacyGroup), reports(privacyGroup), terms(about), privacy(about),
+}
 
 /**
  * Impostazioni (Swift `SettingsView`): profilo, pass, viaggio, sicurezza (filtro, foto sfocate, bloccati,
@@ -109,7 +124,7 @@ fun SettingsScreen(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true),
     ) {
-        BackHandler(enabled = page != SettingsPage.main) { page = SettingsPage.main }
+        BackHandler(enabled = page != SettingsPage.main) { page = page.parent ?: SettingsPage.main }
         Box(Modifier.fillMaxSize().background(AeroTheme.background)) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp)) {
@@ -119,7 +134,7 @@ fun SettingsScreen(
                         } else {
                             IconButton(onClick = {
                                 Haptics.tap()
-                                page = SettingsPage.main
+                                page = page.parent ?: SettingsPage.main
                             }) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.ArrowBack,
@@ -133,6 +148,11 @@ fun SettingsScreen(
                         stringResource(
                             when (page) {
                                 SettingsPage.main -> R.string.safety_settings_title
+                                SettingsPage.profile -> R.string.nearby_settings_profile
+                                SettingsPage.privacyGroup -> R.string.nearby_settings_privacy
+                                SettingsPage.notifications -> R.string.nearby_settings_notifications
+                                SettingsPage.subscription -> R.string.nearby_settings_subscription
+                                SettingsPage.about -> R.string.nearby_settings_about
                                 SettingsPage.blocked -> R.string.safety_settings_blocked
                                 SettingsPage.reports -> R.string.safety_settings_reports
                                 SettingsPage.terms -> R.string.safety_legal_terms
@@ -148,13 +168,16 @@ fun SettingsScreen(
                     )
                 }
                 when (page) {
-                    SettingsPage.main -> SettingsMain(
-                        onNavigate = { page = it },
-                        onMessage = { info = it },
+                    SettingsPage.main -> SettingsMain(onNavigate = { page = it })
+                    SettingsPage.profile -> SettingsProfile(
                         onOpenFlightCard = onOpenFlightCard,
                         onOpenRadar = onOpenRadar,
                         onOpenEmergency = onOpenEmergency,
                     )
+                    SettingsPage.privacyGroup -> SettingsPrivacy(onNavigate = { page = it })
+                    SettingsPage.notifications -> SettingsNotifications()
+                    SettingsPage.subscription -> SettingsSubscription()
+                    SettingsPage.about -> SettingsAbout(onNavigate = { page = it }, onMessage = { info = it })
                     SettingsPage.blocked -> BlockedUsersContent(Modifier.navigationBarsPadding())
                     SettingsPage.reports -> ReportsListContent(onMessage = { info = it }, modifier = Modifier.navigationBarsPadding())
                     SettingsPage.terms -> LegalContent(LegalDocument.terms)
@@ -166,36 +189,14 @@ fun SettingsScreen(
     }
 }
 
+/** Pagina principale: il profilo in cima e cinque gruppi (meno righe, stesse funzioni). */
 @Composable
-private fun SettingsMain(
-    onNavigate: (SettingsPage) -> Unit,
-    onMessage: (String) -> Unit,
-    onOpenFlightCard: (() -> Unit)?,
-    onOpenRadar: (() -> Unit)?,
-    onOpenEmergency: (() -> Unit)?,
-) {
+private fun SettingsMain(onNavigate: (SettingsPage) -> Unit) {
     val environment = LocalAppEnvironment.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     // Ricomposizione a profilo / pass aggiornati.
     environment.identityRecord.collectAsStateWithLifecycle()
     environment.entitlementState.collectAsStateWithLifecycle()
     val settings by AppSettings.state.collectAsStateWithLifecycle()
-    val database by environment.database.collectAsStateWithLifecycle()
-    val blockedFlow = remember(database) {
-        database?.peers?.observeAll()?.map { list -> list.count { it.isBlocked } } ?: flowOf(0)
-    }
-    val blockedCount by blockedFlow.collectAsStateWithLifecycle(initialValue = 0)
-    val reportsFlow = remember(database) { database?.reports?.observeAll()?.map { it.size } ?: flowOf(0) }
-    val reportCount by reportsFlow.collectAsStateWithLifecycle(initialValue = 0)
-
-    var showProfile by remember { mutableStateOf(false) }
-    var showPaywall by remember { mutableStateOf(false) }
-    /** Tocchi sulla riga della versione: al quinto compare l'interruttore della modalita' demo (revisione store). */
-    var versionTaps by remember { mutableIntStateOf(0) }
-    var showDemoToggle by remember { mutableStateOf(false) }
-    val demoVisible = showDemoToggle || settings.isDemoModeEnabled
-
     Column(
         Modifier
             .fillMaxSize()
@@ -203,37 +204,92 @@ private fun SettingsMain(
             .navigationBarsPadding()
             .padding(bottom = 32.dp),
     ) {
-        // Profilo e pass
         Spacer(Modifier.height(8.dp))
         FormSection {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(role = Role.Button) {
-                        Haptics.tap()
-                        showProfile = true
-                    }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                AvatarView(imageData = environment.avatarImage, colorHex = environment.avatarColorHex, size = 48.dp)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(environment.nickname, style = AeroTheme.title(18f, FontWeight.SemiBold), color = AeroTheme.textPrimary)
-                    Text(stringResource(R.string.safety_settings_edit_profile), style = AeroTheme.caption, color = AeroTheme.textSecondary)
-                }
-                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = AeroTheme.textSecondary, modifier = Modifier.size(20.dp))
-            }
+            ProfileHeaderRow(onClick = { onNavigate(SettingsPage.profile) })
+        }
+        Spacer(Modifier.height(16.dp))
+        FormSection {
+            FormRow(
+                title = stringResource(R.string.nearby_settings_privacy),
+                icon = Icons.Outlined.Lock,
+                value = stringResource(if (settings.isNearbyVisible) R.string.nearby_settings_visible_short else R.string.nearby_settings_hidden_short),
+                onClick = { onNavigate(SettingsPage.privacyGroup) },
+            )
+            FormDivider()
+            FormRow(
+                title = stringResource(R.string.nearby_settings_notifications),
+                icon = Icons.Outlined.Notifications,
+                onClick = { onNavigate(SettingsPage.notifications) },
+            )
             FormDivider()
             val isPro = environment.isPro
             FormRow(
-                title = stringResource(if (isPro) R.string.safety_settings_pass_active else R.string.safety_settings_pass),
+                title = stringResource(R.string.nearby_settings_subscription),
                 icon = if (isPro) Icons.Filled.ConfirmationNumber else Icons.Outlined.ConfirmationNumber,
-                onClick = { showPaywall = true },
+                value = if (isPro) stringResource(R.string.nearby_settings_pro_active) else null,
+                onClick = { onNavigate(SettingsPage.subscription) },
+            )
+            FormDivider()
+            FormRow(
+                title = stringResource(R.string.nearby_settings_about),
+                icon = Icons.Outlined.Info,
+                onClick = { onNavigate(SettingsPage.about) },
             )
         }
+    }
+}
 
-        // Viaggio ed eventi
+/** Avatar, nickname e "Modifica profilo". */
+@Composable
+private fun ProfileHeaderRow(onClick: () -> Unit) {
+    val environment = LocalAppEnvironment.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button) {
+                Haptics.tap()
+                onClick()
+            }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AvatarView(imageData = environment.avatarImage, colorHex = environment.avatarColorHex, size = 48.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(environment.nickname, style = AeroTheme.title(18f, FontWeight.SemiBold), color = AeroTheme.textPrimary)
+            Text(stringResource(R.string.safety_settings_edit_profile), style = AeroTheme.caption, color = AeroTheme.textSecondary)
+        }
+        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = AeroTheme.textSecondary, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun SettingsPageColumn(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .padding(bottom = 32.dp),
+        content = content,
+    )
+}
+
+/** Profilo: modifica del profilo, risposte rapide e strumenti di viaggio (cartolina, radar, emergenza). */
+@Composable
+private fun SettingsProfile(
+    onOpenFlightCard: (() -> Unit)?,
+    onOpenRadar: (() -> Unit)?,
+    onOpenEmergency: (() -> Unit)?,
+) {
+    val environment = LocalAppEnvironment.current
+    environment.identityRecord.collectAsStateWithLifecycle()
+    val settings by AppSettings.state.collectAsStateWithLifecycle()
+    var showProfile by remember { mutableStateOf(false) }
+    SettingsPageColumn {
+        Spacer(Modifier.height(8.dp))
+        FormSection { ProfileHeaderRow(onClick = { showProfile = true }) }
         FormHeader(stringResource(R.string.safety_settings_travel))
         FormSection {
             val rows = listOfNotNull(
@@ -253,8 +309,42 @@ private fun SettingsMain(
             )
         }
         FormFooter(stringResource(R.string.safety_settings_travel_footer))
+    }
+    if (showProfile) ProfileEditSheet(onDismiss = { showProfile = false })
+}
 
-        // Sicurezza
+/** Privacy: visibilita' alle persone vicine, sfide, filtro, foto sfocate, bloccati e segnalazioni. */
+@Composable
+private fun SettingsPrivacy(onNavigate: (SettingsPage) -> Unit) {
+    val environment = LocalAppEnvironment.current
+    val scope = rememberCoroutineScope()
+    val settings by AppSettings.state.collectAsStateWithLifecycle()
+    val database by environment.database.collectAsStateWithLifecycle()
+    val blockedFlow = remember(database) {
+        database?.peers?.observeAll()?.map { list -> list.count { it.isBlocked } } ?: flowOf(0)
+    }
+    val blockedCount by blockedFlow.collectAsStateWithLifecycle(initialValue = 0)
+    val reportsFlow = remember(database) { database?.reports?.observeAll()?.map { it.size } ?: flowOf(0) }
+    val reportCount by reportsFlow.collectAsStateWithLifecycle(initialValue = 0)
+    SettingsPageColumn {
+        FormHeader(stringResource(R.string.nearby_title))
+        FormSection {
+            FormToggle(
+                title = stringResource(R.string.nearby_visible_toggle),
+                icon = Icons.Outlined.Visibility,
+                checked = settings.isNearbyVisible,
+                onCheckedChange = { scope.launch { environment.setNearbyVisible(it) } },
+            )
+            FormDivider()
+            FormToggle(
+                title = stringResource(R.string.nearby_settings_open_to_games),
+                icon = Icons.Outlined.SportsEsports,
+                checked = settings.isOpenToGames,
+                onCheckedChange = { scope.launch { environment.setOpenToGames(it) } },
+            )
+        }
+        FormFooter(stringResource(R.string.nearby_settings_visibility_footer))
+
         FormHeader(stringResource(R.string.safety_settings_safety))
         FormSection {
             FormToggle(
@@ -286,8 +376,83 @@ private fun SettingsMain(
             )
         }
         FormFooter(stringResource(R.string.safety_settings_safety_footer))
+    }
+}
 
-        // Legale
+/** Notifiche: stato del permesso e scorciatoia alle impostazioni di sistema dell'app. */
+@Composable
+private fun SettingsNotifications() {
+    val context = LocalContext.current
+    // Riletto a ogni ritorno sulla pagina (il permesso si cambia nelle impostazioni di sistema).
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var enabled by remember { mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled()) }
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                enabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    SettingsPageColumn {
+        Spacer(Modifier.height(8.dp))
+        FormSection {
+            FormRow(
+                title = stringResource(R.string.nearby_settings_notifications_status),
+                icon = Icons.Outlined.Notifications,
+                value = stringResource(if (enabled) R.string.nearby_settings_on else R.string.nearby_settings_off),
+                onClick = null,
+            )
+            FormDivider()
+            FormRow(
+                title = stringResource(R.string.nearby_settings_notifications_open),
+                icon = Icons.Outlined.Settings,
+                onClick = {
+                    val intent = Intent(SystemSettings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(SystemSettings.EXTRA_APP_PACKAGE, context.packageName)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { context.startActivity(intent) }
+                },
+            )
+        }
+        FormFooter(stringResource(R.string.nearby_settings_notifications_footer))
+    }
+}
+
+/** Abbonamento: Flight Group Pass (acquisto e ripristino nel paywall). */
+@Composable
+private fun SettingsSubscription() {
+    val environment = LocalAppEnvironment.current
+    environment.entitlementState.collectAsStateWithLifecycle()
+    var showPaywall by remember { mutableStateOf(false) }
+    SettingsPageColumn {
+        Spacer(Modifier.height(8.dp))
+        val isPro = environment.isPro
+        FormSection {
+            FormRow(
+                title = stringResource(if (isPro) R.string.safety_settings_pass_active else R.string.safety_settings_pass),
+                icon = if (isPro) Icons.Filled.ConfirmationNumber else Icons.Outlined.ConfirmationNumber,
+                onClick = { showPaywall = true },
+            )
+        }
+        FormFooter(stringResource(R.string.nearby_settings_subscription_footer))
+    }
+    if (showPaywall) PaywallView(onDismiss = { showPaywall = false })
+}
+
+/** Info e legale: termini, privacy, versione (con l'interruttore nascosto della demo) e supporto. */
+@Composable
+private fun SettingsAbout(onNavigate: (SettingsPage) -> Unit, onMessage: (String) -> Unit) {
+    val environment = LocalAppEnvironment.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val settings by AppSettings.state.collectAsStateWithLifecycle()
+    /** Tocchi sulla riga della versione: al quinto compare l'interruttore della modalita' demo (revisione store). */
+    var versionTaps by remember { mutableIntStateOf(0) }
+    var showDemoToggle by remember { mutableStateOf(false) }
+    val demoVisible = showDemoToggle || settings.isDemoModeEnabled
+    SettingsPageColumn {
         FormHeader(stringResource(R.string.safety_settings_legal))
         FormSection {
             FormRow(stringResource(R.string.safety_legal_terms), Icons.Outlined.Description, onClick = { onNavigate(SettingsPage.terms) })
@@ -301,7 +466,6 @@ private fun SettingsMain(
             )
         }
 
-        // Informazioni
         FormHeader(stringResource(R.string.safety_settings_about))
         FormSection {
             FormRow(
@@ -345,12 +509,5 @@ private fun SettingsMain(
         if (demoVisible) {
             FormFooter(stringResource(R.string.safety_settings_demo_footer))
         }
-    }
-
-    if (showProfile) {
-        ProfileEditSheet(onDismiss = { showProfile = false })
-    }
-    if (showPaywall) {
-        PaywallView(onDismiss = { showPaywall = false })
     }
 }

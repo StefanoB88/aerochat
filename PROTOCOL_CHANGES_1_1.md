@@ -137,3 +137,41 @@ Contratto completo in `PAIRING_TYPING_SPEC.md`. In sintesi:
   scrivendo…" nell'intestazione, "sta scrivendo…" (accento, corsivo) nella riga della lista chat.
 - **Conferme ancorate**: "Eliminare la chat?" e "Eliminare il messaggio per tutti?" partono dalla riga / bolla.
 - Le chat nuove (1-a-1 e gruppi) nascono con `last_message_at_ms` = creazione, cosi' compaiono in cima.
+
+## 1.3 — PRESENCE e CONTACT_REQUEST
+
+Contratto completo in `NEARBY_SPEC.md`. In sintesi (implementato su iOS):
+- **`PRESENCE = 17`**: chiave della Cabina Pubblica (`SHA256("AeroMesh-Public-Cabin-v1")`), `recipient_id` = 8 zeri,
+  **ttl 1**, mai in coda/DB/notifiche. `InnerPayload` con mittente dichiarato; `extra_data = Presence { avatar_color_hex,
+  flight_code (canonico "CARRIER|FLIGHT|yyyy-MM-dd" o vuoto), open_to_games, sent_at_ms }`. Inviato all'apertura di ogni
+  link (solo a quel vicino) e ogni 60 s con l'app in primo piano, se "Visibile alle persone vicine" e' attiva (default).
+  Ricezione: solo `hop_count == 0`, `openShared` + `SHA256(sender_x25519_pub)[0..<8] == sender_node_id`, Ed25519 uguale a
+  quella nel DB se il peer e' noto, bloccati ignorati, nickname troncato a 32 e filtrato, colore valido solo se 6 hex,
+  `flight_code` max 64 caratteri. Cache in memoria per `node_id` (scade 3 min dopo l'ultimo PRESENCE, max 64 voci, si
+  scarta la meno recente), RSSI dal link. Lista ordinata per RSSI (senza RSSI in fondo) e poi per ultimo visto.
+- **`CONTACT_REQUEST = 18`**: diretto, chiave 1-a-1 normale (HKDF dell'ECDH con la X25519 del PRESENCE o del DB), ttl 2,
+  niente coda ne' ACK. `extra_data = ContactRequest { action (REQUEST=1 | ACCEPT=2 | DECLINE=3), request_id (16 byte),
+  greeting (solo REQUEST, <= 140, niente link), game_kind (0 = Saluta, altrimenti GameKind) }`.
+  Ricezione: chiavi del mittente da DB, cache PRESENCE o dalla nostra REQUEST in corso verso di lui (per ACCEPT/DECLINE),
+  altrimenti scartato; firma verificata con la Ed25519 nota e `sender_x25519_pub`/`sender_ed25519_pub` dichiarate uguali
+  a quelle note. REQUEST: una per mittente ogni 10 min, max 20 pendenti, scadono dopo 30 min; `game_kind` non valido per
+  una sfida 1-a-1 (TIC_TAC_TOE, BATTLESHIP, SCOPA, BRISCOLA) viene trattato come 0. ACCEPT/DECLINE valgono solo se
+  `request_id` corrisponde a una nostra REQUEST (non scaduta, 30 min) verso quel mittente.
+  Accetta: chi accetta fa upsert del peer **fidato** (nickname di un PROFILE_UPDATE non sovrascritto), chat 1-a-1 in cima,
+  `refreshTrustedPeers`, invia ACCEPT **e poi** il proprio PROFILE_UPDATE; chi riceve l'ACCEPT fa lo stesso e manda il
+  profilo. Con `game_kind != 0` chi aveva chiesto invia subito l'invito di gioco normale (GAME_MOVE INVITE) nella nuova chat;
+  chi aveva accettato lo accetta in automatico (il primo invito di quel gioco da quel peer entro 30 min).
+- **Peer gia' nei contatti** (fidato nel DB): "Saluta" apre la chat, "Sfida" manda l'invito di gioco normale (nessun
+  CONTACT_REQUEST).
+- **Byte di riferimento**: `ContactRequest{action: REQUEST, game_kind: 3}` = `08 01 20 03`.
+
+### Comportamenti solo locali (nessun wire)
+- **Passeggero virtuale** ("Prova subito"): contatto fittizio solo nel DB locale (`node_id` = `SHA256("AeroMesh-Demo-Peer-Node")[0..<8]`);
+  il router scarta ogni pacchetto verso di lui prima della radio (niente coda). Gioca Scopa, Briscola e Tris con un bot locale.
+- **Ricordo del viaggio**: un volo inizia con una Cabina del volo attiva e finisce quando la Cabina scade o quando,
+  dopo aver visto la modalita' aereo (Bluetooth spento o rete cellulare assente su un telefono che l'aveva), la rete torna.
+  Una sola notifica "La tua cartolina di volo è pronta ✈️" per volo; contatori (persone incontrate = PRESENCE + mittenti,
+  messaggi inviati/ricevuti, partite vinte/giocate, classifica del volo) congelati a fine volo. iOS: `UserDefaults`
+  (`trip.memory`), nessuna migrazione DB.
+- **Testi di consegna umani**: "Arriverà quando sarete vicini", "via N persone" (N = hop - 1), "N persone vicine",
+  "Raggiungibile tramite N persone", "Fuori portata — il messaggio aspetterà".

@@ -11,9 +11,7 @@
     <string name="shell_banner_unauthorized_message">Autorise le Bluetooth pour AeroChat dans Réglages › Confidentialité pour discuter avec tes compagnons de voyage.</string>
     <string name="shell_banner_unsupported_message">Cet appareil ne prend pas en charge le Bluetooth LE nécessaire au mesh.</string>
     <string name="shell_banner_off_message">Tu peux réactiver le Bluetooth en toute sécurité (comme pour des écouteurs sans fil) tout en laissant le réseau cellulaire désactivé.</string>
-    <string name="shell_radio_direct">Connexion directe</string>
     <string name="shell_radio_out_of_range">Hors de portée</string>
-    <string name="shell_radio_out_of_range_queued">Hors de portée — envoi en file d’attente</string>
     <string name="shell_radio_status_a11y">État radio : %1$s</string>
     <string name="shell_onboarding_tagline">Messages de siège à siège, sans Wi-Fi ni compte. Juste un pseudo.</string>
     <string name="shell_onboarding_question">COMMENT ON T’APPELLE À BORD ?</string>
@@ -65,11 +63,6 @@
     <string name="shell_paywall_buy">Acheter</string>
     <string name="shell_paywall_thanks">Merci ! Ton pass est actif et il est partagé avec tes groupes.</string>
     <string name="shell_paywall_failed">Achat non finalisé : %1$s</string>
-    <plurals name="shell_radio_via_bridge">
-        <item quantity="zero">Via relais (%1$d saut)</item>
-        <item quantity="one">Via relais (%1$d saut)</item>
-        <item quantity="other">Via relais (%1$d sauts)</item>
-    </plurals>
     <string name="shell_permission_bluetooth_rationale">AeroChat utilise le Bluetooth pour échanger des messages chiffrés avec les compagnons de voyage à proximité, même sans Wi-Fi ni réseau cellulaire.</string>
     <string name="shell_permission_camera_rationale">AeroChat utilise l’appareil photo pour scanner le QR code de tes compagnons de voyage et prendre les photos à envoyer.</string>
     <string name="shell_permission_microphone_rationale">AeroChat utilise le micro pour enregistrer les notes vocales à envoyer à tes compagnons de voyage.</string>

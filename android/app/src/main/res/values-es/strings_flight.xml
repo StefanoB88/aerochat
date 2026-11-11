@@ -36,7 +36,6 @@
     <string name="flight_card_slogan">Chat a 10.000 metros.</string>
     <string name="flight_card_slogan2">Sin Wi-Fi, sin cuenta, solo Bluetooth.</string>
     <string name="flight_menu_boarding">Cabina del vuelo (tarjeta de embarque)</string>
-    <string name="flight_empty_hint">Escanea la tarjeta de embarque para entrar en el chat de tu vuelo, o añade a tus compañeros en la puerta de embarque: a bordo os encontraréis solos por Bluetooth.</string>
     <string name="flight_paywall_pass24_title">Pass Vuelo Único 24 Horas</string>
     <string name="flight_paywall_pass24_subtitle">Un vuelo, un día. Fotos, notas de voz y juegos para ti y tu grupo hasta el aterrizaje.</string>
     <string name="flight_paywall_terms">Condiciones de uso</string>

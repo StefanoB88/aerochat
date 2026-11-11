@@ -69,6 +69,28 @@ final class ConversationViewModel {
     }
 
     var isGroup: Bool { conversation.type == .group }
+    /// Chat del passeggero virtuale ("Prova subito"): niente radio, giochi con il bot locale.
+    var isDemo: Bool { DemoPeerIdentity.isDemoPeer(conversation.peerNodeID) }
+
+    /// Persone della conversazione a portata diretta (gruppi e Cabina), per "3 persone vicine".
+    var nearbyCount: Int? {
+        switch conversation.type {
+        case .direct: return nil
+        case .cabinLounge: return environment.neighbors.count
+        case .group:
+            let neighbors = Set(environment.neighbors.map(\.nodeID))
+            return groupMembers.filter { neighbors.contains($0.nodeID) }.count
+        }
+    }
+
+    /// Ultimo suggerimento della prova: dopo un paio di messaggi o una partita finita.
+    var showsDemoInviteHint: Bool {
+        guard isDemo else { return false }
+        if messages.filter({ $0.isOutgoing && $0.contentType == .text }).count >= 2 { return true }
+        return messages.contains { message in
+            message.gameState.flatMap { try? GameSessionState.decode($0) }?.status == .finished
+        }
+    }
     var store: MediaStore? { environment.mediaStore }
     var showsAttachments: Bool { conversation.type != .cabinLounge }
     /// Avanzamento dei trasferimenti media in corso, per `msg_id` (osservato da `AppEnvironment`).
@@ -391,7 +413,7 @@ final class ConversationViewModel {
     /// Giochi del menu: nelle chat 1-a-1 tutti quelli a 2; nei gruppi da almeno 4 (noi compresi) solo lo Scopone.
     var availableGames: [GameKind] {
         switch conversation.type {
-        case .direct: return [.ticTacToe, .battleship, .scopa, .briscola]
+        case .direct: return isDemo ? DemoGameBot.supportedKinds : [.ticTacToe, .battleship, .scopa, .briscola]
         case .group: return groupMembers.count + 1 >= 4 ? [.scopone] : [.ticTacToe, .battleship]
         case .cabinLounge: return []
         }
@@ -544,6 +566,8 @@ final class ConversationViewModel {
 
     /// Applica il modello Freemium e spiega all'utente cosa manca.
     func allows(_ feature: ProFeature) -> Bool {
+        // Passeggero virtuale: la prova dei giochi e' per tutti (tutto in locale).
+        if isDemo, feature == .game { return true }
         switch FeatureGate.decision(for: feature, userIsPro: environment.isPro, conversation: conversation, reachability: reachability) {
         case .allowed:
             return true
@@ -606,6 +630,10 @@ private struct ConversationContent: View {
                     SmartReplyBar(suggestions: viewModel.suggestions) { viewModel.useSuggestion($0) }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+                if viewModel.showsDemoInviteHint {
+                    DemoInviteHint()
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
                 ComposerBar(text: $viewModel.draft,
                             photoItem: $viewModel.photoItem,
                             recorder: viewModel.recorder,
@@ -645,8 +673,14 @@ private struct ConversationContent: View {
                                 .foregroundStyle(AeroTheme.accentCyan)
                                 .lineLimit(1)
                                 .transition(.opacity)
+                        } else if viewModel.isDemo {
+                            Label("Passeggero virtuale · solo su questo iPhone", systemImage: "sparkles")
+                                .font(.caption)
+                                .foregroundStyle(AeroTheme.accentEmerald)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         } else {
-                            RadioStatusView(reachability: viewModel.reachability)
+                            RadioStatusView(reachability: viewModel.reachability, nearbyCount: viewModel.nearbyCount)
                         }
                     }
                     .animation(.easeInOut(duration: 0.2), value: viewModel.typingText)
@@ -661,7 +695,7 @@ private struct ConversationContent: View {
                 .accessibilityAddTraits(viewModel.isGroup ? .isButton : [])
                 .accessibilityHint(viewModel.isGroup ? Text("Mostra i partecipanti del gruppo") : Text(""))
             }
-            if viewModel.conversation.type == .direct {
+            if viewModel.conversation.type == .direct, !viewModel.isDemo {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { viewModel.startCall() } label: {
                         Image(systemName: "phone.fill")
@@ -898,4 +932,44 @@ private struct SmartReplyBar: View {
 /// Partita a carte presentata nel tavolo a schermo intero (`gameID` = hex del msg_id dell'invito).
 struct CardTableItem: Identifiable, Hashable {
     let id: String
+}
+
+/// Suggerimento finale della prova: dal passeggero virtuale alle persone vere.
+private struct DemoInviteHint: View {
+
+    @Environment(AppEnvironment.self) private var environment
+    @State private var showPairing = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "person.wave.2.fill")
+                .foregroundStyle(AeroTheme.accentCyan)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Invita chi è vicino a te")
+                    .font(AeroTheme.title(15, weight: .semibold))
+                    .foregroundStyle(AeroTheme.textPrimary)
+                Text("Con una persona vera i messaggi passano davvero da telefono a telefono.")
+                    .font(.caption)
+                    .foregroundStyle(AeroTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            Menu {
+                Button { Haptics.tap(); environment.requestedNearby = .all } label: { Label("Persone vicine", systemImage: "person.wave.2") }
+                Button { Haptics.tap(); showPairing = true } label: { Label("Mostra il mio QR", systemImage: "qrcode") }
+            } label: {
+                Text("Invita")
+                    .font(.subheadline.weight(.bold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(AeroTheme.accentCyan, in: Capsule())
+                    .foregroundStyle(.black)
+            }
+        }
+        .padding(12)
+        .background(AeroTheme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
+        .sheet(isPresented: $showPairing) { QRPairingSheet() }
+    }
 }

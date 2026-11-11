@@ -74,12 +74,6 @@
     <string name="chat_passenger">Passeggero</string>
     <string name="chat_block_mute">Blocca / Silenzia %s</string>
     <string name="chat_lounge_title">Cabina Pubblica</string>
-    <plurals name="chat_passengers_in_range">
-        <item quantity="zero">Nessun passeggero a portata</item>
-        <item quantity="one">%d passeggero a portata</item>
-        <item quantity="other">%d passeggeri a portata</item>
-    </plurals>
-    <string name="chat_passengers_in_range_zero">Nessun passeggero a portata</string>
     <string name="chat_lounge_empty_hint">Scambia il posto, dividi un taxi all\'arrivo, commenta il ritardo. Anonimo, solo nickname, sparisce dopo 12 ore.</string>
     <string name="chat_group_name_placeholder">Nome del gruppo (es. Volo FR1234)</string>
     <string name="chat_travel_buddies">Compagni di volo</string>
@@ -88,10 +82,6 @@
     <string name="chat_new_group">Nuovo gruppo</string>
     <string name="chat_create">Crea</string>
     <string name="chat_group_create_failed">Impossibile creare il gruppo: %s</string>
-    <plurals name="chat_hops">
-        <item quantity="one">%d salto</item>
-        <item quantity="other">%d salti</item>
-    </plurals>
     <string name="chat_save_to_photos">Salva nelle Foto</string>
     <string name="chat_photo">Foto</string>
     <string name="chat_open_photo">Apri la foto a schermo intero</string>

@@ -52,12 +52,6 @@
     <string name="chat_passenger">Passagerare</string>
     <string name="chat_block_mute">Blockera / tysta %s</string>
     <string name="chat_lounge_title">Publika kabinen</string>
-    <plurals name="chat_passengers_in_range">
-        <item quantity="zero">Inga passagerare inom räckhåll</item>
-        <item quantity="one">%d passagerare inom räckhåll</item>
-        <item quantity="other">%d passagerare inom räckhåll</item>
-    </plurals>
-    <string name="chat_passengers_in_range_zero">Inga passagerare inom räckhåll</string>
     <string name="chat_lounge_empty_hint">Byt plats, dela taxi vid ankomsten, gnäll över förseningen. Anonymt, bara smeknamn, försvinner efter 12 timmar.</string>
     <string name="chat_group_name_placeholder">Gruppnamn (t.ex. Flyg FR1234)</string>
     <string name="chat_travel_buddies">Resekompisar</string>
@@ -66,10 +60,6 @@
     <string name="chat_new_group">Ny grupp</string>
     <string name="chat_create">Skapa</string>
     <string name="chat_group_create_failed">Det gick inte att skapa gruppen: %s</string>
-    <plurals name="chat_hops">
-        <item quantity="one">%d hopp</item>
-        <item quantity="other">%d hopp</item>
-    </plurals>
     <string name="chat_save_to_photos">Spara i Bilder</string>
     <string name="chat_photo">Bild</string>
     <string name="chat_open_photo">Öppna bilden i helskärm</string>

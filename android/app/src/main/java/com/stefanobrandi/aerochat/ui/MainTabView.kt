@@ -72,6 +72,9 @@ import com.stefanobrandi.aerochat.ui.components.hapticOnTap
 import com.stefanobrandi.aerochat.ui.components.rememberMeshPermissionsRequester
 import com.stefanobrandi.aerochat.ui.lounge.CabinLoungeView
 import com.stefanobrandi.aerochat.ui.lounge.EmergencyBanner
+import com.stefanobrandi.aerochat.ui.flight.FlightCardSheet
+import com.stefanobrandi.aerochat.ui.nearby.NearbyBannerHost
+import com.stefanobrandi.aerochat.ui.nearby.NearbyPeopleScreen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -112,6 +115,12 @@ object AeroRoutes {
     const val conversationPattern = "conversation/{$conversationArg}"
 
     fun conversation(conversationID: String): String = "conversation/${Uri.encode(conversationID)}"
+
+    /** "Persone vicine" (con `gamesOnly`: solo chi accetta sfide, "Sfida chi e' vicino"). */
+    const val nearbyArg = "games"
+    const val nearbyPattern = "nearby?$nearbyArg={$nearbyArg}"
+
+    fun nearby(gamesOnly: Boolean = false): String = "nearby?$nearbyArg=$gamesOnly"
 }
 
 /** NavController radice (fornito da [MainTabView]). */
@@ -130,6 +139,18 @@ object AppNavigator {
 
     internal fun consume() {
         _pendingConversationID.value = null
+    }
+
+    /** "Persone vicine" richiesto da fuori (tocco sulla notifica di una richiesta). */
+    private val _pendingNearby = MutableStateFlow(false)
+    val pendingNearby: StateFlow<Boolean> = _pendingNearby.asStateFlow()
+
+    fun openNearby() {
+        _pendingNearby.value = true
+    }
+
+    internal fun consumeNearby() {
+        _pendingNearby.value = false
     }
 }
 
@@ -154,6 +175,18 @@ fun MainTabView() {
             launchSingleTop = true
         }
     }
+
+    // Tocco sulla notifica di una richiesta: apre "Persone vicine".
+    val pendingNearby by AppNavigator.pendingNearby.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingNearby) {
+        if (!pendingNearby) return@LaunchedEffect
+        AppNavigator.consumeNearby()
+        navController.navigate(AeroRoutes.nearby()) {
+            popUpTo(AeroRoutes.tabs)
+            launchSingleTop = true
+        }
+    }
+    val pendingTripCard by environment.pendingTripCard.collectAsStateWithLifecycle()
 
     // Nuovo messaggio con l'app attiva: tocco leggero.
     LaunchedEffect(environment) {
@@ -186,7 +219,30 @@ fun MainTabView() {
                     val id = entry.arguments?.getString(AeroRoutes.conversationArg).orEmpty()
                     ConversationRoute(id)
                 }
+                composable(
+                    AeroRoutes.nearbyPattern,
+                    arguments = listOf(navArgument(AeroRoutes.nearbyArg) { type = NavType.BoolType; defaultValue = false }),
+                ) { entry ->
+                    NearbyPeopleScreen(gamesOnly = entry.arguments?.getBoolean(AeroRoutes.nearbyArg) == true)
+                }
             }
+
+            // Persone vicine: richiesta arrivata, accettata o rifiutata (sopra a ogni schermata).
+            NearbyBannerHost(
+                onOpenNearby = {
+                    navController.navigate(AeroRoutes.nearby()) {
+                        popUpTo(AeroRoutes.tabs)
+                        launchSingleTop = true
+                    }
+                },
+                onOpenChat = { id ->
+                    navController.navigate(AeroRoutes.conversation(id)) {
+                        popUpTo(AeroRoutes.tabs)
+                        launchSingleTop = true
+                    }
+                },
+                modifier = Modifier.zIndex(5f),
+            )
 
             // Chiamata in entrata o in corso: sopra a tutto, da qualsiasi schermata.
             AnimatedVisibility(
@@ -199,6 +255,10 @@ fun MainTabView() {
                 Box(Modifier.fillMaxSize().background(AeroTheme.background)) { CallView() }
             }
         }
+    }
+    // Cartolina di fine volo (tocco sulla notifica "La tua cartolina di volo e' pronta").
+    pendingTripCard?.let { trip ->
+        FlightCardSheet(onDismiss = { environment.dismissTripCard() }, trip = trip)
     }
 }
 

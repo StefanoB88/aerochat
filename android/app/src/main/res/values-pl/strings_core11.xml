@@ -7,13 +7,10 @@
     <string name="core11_emergency_generic">Alert</string>
     <string name="core11_emergency_body_default">Alert od pasażera w pobliżu.</string>
     <string name="core11_emergency_channel_name">Alert awaryjny</string>
-    <string name="core11_demo_nickname">Załoga Demo</string>
-    <string name="core11_demo_reply_1">Cześć! Jestem symulowanym towarzyszem podróży: odpowiadam z tego samego urządzenia, bez Bluetooth. 👋</string>
     <string name="core11_demo_reply_2">Z drugim telefonem wiadomości szłyby przez sieć mesh BLE, szyfrowane end-to-end.</string>
     <string name="core11_demo_reply_3">Spróbuj przytrzymać jedną z moich wiadomości: możesz ją zgłosić albo mnie zablokować.</string>
     <string name="core11_demo_reply_4">W karcie Kabina znajdziesz publiczną tablicę 12-godzinną z zasadami do zaakceptowania.</string>
     <string name="core11_demo_reply_5">Zdjęcia otrzymane od osób, których nie zeskanowano osobiście, pozostają rozmyte, dopóki ich nie dotkniesz.</string>
-    <string name="core11_demo_reply_6">Miłego lotu! ✈️ W każdej chwili możesz mnie wyłączyć w Ustawienia › Informacje.</string>
     <string name="core11_demo_lounge_1">Wie ktoś, czy wózek z przekąskami przyjeżdża przed startem czy po? 🍫</string>
     <string name="core11_demo_lounge_2">Tu rząd 12: za oknem widać niesamowity zachód słońca.</string>
     <string name="core11_report_spam">Spam lub reklama</string>

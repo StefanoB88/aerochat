@@ -186,6 +186,12 @@ final class RecordingNotifier: MeshNotifier, @unchecked Sendable {
     func notify(message: MessageRecord, conversation: ConversationRecord) async {
         lock.withLock { _notified.append(message) }
     }
+
+    private var _contactRequests: [IncomingContactRequest] = []
+    var contactRequests: [IncomingContactRequest] { lock.withLock { _contactRequests } }
+    func notifyContactRequest(_ request: IncomingContactRequest) async {
+        lock.withLock { _contactRequests.append(request) }
+    }
 }
 
 /// Attende (max `timeout`) che la condizione asincrona diventi vera (un errore conta come `false`).

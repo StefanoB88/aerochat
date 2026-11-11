@@ -27,6 +27,10 @@ object AppSettings {
         const val demoMode = "review.demoMode"
         /** Risposte rapide suggerite dal modello on-device (dove disponibile). */
         const val smartReplies = "assistant.smartReplies"
+        /** "Visibile alle persone vicine": invio del `PRESENCE` (default: attivo). */
+        const val nearbyVisible = "nearby.visible"
+        /** "Accetto sfide a carte": `Presence.open_to_games`. */
+        const val openToGames = "nearby.openToGames"
     }
 
     /** Da incrementare quando le regole della Cabina cambiano in modo sostanziale: l'utente le rivedra'. */
@@ -39,6 +43,8 @@ object AppSettings {
         val blursStrangerMedia: Boolean = true,
         val isDemoModeEnabled: Boolean = false,
         val smartRepliesEnabled: Boolean = true,
+        val isNearbyVisible: Boolean = true,
+        val isOpenToGames: Boolean = true,
     ) {
         val hasAcceptedLoungeRules: Boolean get() = loungeRulesAcceptedVersion >= loungeRulesVersion
     }
@@ -66,6 +72,8 @@ object AppSettings {
                 blursStrangerMedia = prefs.getBoolean(Key.blurStrangerMedia, true),
                 isDemoModeEnabled = prefs.getBoolean(Key.demoMode, false),
                 smartRepliesEnabled = prefs.getBoolean(Key.smartReplies, true),
+                isNearbyVisible = prefs.getBoolean(Key.nearbyVisible, true),
+                isOpenToGames = prefs.getBoolean(Key.openToGames, true),
             )
         }
     }
@@ -81,6 +89,15 @@ object AppSettings {
     var smartRepliesEnabled: Boolean
         get() = _state.value.smartRepliesEnabled
         set(value) = update(Key.smartReplies, value) { it.copy(smartRepliesEnabled = value) }
+
+    /** Solo il flag salvato: il router lo riceve da `AppEnvironment.setNearbyVisible`. */
+    var isNearbyVisible: Boolean
+        get() = _state.value.isNearbyVisible
+        set(value) = update(Key.nearbyVisible, value) { it.copy(isNearbyVisible = value) }
+
+    var isOpenToGames: Boolean
+        get() = _state.value.isOpenToGames
+        set(value) = update(Key.openToGames, value) { it.copy(isOpenToGames = value) }
 
     var isLanguageFilterEnabled: Boolean
         get() = _state.value.isLanguageFilterEnabled

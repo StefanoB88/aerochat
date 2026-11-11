@@ -95,6 +95,26 @@ sealed interface RouterEvent {
     data class PeerPaired(val conversationID: String, val nickname: String) : RouterEvent
     data class GroupMembersChanged(val conversationID: String) : RouterEvent
 
+    /** "Saluta" / "Sfida" ricevuto da una persona vicina (`CONTACT_REQUEST` REQUEST): entra in "Richieste". */
+    data class ContactRequestReceived(val request: IncomingContactRequest) : RouterEvent
+
+    /**
+     * Richiesta accettata (`CONTACT_REQUEST` ACCEPT inviato o ricevuto): il peer e' un contatto fidato e la
+     * chat 1-a-1 e' pronta. [requestedByMe] = abbiamo chiesto noi (riceviamo l'ACCEPT). [gameKind] != 0: sfida.
+     */
+    data class ContactAccepted(
+        val conversationID: String,
+        val nickname: String,
+        val gameKind: Int,
+        val requestedByMe: Boolean,
+    ) : RouterEvent
+
+    /** La nostra richiesta e' stata rifiutata (`CONTACT_REQUEST` DECLINE). */
+    data class ContactDeclined(val nickname: String) : RouterEvent
+
+    /** Testo inviato da noi (contatori del ricordo del viaggio). */
+    data class MessageSent(val conversationID: String) : RouterEvent
+
     /**
      * Un messaggio ricevuto e' stato modificato o cancellato dal suo autore (`MESSAGE_REVISION`).
      * [deletedMediaPath]: file media (path relativo) da rimuovere dal disco dopo una cancellazione.
@@ -180,6 +200,11 @@ sealed class RouterError(message: String) : Exception(message) {
         private fun readResolve(): Any = UnknownPairingToken
     }
 
+    /** Persona vicina sconosciuta o richiesta scaduta (`CONTACT_REQUEST`). */
+    data object UnknownContactRequest : RouterError("unknown contact request") {
+        private fun readResolve(): Any = UnknownContactRequest
+    }
+
     /** Modifica/cancellazione non consentita: non e' nostro, fuori dai 15 minuti, gia' cancellato o tipo errato. */
     data object RevisionNotAllowed : RouterError("revision not allowed") {
         private fun readResolve(): Any = RevisionNotAllowed
@@ -198,6 +223,9 @@ interface MeshNotifier {
 
     /** La conversazione e' stata letta o eliminata: via tutte le sue notifiche (e dal badge). */
     suspend fun cancelConversation(conversationID: String) {}
+
+    /** "Marco ti saluta" / "Marco ti sfida a Scopa" (`CONTACT_REQUEST` ricevuta). Default: nessuna. */
+    suspend fun notifyContactRequest(request: IncomingContactRequest) {}
 }
 
 class NoopNotifier : MeshNotifier {
@@ -220,7 +248,9 @@ val PacketType.isStoreAndForwardEligible: Boolean
         // Le chiamate e il quiz hanno senso solo in tempo reale: niente coda.
         PacketType.PUBLIC_LOUNGE, PacketType.MEDIA_HEADER, PacketType.MEDIA_CHUNK, PacketType.PROFILE_UPDATE,
         // "Sta scrivendo" ha senso solo in quel momento.
-        PacketType.CALL_SIGNAL, PacketType.CALL_AUDIO, PacketType.QUIZ, PacketType.TYPING, PacketType.UNRECOGNIZED -> false
+        PacketType.CALL_SIGNAL, PacketType.CALL_AUDIO, PacketType.QUIZ, PacketType.TYPING,
+        // Persone vicine: la presenza vale solo adesso; la richiesta ha la sua risposta (niente coda ne' ACK).
+        PacketType.PRESENCE, PacketType.CONTACT_REQUEST, PacketType.UNRECOGNIZED -> false
     }
 
 val PacketType.isMedia: Boolean

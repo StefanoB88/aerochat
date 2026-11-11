@@ -124,6 +124,29 @@ object MeshProtocol {
     /** Senza battiture per questo tempo il mittente invia `false` (ms). */
     const val typingIdleTimeout: Long = 5_000L
 
+    // MARK: Persone vicine (release 1.3, NEARBY_SPEC.md)
+
+    /** `PRESENCE`: solo vicini diretti. */
+    const val presenceTTL: Int = 1
+    /** `PRESENCE` ripetuto ogni 60 s (solo app in primo piano). */
+    const val presenceInterval: Long = 60_000L
+    /** Una voce della cache dei vicini scade 3 minuti dopo l'ultimo `PRESENCE`. */
+    const val presenceLifetime: Long = 3 * 60_000L
+    /** Voci massime nella cache dei vicini. */
+    const val presenceCapacity = 64
+    /** `CONTACT_REQUEST`: vicini e un ponte. */
+    const val contactRequestTTL: Int = 2
+    /** Una REQUEST per mittente ogni 10 minuti (le altre scartate). */
+    const val contactRequestRateLimit: Long = 10 * 60_000L
+    /** Richieste ricevute in attesa di risposta (le nuove oltre il limite sono scartate). */
+    const val maxPendingContactRequests = 20
+    /** Una richiesta ricevuta (o inviata) scade dopo 30 minuti. */
+    const val contactRequestLifetime: Long = 30 * 60_000L
+    /** Lunghezza massima del saluto di una REQUEST. */
+    const val maxGreetingLength = 140
+    /** `request_id` di una CONTACT_REQUEST. */
+    const val contactRequestIDLength = 16
+
     /** `recipient_id` della Lounge Pubblica: 8 byte a zero. Restituisce sempre una copia nuova. */
     val loungeRecipientID: ByteArray get() = ByteArray(nodeIDLength)
     /** `sender_node_id` per relay anonimo: 8 byte a zero. Restituisce sempre una copia nuova. */

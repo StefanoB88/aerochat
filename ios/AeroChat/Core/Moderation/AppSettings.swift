@@ -15,6 +15,12 @@ enum AppSettings {
         static let demoMode = "review.demoMode"
         /// Risposte rapide suggerite dal modello on-device (solo dove Apple Intelligence e' disponibile).
         static let smartReplies = "assistant.smartReplies"
+        /// "Visibile alle persone vicine": invio del PRESENCE (si continua comunque a vedere gli altri).
+        static let nearbyVisible = "nearby.visible"
+        /// Nel PRESENCE annunciamo che accettiamo sfide a carte.
+        static let openToGames = "nearby.openToGames"
+        /// La rete cellulare e' stata vista almeno una volta (serve a riconoscere la modalita' aereo).
+        static let hasSeenCellular = "flight.hasSeenCellular"
     }
 
     /// Da incrementare quando le regole della Cabina cambiano in modo sostanziale: l'utente le rivedra'.
@@ -28,7 +34,17 @@ enum AppSettings {
             Key.blurStrangerMedia: true,
             Key.demoMode: false,
             Key.smartReplies: true,
+            Key.nearbyVisible: true,
+            Key.openToGames: true,
         ])
+    }
+
+    static var isNearbyVisible: Bool {
+        UserDefaults.standard.bool(forKey: Key.nearbyVisible)
+    }
+
+    static var isOpenToGames: Bool {
+        UserDefaults.standard.bool(forKey: Key.openToGames)
     }
 
     static var smartRepliesEnabled: Bool {

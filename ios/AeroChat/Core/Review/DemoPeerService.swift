@@ -1,9 +1,10 @@
 import Foundation
 import CryptoKit
 
-/// Compagno di volo simulato per la revisione dell'App Store e per provare l'app con un solo iPhone:
-/// un contatto fittizio che risponde ai messaggi della sua chat 1-a-1 e scrive qualche riga in Cabina
-/// Pubblica. Vive solo nel database locale: nessun pacchetto radio, nessuna chiave reale.
+/// Passeggero virtuale ("Prova subito", e revisione dell'App Store con un solo iPhone): un contatto
+/// fittizio che risponde ai messaggi della sua chat 1-a-1, gioca a carte e a Tris (`DemoGameBot`) e scrive
+/// qualche riga in Cabina Pubblica. Vive solo nel database locale: nessun pacchetto radio (il router scarta
+/// tutto cio' che e' diretto a lui), nessuna chiave reale.
 @MainActor
 final class DemoPeerService {
 
@@ -16,23 +17,23 @@ final class DemoPeerService {
         self.database = database
     }
 
-    /// Identita' fissa (derivata da etichette costanti) cosi' riattivare la demo ritrova la stessa chat.
-    static let nodeID = Data(SHA256.hash(data: Data("AeroMesh-Demo-Peer-Node".utf8))).prefix(MeshProtocol.nodeIDLength)
-    private static let x25519Pub = Data(SHA256.hash(data: Data("AeroMesh-Demo-Peer-X25519".utf8)))
-    private static let ed25519Pub = Data(SHA256.hash(data: Data("AeroMesh-Demo-Peer-Ed25519".utf8)))
+    /// Identita' fissa (vedi `DemoPeerIdentity`): riattivare la prova ritrova la stessa chat.
+    static var nodeID: Data { Data(DemoPeerIdentity.nodeID) }
+    private static var x25519Pub: Data { DemoPeerIdentity.x25519Pub }
+    private static var ed25519Pub: Data { DemoPeerIdentity.ed25519Pub }
 
-    static var nickname: String { String(localized: "Equipaggio Demo") }
+    /// Nome ben visibile in lista e nell'intestazione: e' chiaro che non e' una persona vera.
+    static var nickname: String { String(localized: "Passeggero virtuale") }
 
-    static func isDemoPeer(_ nodeID: Data) -> Bool { nodeID == Self.nodeID }
+    static func isDemoPeer(_ nodeID: Data?) -> Bool { DemoPeerIdentity.isDemoPeer(nodeID) }
 
     private var replies: [String] {
         [
-            String(localized: "Ciao! Sono il compagno di volo simulato: rispondo dallo stesso iPhone, senza Bluetooth. 👋"),
-            String(localized: "Con un secondo telefono i messaggi passerebbero via mesh BLE, cifrati end-to-end."),
-            String(localized: "Prova a tenere premuto un mio messaggio: puoi segnalarlo o bloccarmi."),
-            String(localized: "Nella tab Cabina trovi la bacheca pubblica di 12 ore con le regole da accettare."),
-            String(localized: "Le foto che ricevi da chi non hai scansionato di persona restano sfocate finché non le tocchi."),
-            String(localized: "Buon volo! ✈️ Quando vuoi disattivami da Impostazioni › Informazioni."),
+            String(localized: "Ciao! Sono il passeggero virtuale 👋 Ti mostro come funziona AeroChat, tutto da questo iPhone."),
+            String(localized: "In volo i messaggi passano da telefono a telefono via Bluetooth: niente Wi-Fi, niente rete, niente account."),
+            String(localized: "Se l'amico è lontano, il messaggio aspetta e arriva appena siete vicini, anche passando da altri passeggeri."),
+            String(localized: "Facciamo una partita? Tocca + qui sotto e scegli Scopa, Briscola o Tris 🃏"),
+            String(localized: "Ora prova con una persona vera: tocca «Invita chi è vicino a te» qui sotto ✈️"),
         ]
     }
 
@@ -41,6 +42,11 @@ final class DemoPeerService {
             String(localized: "Qualcuno sa se il carrello passa prima o dopo il decollo? 🍫"),
             String(localized: "Fila 12 qui: si vede un tramonto pazzesco dal finestrino."),
         ]
+    }
+
+    /// Chat del passeggero virtuale (creata da `enable`).
+    func conversation() async -> ConversationRecord? {
+        try? await database.conversations.fetch(id: DemoPeerIdentity.conversationID)
     }
 
     func enable() async {
@@ -74,8 +80,7 @@ final class DemoPeerService {
         observation?.cancel()
         observation = nil
         answered.removeAll()
-        let conversationID = "direct:\(Self.nodeID.hexString)"
-        try? await database.conversations.delete(conversationID: conversationID)
+        try? await database.conversations.delete(conversationID: DemoPeerIdentity.conversationID)
         if let lounge = try? await database.conversations.fetch(id: ConversationRecord.cabinLoungeID),
            let messages = try? await database.messages.fetch(conversationID: lounge.id, limit: 500) {
             for message in messages where message.senderNodeID == Self.nodeID {
@@ -91,7 +96,9 @@ final class DemoPeerService {
         try? await database.messages.advanceDeliveryStatus(to: .read, msgID: message.msgID)
         try? await Task.sleep(for: .seconds(1.5))
         guard !Task.isCancelled else { return }
-        let text = replies[replyIndex % replies.count]
+        // Dopo il copione si alternano gli ultimi due suggerimenti (partita e invito).
+        let index = replyIndex < replies.count ? replyIndex : replies.count - 2 + (replyIndex - replies.count) % 2
+        let text = replies[index]
         replyIndex += 1
         await insertIncoming(text, in: conversation)
     }
