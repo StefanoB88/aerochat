@@ -8,13 +8,33 @@ final class ChatListViewModel {
     var reachability: [String: Reachability] = [:]
     var peers: [Data: PeerRecord] = [:]
     private var tasks: [Task<Void, Never>] = []
+    /// Lista "congelata" mentre e' aperta la conferma di eliminazione: il popover e' agganciato alla riga e
+    /// iOS lo chiude se la riga viene ridisegnata (stato radio ogni 4 s, nuovi messaggi, "sta scrivendo").
+    /// Gli aggiornamenti arrivati nel frattempo si applicano alla chiusura.
+    private(set) var isFrozen = false
+    private var pendingConversations: [ConversationRecord]?
+    private var pendingReachability: [String: Reachability]?
+
+    func setFrozen(_ frozen: Bool) {
+        guard frozen != isFrozen else { return }
+        isFrozen = frozen
+        guard !frozen else { return }
+        if let pending = pendingConversations { conversations = pending }
+        if let pending = pendingReachability { reachability = pending }
+        pendingConversations = nil
+        pendingReachability = nil
+    }
 
     func start(environment: AppEnvironment) {
         guard tasks.isEmpty, let database = environment.database else { return }
         tasks.append(Task { [weak self] in
             for await list in database.conversations.observePermanent() {
                 guard let self else { break }
-                self.conversations = list
+                if self.isFrozen {
+                    self.pendingConversations = list
+                } else {
+                    self.conversations = list
+                }
                 await self.refreshReachability(environment)
             }
         })
@@ -48,7 +68,11 @@ final class ChatListViewModel {
             map[conversation.id] = await router.reachability(of: conversation)
         }
         // Solo se cambia: ogni assegnazione ridisegna l'intera lista.
-        if map != reachability { reachability = map }
+        if isFrozen {
+            pendingReachability = map
+        } else if map != reachability {
+            reachability = map
+        }
     }
 }
 
@@ -175,7 +199,10 @@ struct ChatListView: View {
         } message: {
             Text(actionError ?? "")
         }
-        .onAppear { viewModel.start(environment: environment) }
+        .onAppear {
+            viewModel.setFrozen(false)
+            viewModel.start(environment: environment)
+        }
         .onDisappear { viewModel.stop() }
     }
 
@@ -220,7 +247,10 @@ struct ChatListView: View {
     private func deleteConfirmationBinding(for conversation: ConversationRecord) -> Binding<Bool> {
         Binding(get: { conversationToDelete?.id == conversation.id },
                 set: { presented in
-                    if !presented, conversationToDelete?.id == conversation.id { conversationToDelete = nil }
+                    if !presented, conversationToDelete?.id == conversation.id {
+                        conversationToDelete = nil
+                        viewModel.setFrozen(false)
+                    }
                 })
     }
 
@@ -240,7 +270,13 @@ struct ChatListView: View {
     private func deleteButton(_ conversation: ConversationRecord) -> some View {
         Button(role: .destructive) {
             Haptics.tap()
-            conversationToDelete = conversation
+            viewModel.setFrozen(true)
+            // Dallo swipe o dal menu contestuale la riga si sta ancora richiudendo: aprire la conferma
+            // subito la faceva sparire insieme all'animazione. Si apre a riga ferma.
+            Task {
+                try? await Task.sleep(for: .milliseconds(400))
+                conversationToDelete = conversation
+            }
         } label: {
             Label("Elimina", systemImage: "trash.fill")
         }
@@ -289,7 +325,8 @@ struct ChatListView: View {
                     }
                 }
                 HStack {
-                    if environment.typing.isAnyoneTyping(in: conversation.id) {
+                    // Lista congelata (conferma di eliminazione aperta): niente "sta scrivendo" che ridisegna la riga.
+                    if !viewModel.isFrozen, environment.typing.isAnyoneTyping(in: conversation.id) {
                         Text("sta scrivendo…")
                             .font(.subheadline.italic())
                             .foregroundStyle(AeroTheme.accentCyan)
