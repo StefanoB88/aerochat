@@ -8,6 +8,12 @@ import android.content.ContextWrapper
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.foundation.layout.mandatorySystemGestures
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.systemGestures
+import androidx.compose.foundation.layout.tappableElement
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -55,7 +61,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -135,18 +140,18 @@ fun CardTableDialog(
     statusMessage: String? = null,
     onStatusExpire: () -> Unit = {},
 ) {
-    // Inset del tavolo (Pixel 8a, navigazione a gesti: mano e "Gioca" finivano sulla maniglia di sistema).
-    // `WindowInsets.safeDrawing` letto nella composizione della chat arrivava a zero: e' lo stato Compose
-    // della ComposeView dell'Activity, letto (in modo pigro) dalla finestra del Dialog, e sotto lo Scaffold
-    // della chat (insets consumati) / con la finestra del Dialog in primo piano non veniva aggiornato. Ora:
+    // Inset del tavolo (Pixel 8a, navigazione a gesti: mano e "Gioca" finivano sulla maniglia di sistema,
+    // e a volte succedeva ancora con il minimo di 24 dp). Si prende il massimo, lato per lato, di:
     // 1. inset reali della finestra dell'Activity dalle root insets della DecorView (barre di sistema,
-    //    ritaglio del display e gesti obbligatori, cioe' la maniglia in basso);
-    // 2. il massimo con gli inset della finestra del Dialog stesso (safeDrawing + gesti obbligatori);
-    // 3. in basso almeno [TableMinBottomInset], cosi' mano e "Gioca" stanno sempre sopra la maniglia.
+    //    ritaglio del display, gesti obbligatori; in basso anche gesti di sistema ed elementi toccabili);
+    // 2. inset Compose della finestra del Dialog (safeDrawing; in basso anche barra di navigazione, gesti
+    //    obbligatori e di sistema, elementi toccabili);
+    // 3. root insets della finestra del Dialog lette dopo il layout (quando la finestra e' davvero attaccata);
+    // 4. in basso almeno [TableMinBottomInset], cosi' mano e "Gioca" stanno sempre sopra la maniglia.
     val hostView = LocalView.current
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
-    val hostInsets = remember(hostView, density, configuration) { activityRootInsets(hostView, density) }
+    val hostInsets = remember(hostView, density, configuration) { rootInsets(hostView, density) }
     Dialog(
         onDismissRequest = onDismiss,
         // Edge-to-edge: il feltro disegna sotto le barre di sistema, il contenuto rispetta gli inset sopra.
@@ -154,26 +159,45 @@ fun CardTableDialog(
     ) {
         FullScreenDialogWindow()
         val layoutDirection = LocalLayoutDirection.current
+        val dialogView = LocalView.current
+        val dialogDensity = LocalDensity.current
+        var dialogRootInsets by remember { mutableStateOf(TableInsets()) }
         val dialogSafe = WindowInsets.safeDrawing.asPaddingValues()
-        val dialogGestures = WindowInsets.mandatorySystemGestures.asPaddingValues()
+        // Dei gesti del Dialog conta solo il basso (i bordi laterali del "indietro" no).
+        val dialogBottom = listOf(
+            WindowInsets.navigationBars,
+            WindowInsets.mandatorySystemGestures,
+            WindowInsets.systemGestures,
+            WindowInsets.tappableElement,
+        ).maxOf { with(dialogDensity) { it.getBottom(dialogDensity).toDp() } }
         val contentPadding = tableContentPadding(
             hostInsets,
+            dialogRootInsets,
             TableInsets(dialogSafe, layoutDirection),
-            // Dei gesti del Dialog conta solo la maniglia in basso (i bordi laterali del "indietro" no).
-            TableInsets(bottom = dialogGestures.calculateBottomPadding()),
+            TableInsets(bottom = dialogBottom),
         )
         // Il panno verde resta scuro anche con il tema chiaro di sistema.
         AeroForcedDark {
-            CardTableView(
-                state, onAction, onDismiss, statusMessage = statusMessage, onStatusExpire = onStatusExpire,
-                contentPadding = contentPadding,
-            )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .onGloballyPositioned {
+                        // Dopo il layout la finestra del Dialog ha i suoi inset reali: si rilegge.
+                        val measured = rootInsets(dialogView, dialogDensity, fallbackToActivity = false)
+                        if (measured != dialogRootInsets) dialogRootInsets = measured
+                    },
+            ) {
+                CardTableView(
+                    state, onAction, onDismiss, statusMessage = statusMessage, onStatusExpire = onStatusExpire,
+                    contentPadding = contentPadding,
+                )
+            }
         }
     }
 }
 
-/** Spazio minimo sotto mano e "Gioca": sempre sopra la maniglia della navigazione a gesti. */
-internal val TableMinBottomInset = 24.dp
+/** Spazio minimo sotto mano e "Gioca": sempre ben sopra la maniglia della navigazione a gesti. */
+internal val TableMinBottomInset = 48.dp
 
 /** Inset del tavolo in dp, in direzione logica (start/end). */
 internal data class TableInsets(val start: Dp = 0.dp, val top: Dp = 0.dp, val end: Dp = 0.dp, val bottom: Dp = 0.dp) {
@@ -195,30 +219,37 @@ internal fun tableContentPadding(vararg insets: TableInsets, minBottom: Dp = Tab
     )
 
 /**
- * Inset della finestra dell'Activity dalle root insets della DecorView (non consumati da nessuno):
- * barre di sistema, ritaglio del display e gesti obbligatori (la maniglia in basso), in dp.
+ * Root insets (non consumati da nessuno) della finestra di [view] (con [fallbackToActivity], della
+ * DecorView dell'Activity), in dp: barre di sistema, ritaglio del display e gesti obbligatori; in basso
+ * anche gesti di sistema ed elementi toccabili (la maniglia della navigazione a gesti).
  */
-private fun activityRootInsets(view: View, density: Density): TableInsets {
-    val decorView = view.context.findActivity()?.window?.decorView ?: view.rootView
-    val insets = ViewCompat.getRootWindowInsets(decorView)
-        ?.getInsets(
-            WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or
-                WindowInsetsCompat.Type.mandatorySystemGestures(),
-        ) ?: return TableInsets()
-    val rtl = decorView.layoutDirection == View.LAYOUT_DIRECTION_RTL
+private fun rootInsets(view: View, density: Density, fallbackToActivity: Boolean = true): TableInsets {
+    val target = if (fallbackToActivity) view.context.findActivity()?.window?.decorView ?: view.rootView else view.rootView
+    val windowInsets = ViewCompat.getRootWindowInsets(target) ?: return TableInsets()
+    val insets = windowInsets.getInsets(
+        WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or
+            WindowInsetsCompat.Type.mandatorySystemGestures(),
+    )
+    val bottom = maxOf(
+        insets.bottom,
+        windowInsets.getInsets(WindowInsetsCompat.Type.systemGestures()).bottom,
+        windowInsets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom,
+    )
+    val rtl = target.layoutDirection == View.LAYOUT_DIRECTION_RTL
     return with(density) {
         TableInsets(
             start = (if (rtl) insets.right else insets.left).toDp(),
             top = insets.top.toDp(),
             end = (if (rtl) insets.left else insets.right).toDp(),
-            bottom = insets.bottom.toDp(),
+            bottom = bottom.toDp(),
         )
     }
 }
 
 /**
- * La finestra del Dialog occupa tutto lo schermo (anche sotto la barra di navigazione) e non adatta il
- * contenuto alle barre da sola: il feltro arriva ai bordi, gli inset li applica il tavolo.
+ * La finestra del Dialog occupa tutto lo schermo (anche sotto barra di stato, ritaglio e barra di
+ * navigazione) e non adatta il contenuto alle barre da sola: il feltro arriva ai bordi e gli inset li
+ * applica una sola volta il tavolo (niente padding di sistema sommato al nostro, che spingeva giu' la mano).
  */
 @Composable
 private fun FullScreenDialogWindow() {
@@ -226,6 +257,12 @@ private fun FullScreenDialogWindow() {
     SideEffect {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+        window.decorView.setPadding(0, 0, 0, 0)
+        val attributes = window.attributes
+        if (attributes.layoutInDisplayCutoutMode != WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES) {
+            attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            window.attributes = attributes
+        }
     }
 }
 
@@ -240,6 +277,35 @@ private val feltEdge = Color.hex(0x03241A)
 private val gold = Color.hex(0xFFD54F)
 /** Sollevamento della carta selezionata nella mano. */
 private val cardLift = 16.dp
+
+// Slot fissi del tavolo (dp): l'altezza di ogni regione non dipende mai dal turno o dallo stato.
+private val TableTopPadding = 8.dp
+private val TableBottomPadding = 12.dp
+private val TableSpacing = 10.dp
+internal val HeaderHeight = 48.dp
+private val SeatSlotHeight = 108.dp
+private val SeatNameRowHeight = 18.dp
+private val SeatCardsHeight = 52.dp
+private val CompactSeatWidth = 72.dp
+private val PileRowHeight = 16.dp
+private val InfoLineHeight = 40.dp
+private val CaptureSlotHeight = 56.dp
+private val BottomRowHeight = 48.dp
+private val HandMaxHeight = 136.dp
+private val HandMinHeight = 96.dp
+/** Spazio minimo lasciato al centro del tavolo prima di rimpicciolire la mano. */
+private val TableCenterMinHeight = 180.dp
+internal const val CaptureSlotTag = "cardTable.captureSlot"
+internal const val HandTag = "cardTable.hand"
+internal const val PlayButtonTag = "cardTable.play"
+
+/** Altezza della mano: la massima che lascia al centro del tavolo almeno [TableCenterMinHeight]. */
+private fun handHeightFor(available: Dp, hasCaptureSlot: Boolean): Dp {
+    val slots = 5 + (if (hasCaptureSlot) 1 else 0)
+    val fixed = HeaderHeight + SeatSlotHeight + InfoLineHeight + BottomRowHeight +
+        (if (hasCaptureSlot) CaptureSlotHeight else 0.dp) + TableSpacing * (slots - 1)
+    return (available - fixed - TableCenterMinHeight).coerceIn(HandMinHeight, HandMaxHeight)
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -366,42 +432,71 @@ fun CardTableView(
         }
     }
 
+    // Layout a slot fissi: nessuna regione cambia altezza con il turno o lo stato (prima il banner di
+    // stato, la scelta della presa e il pulsante "Gioca" comparivano e sparivano nella colonna, e il
+    // centro del tavolo, a peso 1, si allargava e stringeva a ogni cambio: tutto "saltava").
+    val insetsModifier = if (contentPadding != null) Modifier.padding(contentPadding) else Modifier.safeDrawingPadding()
     Box(
         Modifier
             .fillMaxSize()
             .background(Brush.radialGradient(listOf(feltCenter, feltEdge), radius = 1400f)),
     ) {
-        Column(
+        BoxWithConstraints(
             Modifier
                 .fillMaxSize()
-                .then(if (contentPadding != null) Modifier.padding(contentPadding) else Modifier.safeDrawingPadding())
+                .then(insetsModifier)
                 .padding(horizontal = 12.dp)
-                .padding(top = 8.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(top = TableTopPadding, bottom = TableBottomPadding),
         ) {
-            Header(state, onDismiss, onShowScore = { showScoreSheet = true }, onResign = { confirmResign = true })
-            InfoBanner(message = statusMessage, onExpire = onStatusExpire)
-            SeatBadge(state, seat = (bottomSeat + (if (playerCount == 4) 2 else 1)) % playerCount)
-            Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                if (playerCount == 4) SeatBadge(state, seat = (bottomSeat + 3) % 4, compact = true)
-                Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
-                    TableCenter(state, highlighted, dimOthers = selectedCard != null && highlighted.isNotEmpty()) { card ->
-                        val index = captureOptions.indexOfFirst { it.contains(card) }
-                        if (index >= 0) {
-                            Haptics.tap()
-                            selectedOption = index
+            // Altezza della mano dallo spazio disponibile (dipende solo dallo schermo, non dal turno): su
+            // schermi bassi carte e mano si rimpiccioliscono invece di finire sotto il bordo.
+            val hasCaptureSlot = scopa != null && state.mySeat != null
+            val handHeight = handHeightFor(maxHeight, hasCaptureSlot)
+            Column(
+                Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(TableSpacing),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Header(state, onDismiss, onShowScore = { showScoreSheet = true }, onResign = { confirmResign = true })
+                Box(Modifier.fillMaxWidth().height(SeatSlotHeight), contentAlignment = Alignment.Center) {
+                    SeatBadge(state, seat = (bottomSeat + (if (playerCount == 4) 2 else 1)) % playerCount)
+                }
+                Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    if (playerCount == 4) SeatBadge(state, seat = (bottomSeat + 3) % 4, compact = true)
+                    Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
+                        TableCenter(state, highlighted, dimOthers = selectedCard != null && highlighted.isNotEmpty()) { card ->
+                            val index = captureOptions.indexOfFirst { it.contains(card) }
+                            if (index >= 0) {
+                                Haptics.tap()
+                                selectedOption = index
+                            }
+                        }
+                    }
+                    if (playerCount == 4) SeatBadge(state, seat = (bottomSeat + 1) % 4, compact = true)
+                }
+                InfoLine(state)
+                if (hasCaptureSlot) {
+                    // Spazio sempre riservato: il contenuto c'e' solo con piu' prese possibili.
+                    Box(
+                        Modifier.fillMaxWidth().height(CaptureSlotHeight).testTag(CaptureSlotTag),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (captureOptions.size > 1) {
+                            CaptureChooser(captureOptions, selectedOption) { selectedOption = it }
                         }
                     }
                 }
-                if (playerCount == 4) SeatBadge(state, seat = (bottomSeat + 1) % 4, compact = true)
+                BottomArea(state, selectedCard, canPlay, handHeight, onTap = tap, onPlay = playSelected)
             }
-            InfoLine(state)
-            if (captureOptions.size > 1) {
-                CaptureChooser(captureOptions, selectedOption) { selectedOption = it }
-            }
-            BottomArea(state, selectedCard, canPlay, onTap = tap, onPlay = playSelected)
         }
+        // Banner di stato in sovrimpressione sul feltro (sotto l'intestazione): non sposta niente.
+        InfoBanner(
+            message = statusMessage, onExpire = onStatusExpire,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .then(insetsModifier)
+                .padding(top = TableTopPadding + HeaderHeight),
+        )
         AnimatedVisibility(
             visible = scopaFlash,
             enter = scaleIn(spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow), initialScale = 0.4f) + fadeIn(),
@@ -449,12 +544,15 @@ fun CardTableView(
 
 @Composable
 private fun Header(state: GameSessionState, onDismiss: () -> Unit, onShowScore: () -> Unit, onResign: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(HeaderHeight), verticalAlignment = Alignment.CenterVertically) {
         HapticButton(onClick = onDismiss, tint = AeroTheme.textPrimary, contentDescription = stringResource(R.string.games_close_table)) {
             Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.games_close_table))
         }
         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(gameTitle(state.gameKind), style = AeroTheme.title(17f, FontWeight.SemiBold), color = AeroTheme.textPrimary)
+            Text(
+                gameTitle(state.gameKind), style = AeroTheme.title(17f, FontWeight.SemiBold), color = AeroTheme.textPrimary,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
             val scores = cardScores(state)
             if (scores != null && scores.size == 2) {
                 Text(
@@ -501,7 +599,7 @@ private fun SeatBadge(state: GameSessionState, seat: Int, compact: Boolean = fal
     val shape = RoundedCornerShape(12.dp)
     Column(
         Modifier
-            .then(if (compact) Modifier.widthIn(max = 72.dp) else Modifier)
+            .then(if (compact) Modifier.width(CompactSeatWidth) else Modifier)
             .background(Color.Black.copy(alpha = if (isTurn) 0.35f else 0.18f), shape)
             .border(1.5.dp, if (isTurn) AeroTheme.accentCyan.copy(alpha = 0.8f) else Color.Transparent, shape)
             .padding(6.dp)
@@ -509,7 +607,10 @@ private fun SeatBadge(state: GameSessionState, seat: Int, compact: Boolean = fal
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            Modifier.height(SeatNameRowHeight),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             if (isDealer(state, seat)) {
                 Text(
                     stringResource(R.string.games_dealer_short),
@@ -529,22 +630,23 @@ private fun SeatBadge(state: GameSessionState, seat: Int, compact: Boolean = fal
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (count > 0) {
-            if (compact) {
-                Box(Modifier.size(50.dp, 70.dp)) {
-                    for (index in 0 until minOf(count, 5)) {
-                        NeapolitanCardView(
-                            card = null, width = 28.dp,
-                            modifier = Modifier.align(Alignment.TopCenter).offset(y = (index * 6).dp).rotate(90f),
-                        )
-                    }
+        // Spazio delle carte sempre riservato (anche a mano vuota) e largo quanto la mano piena.
+        if (compact) {
+            Box(Modifier.size(50.dp, 70.dp)) {
+                for (index in 0 until minOf(count, 5)) {
+                    NeapolitanCardView(
+                        card = null, width = 28.dp,
+                        modifier = Modifier.align(Alignment.TopCenter).offset(y = (index * 6).dp).rotate(90f),
+                    )
                 }
-            } else {
-                val step = 10.dp
-                Box(Modifier.size(32.dp + step * (count - 1), 52.dp)) {
-                    for (index in 0 until count) {
-                        NeapolitanCardView(card = null, width = 32.dp, modifier = Modifier.offset(x = step * index))
-                    }
+            }
+        } else {
+            val step = 10.dp
+            val fullHand = maxOf(count, if (state.scopa?.isScopone == true) 10 else 3)
+            Box(Modifier.size(32.dp + step * (fullHand - 1), SeatCardsHeight), contentAlignment = Alignment.CenterStart) {
+                val start = step * (fullHand - count) / 2
+                for (index in 0 until count) {
+                    NeapolitanCardView(card = null, width = 32.dp, modifier = Modifier.offset(x = start + step * index))
                 }
             }
         }
@@ -556,7 +658,10 @@ private fun SeatBadge(state: GameSessionState, seat: Int, compact: Boolean = fal
 private fun PileLabel(state: GameSessionState, seat: Int) {
     val scope = state.scopa?.scope?.getOrNull(ScopaGame.side(seat)) ?: 0
     val scopeDescription = pluralStringResource(R.plurals.games_scope_count, scope, scope)
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(
+        Modifier.height(PileRowHeight),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         Icon(Icons.Outlined.Layers, contentDescription = null, tint = AeroTheme.textSecondary, modifier = Modifier.size(12.dp))
         Text(
             pileCount(state, seat).toString(),
@@ -655,21 +760,24 @@ private fun BriscolaCenter(briscola: BriscolaGame) {
     }
 }
 
+/** Ultima giocata e stato del turno: due righe singole in uno slot ad altezza fissa (testi lunghi troncati). */
 @Composable
 private fun InfoLine(state: GameSessionState) {
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        lastMoveText(state)?.let {
-            Text(
-                it, style = AeroTheme.footnote.copy(fontWeight = FontWeight.Medium), color = AeroTheme.textPrimary,
-                textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            )
-        }
+    Column(
+        Modifier.fillMaxWidth().height(InfoLineHeight),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+    ) {
         Text(
-            cardStatusText(state),
+            lastMoveText(state).orEmpty(), style = AeroTheme.footnote.copy(fontWeight = FontWeight.Medium),
+            color = AeroTheme.textPrimary, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            listOfNotNull(cardStatusText(state), resignText(state)).joinToString(" · "),
             style = AeroTheme.captionSemibold,
             color = if (state.myTurn) AeroTheme.accentCyan else AeroTheme.textSecondary,
+            textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-        resignText(state)?.let { Text(it, style = AeroTheme.caption.copy(fontSize = 11.sp), color = AeroTheme.textSecondary) }
     }
 }
 
@@ -708,17 +816,26 @@ private fun CaptureChooser(options: List<List<Int>>, selected: Int, onSelect: (I
 
 // MARK: Mano
 
+/**
+ * Mano e riga del giocatore in uno slot ad altezza fissa ancorato in basso: il pulsante "Gioca" c'e'
+ * sempre nello stesso punto (disattivato e attenuato fuori turno o senza carta scelta).
+ */
 @Composable
 private fun BottomArea(
     state: GameSessionState,
     selectedCard: Int?,
     canPlay: Boolean,
+    handHeight: Dp,
     onTap: (Int) -> Unit,
     onPlay: () -> Unit,
 ) {
     val mySeat = state.mySeat
     if (mySeat == null) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(
+            Modifier.fillMaxWidth().height(handHeight + BottomRowHeight),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(Icons.Outlined.Visibility, contentDescription = null, tint = AeroTheme.textSecondary, modifier = Modifier.size(14.dp))
                 Text(stringResource(R.string.games_watching), style = AeroTheme.caption, color = AeroTheme.textSecondary)
@@ -729,62 +846,79 @@ private fun BottomArea(
     }
     // Mano ordinata per seme e valore (l'ordine interno resta quello di distribuzione).
     val hand = (state.scopa?.hands?.getOrNull(mySeat) ?: state.briscola?.hands?.getOrNull(mySeat) ?: emptyList()).sorted()
-    BoxWithConstraints(Modifier.fillMaxWidth().height(136.dp), contentAlignment = Alignment.BottomCenter) {
-        val count = maxOf(hand.size, 1)
-        val visible = if (count > 5) 0.62f else 1.08f
-        val width: Dp = (maxWidth / (1 + (count - 1) * visible)).coerceIn(36.dp, 72.dp)
-        val step = width * visible
-        val total = width + step * (count - 1)
-        Box(Modifier.width(total).height(136.dp)) {
-            hand.forEachIndexed { index, card ->
-                key(card) {
-                    val lift by animateDpAsState(if (card == selectedCard) cardLift else 0.dp, label = "lift")
-                    // L'area di tocco resta ferma (alta quanto carta + sollevamento): prima si spostava con la
-                    // carta sollevata e il secondo tocco ("doppio tocco per giocare") cadeva nel vuoto o sulla
-                    // carta accanto. Solo il disegno si solleva (graphicsLayer, niente nuovo layout).
-                    Box(
-                        Modifier
-                            .align(Alignment.BottomStart)
-                            .offset(x = step * index)
-                            .size(width, width * cardAspectRatio + cardLift)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() }, indication = null,
-                                role = Role.Button,
-                            ) { onTap(card) }
-                            .semantics { selected = card == selectedCard },
-                        contentAlignment = Alignment.BottomStart,
-                    ) {
-                        NeapolitanCardView(
-                            card = card, width = width, highlighted = card == selectedCard,
-                            modifier = Modifier.graphicsLayer { translationY = -lift.toPx() },
-                        )
+    Column(Modifier.fillMaxWidth().height(handHeight + BottomRowHeight)) {
+        BoxWithConstraints(
+            Modifier.fillMaxWidth().height(handHeight).testTag(HandTag),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            val count = maxOf(hand.size, 1)
+            val visible = if (count > 5) 0.62f else 1.08f
+            // Larghezza della carta limitata anche dall'altezza della mano (carta + sollevamento).
+            val maxCardWidth = minOf(72.dp, (handHeight - cardLift) / cardAspectRatio)
+            val width: Dp = (maxWidth / (1 + (count - 1) * visible)).coerceIn(minOf(36.dp, maxCardWidth), maxCardWidth)
+            val step = width * visible
+            val total = width + step * (count - 1)
+            Box(Modifier.width(total).height(handHeight)) {
+                hand.forEachIndexed { index, card ->
+                    key(card) {
+                        val lift by animateDpAsState(if (card == selectedCard) cardLift else 0.dp, label = "lift")
+                        // L'area di tocco resta ferma (alta quanto carta + sollevamento): prima si spostava con la
+                        // carta sollevata e il secondo tocco ("doppio tocco per giocare") cadeva nel vuoto o sulla
+                        // carta accanto. Solo il disegno si solleva (graphicsLayer, niente nuovo layout).
+                        Box(
+                            Modifier
+                                .align(Alignment.BottomStart)
+                                .offset(x = step * index)
+                                .size(width, width * cardAspectRatio + cardLift)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() }, indication = null,
+                                    role = Role.Button,
+                                ) { onTap(card) }
+                                .semantics { selected = card == selectedCard },
+                            contentAlignment = Alignment.BottomStart,
+                        ) {
+                            NeapolitanCardView(
+                                card = card, width = width, highlighted = card == selectedCard,
+                                modifier = Modifier.graphicsLayer { translationY = -lift.toPx() },
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                seatName(state, mySeat), style = AeroTheme.captionSemibold,
-                color = if (state.turnSeat == mySeat) AeroTheme.accentCyan else AeroTheme.textPrimary,
-            )
-            PileLabel(state, mySeat)
-            if (isDealer(state, mySeat)) {
-                Text(stringResource(R.string.games_dealer), style = AeroTheme.caption.copy(fontSize = 11.sp), color = AeroTheme.textSecondary)
+        Row(Modifier.fillMaxWidth().height(BottomRowHeight), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    seatName(state, mySeat), style = AeroTheme.captionSemibold,
+                    color = if (state.turnSeat == mySeat) AeroTheme.accentCyan else AeroTheme.textPrimary,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                )
+                PileLabel(state, mySeat)
+                if (isDealer(state, mySeat)) {
+                    Text(
+                        stringResource(R.string.games_dealer), style = AeroTheme.caption.copy(fontSize = 11.sp),
+                        color = AeroTheme.textSecondary, maxLines = 1,
+                    )
+                }
             }
-        }
-        if (canPlay) {
+            val playEnabled = canPlay && selectedCard != null
             Button(
                 onClick = onPlay,
-                enabled = selectedCard != null,
-                modifier = Modifier.hapticOnTap(),
-                colors = ButtonDefaults.buttonColors(containerColor = AeroTheme.accentEmerald, contentColor = Color.White),
+                enabled = playEnabled,
+                modifier = Modifier
+                    .testTag(PlayButtonTag)
+                    .hapticOnTap(playEnabled)
+                    .alpha(if (canPlay) 1f else 0.5f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AeroTheme.accentEmerald, contentColor = Color.White,
+                    disabledContainerColor = AeroTheme.accentEmerald.copy(alpha = 0.35f),
+                    disabledContentColor = Color.White.copy(alpha = 0.6f),
+                ),
             ) {
                 Text(
                     stringResource(R.string.games_play), style = AeroTheme.body, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.defaultMinSize(minWidth = 72.dp),
-                    textAlign = TextAlign.Center,
+                    textAlign = TextAlign.Center, maxLines = 1,
                 )
             }
         }

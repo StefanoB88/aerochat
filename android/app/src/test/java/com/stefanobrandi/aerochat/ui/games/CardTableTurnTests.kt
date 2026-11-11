@@ -5,6 +5,9 @@ import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onNodeWithTag
 import com.stefanobrandi.aerochat.proto.GameKind
 import com.stefanobrandi.aerochat.core.games.GameSessionState
 import com.stefanobrandi.aerochat.core.games.GameStatus
@@ -54,14 +57,17 @@ class CardTableTurnTests {
         compose.onAllNodes(isSelectable()).onFirst().performClick()
         compose.waitForIdle()
         assertTrue(actions.isEmpty())
+        // "Gioca" c'e' sempre (stesso posto), ma fuori turno e' disattivato.
+        compose.onNodeWithTag(PlayButtonTag).assertExists().assertIsNotEnabled()
 
         // Arriva la mossa dell'avversario: ora tocca a noi, con il tavolo ancora aperto.
         state.value = scopaState(myTurn = true, sequence = 2)
         compose.waitForIdle()
 
-        // Primo tocco seleziona, secondo tocco gioca.
+        // Primo tocco seleziona (e attiva "Gioca"), secondo tocco gioca.
         compose.onAllNodes(isSelectable()).onFirst().performClick()
         compose.waitForIdle()
+        compose.onNodeWithTag(PlayButtonTag).assertIsEnabled()
         compose.onAllNodes(isSelectable()).onFirst().performClick()
         compose.waitForIdle()
 
