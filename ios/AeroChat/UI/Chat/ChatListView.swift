@@ -70,6 +70,33 @@ struct ChatListView: View {
     @State private var conversationToDelete: ConversationRecord?
     @State private var actionError: String?
 
+    /// Avatar (profilo) e Pass/Pro affiancati nella barra in alto a sinistra.
+    private var profileAndPassButtons: some View {
+        HStack(spacing: 10) {
+            Button {
+                Haptics.tap()
+                showProfile = true
+            } label: {
+                AvatarView(imageData: environment.avatarImage, colorHex: environment.avatarColorHex, size: 34)
+            }
+            .accessibilityLabel("Impostazioni e profilo")
+            Button {
+                showPaywall = true
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: environment.isPro ? "ticket.fill" : "ticket")
+                    Text(environment.isPro ? "Pro" : "Pass")
+                        .font(.body.weight(.medium))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(environment.isPro ? AeroTheme.accentEmerald : AeroTheme.accentCyan)
+                .padding(.vertical, 6)
+            }
+            .accessibilityLabel(environment.isPro ? "Pro" : "Pass")
+        }
+        .buttonStyle(.haptic)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -82,25 +109,21 @@ struct ChatListView: View {
             }
             .navigationTitle("AeroChat")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        Haptics.tap()
-                        showProfile = true
-                    } label: {
-                        AvatarView(imageData: environment.avatarImage, colorHex: environment.avatarColorHex, size: 34)
-                            // Margine dentro la capsula della barra: avatar e Pass non stanno piu' schiacciati.
-                            .padding(.horizontal, 6)
+                // Avatar + Pass/Pro in un'unica capsula di vetro disegnata da noi: la capsula condivisa
+                // della barra veniva dimensionata sulle sole icone e tagliava "Pro"/"Pass".
+                if #available(iOS 26.0, *) {
+                    ToolbarItem(placement: .topBarLeading) {
+                        profileAndPassButtons
+                            .padding(.leading, 5)
+                            .padding(.trailing, 14)
+                            .padding(.vertical, 5)
+                            .fixedSize()
+                            .glassEffect(.regular.interactive(), in: .capsule)
                     }
-                    .accessibilityLabel("Impostazioni e profilo")
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showPaywall = true
-                    } label: {
-                        Label(environment.isPro ? String(localized: "Pro") : String(localized: "Pass"), systemImage: environment.isPro ? "ticket.fill" : "ticket")
-                            .labelStyle(.titleAndIcon)
-                            .foregroundStyle(environment.isPro ? AeroTheme.accentEmerald : AeroTheme.accentCyan)
-                            .toolbarLabel()
+                    .sharedBackgroundVisibility(.hidden)
+                } else {
+                    ToolbarItem(placement: .topBarLeading) {
+                        profileAndPassButtons.fixedSize()
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
