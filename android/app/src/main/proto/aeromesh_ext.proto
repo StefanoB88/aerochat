@@ -171,3 +171,9 @@ message MessageRevision {
   string new_text = 3;       // solo EDIT, 1..4000 caratteri dopo trim
   int64 revised_at_ms = 4;   // istante della modifica (Unix ms)
 }
+
+// "Sta scrivendo" (TYPING, release 1.2): diretto o di gruppo, ttl 2, niente coda/ACK/DB/notifiche.
+// `true` ripetuto al massimo ogni 4 s mentre si scrive; il ricevente lo fa scadere 6 s dopo l'ultimo `true`.
+message TypingIndicator {
+  bool is_typing = 1;
+}

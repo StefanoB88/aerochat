@@ -50,10 +50,18 @@ final class ConversationViewModel {
 
     private let environment: AppEnvironment
     private var tasks: [Task<Void, Never>] = []
+    /// "Sta scrivendo" verso gli altri partecipanti (solo 1-a-1 e gruppi).
+    @ObservationIgnored private var typingSender: TypingSender?
 
     init(conversation: ConversationRecord, environment: AppEnvironment) {
         self.conversation = conversation
         self.environment = environment
+        typingSender = TypingSender { [weak self] isTyping in
+            guard let self else { return }
+            let conversation = self.conversation
+            let environment = self.environment
+            Task { await environment.sendTyping(isTyping, in: conversation) }
+        }
         // Limite dei 120 s: la nota registrata parte comunque, come con il tap su "ferma".
         recorder.onAutoStop = { [weak self] recording in
             self?.sendVoiceNote(recording)
@@ -122,6 +130,7 @@ final class ConversationViewModel {
     }
 
     func stop() {
+        typingSender?.stop()
         if NotificationPresence.visibleConversationID == conversation.id {
             NotificationPresence.visibleConversationID = nil
         }
@@ -138,6 +147,27 @@ final class ConversationViewModel {
         await environment.markConversationRead(conversation)
     }
 
+    // MARK: Sta scrivendo
+
+    /// Chi sta scrivendo in questa chat (dagli altri partecipanti), per l'intestazione.
+    var typingText: String? {
+        TypingStore.headerText(for: environment.typing.typers(in: conversation.id), isGroup: isGroup)
+    }
+
+    /// Testo della barra cambiato: "sta scrivendo" agli altri (non durante la modifica di un messaggio).
+    func draftChanged() {
+        guard editingMessage == nil, MeshRouterActor.allowsTyping(in: conversation) else {
+            typingSender?.stop()
+            return
+        }
+        typingSender?.textChanged(draft)
+    }
+
+    /// App in background: niente "sta scrivendo" rimasto acceso.
+    func stopTyping() {
+        typingSender?.stop()
+    }
+
     // MARK: Invio
 
     func sendText() {
@@ -152,6 +182,7 @@ final class ConversationViewModel {
             return
         }
         draft = ""
+        typingSender?.stop()
         Task {
             do {
                 try await router.sendText(text, in: conversation)
@@ -198,6 +229,15 @@ final class ConversationViewModel {
                 errorMessage = AppEnvironment.revisionFailureText(error, isDelete: false)
             }
         }
+    }
+
+    /// Conferma "Elimina per tutti" presentata dalla bolla del messaggio scelto.
+    func deleteConfirmationBinding(for message: MessageRecord) -> Binding<Bool> {
+        Binding(get: { [weak self] in self?.deleteTarget?.msgID == message.msgID },
+                set: { [weak self] presented in
+                    guard let self, !presented, self.deleteTarget?.msgID == message.msgID else { return }
+                    self.deleteTarget = nil
+                })
     }
 
     func deleteForEveryone(_ message: MessageRecord) {
@@ -599,8 +639,17 @@ private struct ConversationContent: View {
                                     .foregroundStyle(AeroTheme.textSecondary)
                             }
                         }
-                        RadioStatusView(reachability: viewModel.reachability)
+                        if let typing = viewModel.typingText {
+                            Text(typing)
+                                .font(.caption.italic())
+                                .foregroundStyle(AeroTheme.accentCyan)
+                                .lineLimit(1)
+                                .transition(.opacity)
+                        } else {
+                            RadioStatusView(reachability: viewModel.reachability)
+                        }
                     }
+                    .animation(.easeInOut(duration: 0.2), value: viewModel.typingText)
                 }
                 // Gruppo: il nome apre i partecipanti (gesto, non Button: niente capsula di vetro sul titolo).
                 .contentShape(Rectangle())
@@ -640,6 +689,10 @@ private struct ConversationContent: View {
         .onChange(of: scenePhase) { _, phase in
             // Sblocco / ritorno in primo piano con la chat aperta: ora i messaggi sono davvero letti.
             if phase == .active { Task { await viewModel.markReadIfVisible() } }
+            if phase == .background { viewModel.stopTyping() }
+        }
+        .onChange(of: viewModel.draft) { _, _ in
+            viewModel.draftChanged()
         }
         .fullScreenCover(isPresented: $viewModel.showCamera) {
             CameraPicker { data in viewModel.sendCapturedPhoto(data) }
@@ -662,16 +715,6 @@ private struct ConversationContent: View {
         }
         .sheet(isPresented: $viewModel.showScoponePicker) {
             ScoponePlayerPicker(members: viewModel.groupMembers) { viewModel.inviteScopone(players: $0) }
-        }
-        .confirmationDialog("Eliminare il messaggio per tutti?",
-                            isPresented: Binding(get: { viewModel.deleteTarget != nil },
-                                                 set: { if !$0 { viewModel.deleteTarget = nil } }),
-                            titleVisibility: .visible,
-                            presenting: viewModel.deleteTarget) { message in
-            Button("Elimina per tutti", role: .destructive) { viewModel.deleteForEveryone(message) }
-            Button("Annulla", role: .cancel) {}
-        } message: { _ in
-            Text("Il messaggio sparirà anche dai dispositivi degli altri partecipanti.")
         }
         .sheet(isPresented: $viewModel.showPaywall) { PaywallView() }
         .sheet(item: $viewModel.reportTarget) { message in
@@ -771,6 +814,15 @@ private struct MessageListView: View {
                                         Label("Blocca \(message.senderNickname ?? viewModel.conversation.title)", systemImage: "hand.raised.fill")
                                     }
                                 }
+                            }
+                            // Conferma agganciata alla bolla: su iOS 26 il popover parte dal messaggio.
+                            .confirmationDialog("Eliminare il messaggio per tutti?",
+                                                isPresented: viewModel.deleteConfirmationBinding(for: message),
+                                                titleVisibility: .visible) {
+                                Button("Elimina per tutti", role: .destructive) { viewModel.deleteForEveryone(message) }
+                                Button("Annulla", role: .cancel) {}
+                            } message: {
+                                Text("Il messaggio sparirà anche dai dispositivi degli altri partecipanti.")
                             }
                     }
                     ForEach(viewModel.pendingPhotos, id: \.self) { id in

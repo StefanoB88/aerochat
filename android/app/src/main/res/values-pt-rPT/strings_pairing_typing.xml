@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release 1.2: chat dopo il QR (PAIR_HELLO) e "sta scrivendo" (TYPING). -->
+<resources>
+    <string name="typing_label">a escrever…</string>
+    <string name="typing_label_named">%1$s está a escrever…</string>
+    <plurals name="typing_label_many">
+        <item quantity="one">%d pessoa está a escrever…</item>
+        <item quantity="many">%d pessoas estão a escrever…</item>
+        <item quantity="other">%d pessoas estão a escrever…</item>
+    </plurals>
+    <string name="pairing_new_contact">Novo contacto</string>
+    <string name="pairing_no_messages">Sem mensagens</string>
+    <string name="pairing_peer_added">%1$s leu o seu código: conversa pronta</string>
+</resources>

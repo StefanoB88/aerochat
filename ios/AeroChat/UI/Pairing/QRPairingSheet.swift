@@ -137,12 +137,18 @@ struct QRPairingSheet: View {
         }
     }
 
+    /// Un token di abbinamento (`pt`) per ogni presentazione della scheda: resta lo stesso finche' e'
+    /// aperta (QR e link d'invito), cosi' chi scansiona puo' farci comparire la chat con il PAIR_HELLO.
     private func loadPayload() async {
+        guard payload == nil else { return }
+        var base: PairingPayload?
         if let group, let router = environment.router {
-            payload = await router.groupInvitePayload(for: group)
+            base = await router.groupInvitePayload(for: group)
         } else if let keys = environment.identityKeys {
-            payload = PairingPayload(identity: keys, nickname: environment.nickname)
+            base = PairingPayload(identity: keys, nickname: environment.nickname)
         }
+        guard let base else { return }
+        payload = base.withPairingToken(await environment.issuePairingToken())
     }
 
     private func handle(code: String) async {

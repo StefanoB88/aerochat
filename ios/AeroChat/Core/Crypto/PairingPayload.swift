@@ -6,6 +6,9 @@ import Foundation
 /// `aeromesh://v1?x=<base64url_x25519_32B>&e=<base64url_ed25519_32B>&n=<url_encoded_nick>&g=<optional_group_uuid>&gk=<optional_base64url_group_key>&gt=<optional_url_encoded_group_title>`
 ///
 /// `gt` e' opzionale e retrocompatibile: chi non lo conosce lo ignora e riceve il titolo dal Group Key Gossip.
+/// `pt` (release 1.2) e' il token di abbinamento (16 byte, base64url senza padding): chi scansiona manda un
+/// `PAIR_HELLO` cifrato con una chiave derivata dal token, cosi' anche chi ha mostrato il QR vede la chat.
+/// I parametri sconosciuti vengono ignorati.
 struct PairingPayload: Sendable, Equatable {
 
     enum Failure: Error, Equatable {
@@ -22,12 +25,14 @@ struct PairingPayload: Sendable, Equatable {
     let groupSecretKey: Data?
     /// Nome del gruppo di viaggio, cosi' chi scansiona lo vede subito (senza attendere il gossip).
     let groupTitle: String?
+    /// Token di abbinamento (`pt`, 16 byte) del QR mostrato: abilita il `PAIR_HELLO`.
+    let pairingToken: Data?
 
     /// Lunghezza massima del titolo nel QR (resta leggibile dalla fotocamera).
     static let maxGroupTitleLength = 64
 
     init(x25519PublicKeyRaw: Data, ed25519PublicKeyRaw: Data, nickname: String, groupID: UUID? = nil, groupSecretKey: Data? = nil,
-         groupTitle: String? = nil) {
+         groupTitle: String? = nil, pairingToken: Data? = nil) {
         self.x25519PublicKeyRaw = x25519PublicKeyRaw
         self.ed25519PublicKeyRaw = ed25519PublicKeyRaw
         self.nickname = nickname
@@ -35,16 +40,28 @@ struct PairingPayload: Sendable, Equatable {
         self.groupSecretKey = groupSecretKey
         let trimmedTitle = groupTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.groupTitle = trimmedTitle.flatMap { $0.isEmpty ? nil : String($0.prefix(Self.maxGroupTitleLength)) }
+        self.pairingToken = pairingToken.flatMap { $0.count == Self.pairingTokenLength ? $0 : nil }
     }
 
+    /// Lunghezza del token di abbinamento (`pt`).
+    static let pairingTokenLength = 16
+
     /// Payload personale a partire dall'identita' locale.
-    init(identity: IdentityKeys, nickname: String, groupID: UUID? = nil, groupSecretKey: Data? = nil, groupTitle: String? = nil) {
+    init(identity: IdentityKeys, nickname: String, groupID: UUID? = nil, groupSecretKey: Data? = nil, groupTitle: String? = nil,
+         pairingToken: Data? = nil) {
         self.init(x25519PublicKeyRaw: identity.x25519PublicKeyRaw,
                   ed25519PublicKeyRaw: identity.ed25519PublicKeyRaw,
                   nickname: nickname,
                   groupID: groupID,
                   groupSecretKey: groupSecretKey,
-                  groupTitle: groupTitle)
+                  groupTitle: groupTitle,
+                  pairingToken: pairingToken)
+    }
+
+    /// Stesso QR con un altro token di abbinamento (generato a ogni presentazione della scheda).
+    func withPairingToken(_ token: Data?) -> PairingPayload {
+        PairingPayload(x25519PublicKeyRaw: x25519PublicKeyRaw, ed25519PublicKeyRaw: ed25519PublicKeyRaw, nickname: nickname,
+                       groupID: groupID, groupSecretKey: groupSecretKey, groupTitle: groupTitle, pairingToken: token)
     }
 
     /// `node_id` derivato dalla chiave X25519 contenuta nel QR.
@@ -77,6 +94,9 @@ struct PairingPayload: Sendable, Equatable {
         }
         if let groupTitle {
             items.append(("gt", groupTitle.addingPercentEncoding(withAllowedCharacters: Self.nicknameAllowed) ?? ""))
+        }
+        if let pairingToken {
+            items.append(("pt", pairingToken.base64URLEncodedString()))
         }
         let query = items.map { "\($0.0)=\($0.1)" }.joined(separator: "&")
         return "\(MeshProtocol.qrScheme)://\(MeshProtocol.qrVersion)?\(query)"
@@ -128,7 +148,10 @@ struct PairingPayload: Sendable, Equatable {
         // Titolo facoltativo: se non decodificabile si ignora (il gossip lo correggera').
         let groupTitle = fields["gt"].flatMap { $0.replacingOccurrences(of: "+", with: " ").removingPercentEncoding }
 
+        // Token facoltativo: se malformato si ignora (il pairing funziona come prima, senza PAIR_HELLO).
+        let pairingToken = fields["pt"].flatMap { Data(base64URLEncoded: $0) }.flatMap { $0.count == Self.pairingTokenLength ? $0 : nil }
+
         self.init(x25519PublicKeyRaw: x, ed25519PublicKeyRaw: e, nickname: nickname, groupID: groupID, groupSecretKey: groupSecretKey,
-                  groupTitle: groupTitle)
+                  groupTitle: groupTitle, pairingToken: pairingToken)
     }
 }

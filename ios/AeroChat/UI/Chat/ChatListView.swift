@@ -170,15 +170,6 @@ struct ChatListView: View {
         .sheet(isPresented: $showNewGroup) { NewGroupSheet() }
         .sheet(isPresented: $showPaywall) { PaywallView() }
         .sheet(isPresented: $showProfile) { SettingsView() }
-        .confirmationDialog("Eliminare la chat?",
-                            isPresented: Binding(get: { conversationToDelete != nil }, set: { if !$0 { conversationToDelete = nil } }),
-                            titleVisibility: .visible,
-                            presenting: conversationToDelete) { conversation in
-            Button("Elimina chat", role: .destructive) { delete(conversation) }
-            Button("Annulla", role: .cancel) {}
-        } message: { _ in
-            Text("Messaggi e media verranno cancellati da questo iPhone.")
-        }
         .alert("Ops", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -207,6 +198,15 @@ struct ChatListView: View {
                     pinButton(conversation)
                     deleteButton(conversation)
                 }
+                // Conferma agganciata alla riga: su iOS 26 il popover parte dalla chat da eliminare.
+                .confirmationDialog("Eliminare la chat?",
+                                    isPresented: deleteConfirmationBinding(for: conversation),
+                                    titleVisibility: .visible) {
+                    Button("Elimina chat", role: .destructive) { delete(conversation) }
+                    Button("Annulla", role: .cancel) {}
+                } message: {
+                    Text("Messaggi e media verranno cancellati da questo iPhone.")
+                }
             }
         }
         .listStyle(.plain)
@@ -215,6 +215,13 @@ struct ChatListView: View {
         // pulsante personalizzato che si prendeva il tocco: la List non riconosceva piu' lo swipe delle
         // celle. Qui torna lo stile di sistema (celle native, swipe come Mail, evidenziazione al tocco).
         .buttonStyle(.automatic)
+    }
+
+    private func deleteConfirmationBinding(for conversation: ConversationRecord) -> Binding<Bool> {
+        Binding(get: { conversationToDelete?.id == conversation.id },
+                set: { presented in
+                    if !presented, conversationToDelete?.id == conversation.id { conversationToDelete = nil }
+                })
     }
 
     private func pinButton(_ conversation: ConversationRecord) -> some View {
@@ -282,7 +289,14 @@ struct ChatListView: View {
                     }
                 }
                 HStack {
-                    RadioStatusView(reachability: viewModel.reachability[conversation.id] ?? .outOfRange, compact: true)
+                    if environment.typing.isAnyoneTyping(in: conversation.id) {
+                        Text("sta scrivendo…")
+                            .font(.subheadline.italic())
+                            .foregroundStyle(AeroTheme.accentCyan)
+                            .lineLimit(1)
+                    } else {
+                        RadioStatusView(reachability: viewModel.reachability[conversation.id] ?? .outOfRange, compact: true)
+                    }
                     Spacer()
                     if conversation.isPinned {
                         Image(systemName: "pin.fill")

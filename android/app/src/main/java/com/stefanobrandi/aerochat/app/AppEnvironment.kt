@@ -54,6 +54,7 @@ import com.stefanobrandi.aerochat.ui.components.Haptics
 import com.stefanobrandi.aerochat.ui.onboarding.OnboardingView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -317,6 +318,23 @@ class AppEnvironment(
         val profile = localProfile
         if (router != null && profile != null) {
             router.setProfile(profile, announce = true)
+        }
+    }
+
+    /**
+     * "Sta scrivendo" (`TYPING`) verso la chat, senza attendere la radio. Avviato senza dispatch: l'ordine
+     * delle chiamate (true / false) arriva intatto al router, anche se la schermata della chat sta chiudendo.
+     */
+    fun sendTyping(isTyping: Boolean, conversation: ConversationRecord) {
+        val router = _router.value ?: return
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                router.sendTyping(isTyping, conversation = conversation)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Indicatore effimero: un errore radio non interessa a nessuno.
+            }
         }
     }
 
@@ -820,6 +838,8 @@ class AppEnvironment(
                 refreshLiveStatus()
             }
             is RouterEvent.RelayQueueChanged -> _relayQueueCount.value = event.count
+            // Qualcuno ha scansionato il nostro QR: la chat compare da sola nella lista (DB osservato).
+            is RouterEvent.PeerPaired -> Unit
             // Cancellato per tutti dal mittente: via il file della foto / nota vocale.
             is RouterEvent.MessageRevised -> {
                 removeMedia(event.deletedMediaPath)

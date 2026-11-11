@@ -44,6 +44,9 @@ import androidx.compose.ui.unit.dp
 import com.stefanobrandi.aerochat.R
 import com.stefanobrandi.aerochat.app.LocalAppEnvironment
 import com.stefanobrandi.aerochat.core.crypto.PairingPayload
+import com.stefanobrandi.aerochat.core.mesh.RouterEvent
+import com.stefanobrandi.aerochat.core.protocol.base64URLDecoded
+import com.stefanobrandi.aerochat.core.protocol.base64URLEncodedString
 import com.stefanobrandi.aerochat.core.qr.QRCodeGenerator
 import com.stefanobrandi.aerochat.core.qr.QRScannerError
 import com.stefanobrandi.aerochat.core.qr.QRScannerView
@@ -88,15 +91,39 @@ fun QRPairingSheet(
     var status by remember { mutableStateOf<String?>(null) }
     var isBusy by remember { mutableStateOf(false) }
 
+    // Token di abbinamento `pt`: uno per presentazione della scheda, stabile finche' resta aperta (anche
+    // ruotando lo schermo). Salvato prima di mostrare il QR, cosi' il PAIR_HELLO di chi scansiona si apre.
+    var pairingToken by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(group?.id) {
         val router = environment.router.value
         val keys = environment.identityKeys.value
-        payload = if (group != null && router != null) {
+        val base = if (group != null && router != null) {
             router.groupInvitePayload(group)
         } else if (keys != null) {
             PairingPayload(keys, environment.nickname)
         } else {
             null
+        }
+        val token = pairingToken?.base64URLDecoded() ?: try {
+            (router?.issuePairingToken() ?: environment.database.value?.pairingTokens?.issue())
+                ?.also { pairingToken = it.base64URLEncodedString() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Senza token il QR funziona come prima (nessun PAIR_HELLO).
+            null
+        }
+        payload = base?.withPairingToken(token)
+    }
+
+    // Mentre il QR e' mostrato: chi lo scansiona si presenta (PAIR_HELLO) e la sua chat e' gia' pronta.
+    LaunchedEffect(Unit) {
+        val router = environment.router.value ?: return@LaunchedEffect
+        router.events().collect { event ->
+            if (event is RouterEvent.PeerPaired) {
+                Haptics.success()
+                status = context.getString(R.string.pairing_peer_added, event.nickname)
+            }
         }
     }
 

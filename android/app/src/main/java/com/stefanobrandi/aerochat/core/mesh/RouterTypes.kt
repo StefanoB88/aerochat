@@ -4,6 +4,7 @@ import com.stefanobrandi.aerochat.core.emergency.EmergencyAlert
 import com.stefanobrandi.aerochat.core.protocol.toHex
 import com.stefanobrandi.aerochat.core.transport.RadioState
 import com.stefanobrandi.aerochat.data.records.ConversationRecord
+import com.stefanobrandi.aerochat.data.records.ConversationType
 import com.stefanobrandi.aerochat.data.records.MessageRecord
 import com.stefanobrandi.aerochat.data.records.PeerRecord
 import com.stefanobrandi.aerochat.proto.CallAudio
@@ -89,6 +90,9 @@ sealed interface RouterEvent {
     }
 
     data class RelayQueueChanged(val count: Int) : RouterEvent
+
+    /** Qualcuno ha scansionato il nostro QR (`PAIR_HELLO` verificato): la sua chat 1-a-1 e' pronta. */
+    data class PeerPaired(val conversationID: String, val nickname: String) : RouterEvent
     data class GroupMembersChanged(val conversationID: String) : RouterEvent
 
     /**
@@ -171,6 +175,11 @@ sealed class RouterError(message: String) : Exception(message) {
         private fun readResolve(): Any = LinkNotAllowedInLounge
     }
 
+    /** `PAIR_HELLO` che non si apre con nessuno dei nostri token validi (sconosciuto o scaduto). */
+    data object UnknownPairingToken : RouterError("unknown pairing token") {
+        private fun readResolve(): Any = UnknownPairingToken
+    }
+
     /** Modifica/cancellazione non consentita: non e' nostro, fuori dai 15 minuti, gia' cancellato o tipo errato. */
     data object RevisionNotAllowed : RouterError("revision not allowed") {
         private fun readResolve(): Any = RevisionNotAllowed
@@ -195,16 +204,23 @@ class NoopNotifier : MeshNotifier {
     override suspend fun notify(message: MessageRecord, conversation: ConversationRecord) {}
 }
 
+/** "Sta scrivendo" solo in chat 1-a-1 e gruppi: mai nella Cabina Pubblica ne' nella Cabina del volo. */
+val ConversationRecord.supportsTypingIndicator: Boolean
+    get() = type == ConversationType.direct || (type == ConversationType.group && !isFlightLounge)
+
 /** Pacchetti testuali/di controllo che possono attendere in `relay_queue` (Delay-Tolerant Networking). */
 val PacketType.isStoreAndForwardEligible: Boolean
     get() = when (this) {
         // L'emergenza deve arrivare anche a chi passa di li' piu' tardi.
         PacketType.CHAT_TEXT, PacketType.DELIVERY_ACK, PacketType.READ_RECEIPT, PacketType.GROUP_KEY_GOSSIP,
-        PacketType.PRO_PASS_GRANT, PacketType.GAME_MOVE, PacketType.EMERGENCY, PacketType.MESSAGE_REVISION -> true
+        PacketType.PRO_PASS_GRANT, PacketType.GAME_MOVE, PacketType.EMERGENCY, PacketType.MESSAGE_REVISION,
+        // Chi ha scansionato il QR si presenta anche se chi l'ha mostrato e' momentaneamente lontano.
+        PacketType.PAIR_HELLO -> true
         // Il profilo viene ripetuto a ogni nuovo link: non serve tenerlo in coda.
         // Le chiamate e il quiz hanno senso solo in tempo reale: niente coda.
         PacketType.PUBLIC_LOUNGE, PacketType.MEDIA_HEADER, PacketType.MEDIA_CHUNK, PacketType.PROFILE_UPDATE,
-        PacketType.CALL_SIGNAL, PacketType.CALL_AUDIO, PacketType.QUIZ, PacketType.UNRECOGNIZED -> false
+        // "Sta scrivendo" ha senso solo in quel momento.
+        PacketType.CALL_SIGNAL, PacketType.CALL_AUDIO, PacketType.QUIZ, PacketType.TYPING, PacketType.UNRECOGNIZED -> false
     }
 
 val PacketType.isMedia: Boolean

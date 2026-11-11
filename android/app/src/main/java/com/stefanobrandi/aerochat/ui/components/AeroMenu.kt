@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -37,6 +38,8 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -63,6 +66,12 @@ data class AeroMenuItem(
     val onClick: () -> Unit,
 )
 
+/**
+ * Intestazione facoltativa di [AeroDropdownMenu] (titolo in grassetto + testo esplicativo), per le conferme
+ * ancorate all'elemento interessato (come `confirmationDialog` su iOS 26, che parte dalla riga / dalla bolla).
+ */
+data class AeroMenuHeader(val title: String, val message: String? = null)
+
 /** Distanza tra il bordo del pulsante e il menu. */
 private val MenuGap = 4.dp
 
@@ -77,6 +86,9 @@ private val ShadowPad = 4.dp
 /** Altezza di una riga (come `DropdownMenuItem`) e padding verticale del contenitore: servono a stimare l'altezza. */
 private val RowHeight = 48.dp
 private val ContainerPadding = 8.dp
+/** Stima dell'altezza dell'intestazione (titolo + 2 righe di testo + separatore). */
+private val HeaderHeight = 88.dp
+private val HeaderMaxWidth = 280.dp
 
 /** Stato non osservato: legge posizione del pulsante e direzione senza ricomporre a ogni scroll. */
 private class AeroMenuAnchor {
@@ -100,6 +112,7 @@ fun BoxScope.AeroDropdownMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     items: List<AeroMenuItem>,
+    header: AeroMenuHeader? = null,
 ) {
     val anchor = remember { AeroMenuAnchor() }
     // Legge i limiti del contenitore (= il pulsante) senza stato osservato: onPlaced non scatta a ogni frame di scroll.
@@ -121,7 +134,10 @@ fun BoxScope.AeroDropdownMenu(
     if (expanded && bounds != null) {
         val dividers = items.count { it.dividerBefore }
         val estimated = with(density) {
-            (RowHeight * items.size + ContainerPadding * 2 + (ContainerPadding * 2 + 1.dp) * dividers).toPx()
+            (
+                RowHeight * items.size + ContainerPadding * 2 + (ContainerPadding * 2 + 1.dp) * dividers +
+                    (if (header != null) HeaderHeight else 0.dp)
+                ).toPx()
         }
         val spaceBelow = frame.bottom - bounds.bottom - gapPx - marginPx
         val spaceAbove = bounds.top - frame.top - gapPx - marginPx
@@ -139,7 +155,8 @@ fun BoxScope.AeroDropdownMenu(
     val maxHeight = with(density) { maxHeightPx.coerceAtLeast(RowHeight.toPx()).toDp() }
 
     // Verso l'alto la prima voce finisce in fondo, vicino al pulsante; il separatore resta tra la stessa coppia.
-    val rows: List<Pair<AeroMenuItem, Boolean>> = if (opensUp) {
+    // Con un'intestazione (conferma) l'ordine resta quello di lettura: titolo, conferma, "Annulla".
+    val rows: List<Pair<AeroMenuItem, Boolean>> = if (opensUp && header == null) {
         items.indices.reversed().map { i -> items[i] to (items.getOrNull(i + 1)?.dividerBefore == true) }
     } else {
         items.mapIndexed { i, item -> item to (i > 0 && item.dividerBefore) }
@@ -176,6 +193,8 @@ fun BoxScope.AeroDropdownMenu(
                         .verticalScroll(rememberScrollState())
                         .padding(vertical = ContainerPadding),
                 ) {
+                    // L'intestazione resta sempre in cima, qualunque sia la direzione di apertura.
+                    if (header != null) AeroMenuHeaderView(header)
                     for ((item, divider) in rows) {
                         if (divider) {
                             HorizontalDivider(
@@ -189,6 +208,53 @@ fun BoxScope.AeroDropdownMenu(
             }
         }
     }
+}
+
+@Composable
+private fun AeroMenuHeaderView(header: AeroMenuHeader) {
+    Column(
+        Modifier
+            .widthIn(max = HeaderMaxWidth)
+            .padding(horizontal = 16.dp)
+            .padding(top = 6.dp, bottom = 4.dp)
+            .semantics(mergeDescendants = true) { heading() },
+    ) {
+        Text(header.title, style = AeroTheme.headline, color = AeroTheme.textPrimary)
+        header.message?.let {
+            Spacer(Modifier.height(4.dp))
+            Text(it, style = AeroTheme.footnote, color = AeroTheme.textSecondary)
+        }
+    }
+    HorizontalDivider(
+        modifier = Modifier.padding(top = ContainerPadding, bottom = 4.dp),
+        color = AeroTheme.onBackground.copy(alpha = 0.1f),
+    )
+}
+
+/**
+ * Conferma di un'azione distruttiva ancorata all'elemento (riga della lista, bolla): titolo, testo, voce
+ * rossa di conferma e "Annulla". Va dichiarata nel `Box` dell'elemento, come [AeroDropdownMenu].
+ */
+@Composable
+fun BoxScope.AeroConfirmMenu(
+    expanded: Boolean,
+    title: String,
+    message: String?,
+    confirmText: String,
+    cancelText: String,
+    onConfirm: () -> Unit,
+    onDismissRequest: () -> Unit,
+    confirmIcon: ImageVector? = null,
+) {
+    AeroDropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        header = AeroMenuHeader(title, message),
+        items = listOf(
+            AeroMenuItem(confirmText, confirmIcon, destructive = true, onClick = onConfirm),
+            AeroMenuItem(cancelText, onClick = onDismissRequest),
+        ),
+    )
 }
 
 @Composable

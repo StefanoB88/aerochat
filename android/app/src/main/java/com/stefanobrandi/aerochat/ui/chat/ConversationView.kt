@@ -71,6 +71,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -92,6 +94,8 @@ import com.stefanobrandi.aerochat.ui.games.CardTableDialog
 import com.stefanobrandi.aerochat.ui.games.ScoponePlayerPicker
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -106,6 +110,8 @@ import com.stefanobrandi.aerochat.core.mesh.MeshRouterActor
 import com.stefanobrandi.aerochat.core.mesh.NotificationPresence
 import com.stefanobrandi.aerochat.core.mesh.Reachability
 import com.stefanobrandi.aerochat.core.mesh.RouterError
+import com.stefanobrandi.aerochat.core.mesh.TypingSender
+import com.stefanobrandi.aerochat.core.mesh.supportsTypingIndicator
 import com.stefanobrandi.aerochat.core.protocol.toHex
 import com.stefanobrandi.aerochat.data.records.ConversationRecord
 import com.stefanobrandi.aerochat.data.records.ConversationType
@@ -237,6 +243,36 @@ class ConversationViewModel(
     private var suggestionsJob: Job? = null
     private var suggester: SmartReplySuggester? = null
 
+    // MARK: Sta scrivendo
+
+    /** Nickname di chi sta scrivendo ora in questa chat (`TYPING` ricevuto, solo in memoria). */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val typingNames: StateFlow<List<String>> = environment.router
+        .flatMapLatest { router -> router?.typing?.state ?: flowOf(emptyMap()) }
+        .map { state -> state[conversation.id].orEmpty().map { it.nickname } }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Il nostro "sta scrivendo" verso il compagno / il gruppo. */
+    private val typingSender = TypingSender(
+        scope = scope,
+        canSend = { canSendTyping() },
+        send = { isTyping -> environment.sendTyping(isTyping, conversation = _conversation.value) },
+    )
+
+    /** Mai nella Cabina (Pubblica o del volo), in una chat scaduta, verso un bloccato o mentre si modifica. */
+    private fun canSendTyping(): Boolean {
+        val conversation = _conversation.value
+        return conversation.supportsTypingIndicator && !conversation.isExpired() &&
+            _editingMessage.value == null && _peer.value?.isBlocked != true
+    }
+
+    /** Testo modificato dall'utente nella barra di scrittura. */
+    fun onDraftEdited(text: String) {
+        draft.value = text
+        typingSender.textChanged(text)
+    }
+
     private val tasks = mutableListOf<Job>()
 
     init {
@@ -307,6 +343,8 @@ class ConversationViewModel(
      * router), ma non la nota vocale in riproduzione. Riprendono con [start] al ritorno in primo piano.
      */
     fun stopObserving() {
+        // Uscita dalla chat o app in background: non stiamo piu' scrivendo.
+        typingSender.stop()
         if (NotificationPresence.visibleConversationID == _conversation.value.id) {
             NotificationPresence.visibleConversationID = null
         }
@@ -365,6 +403,7 @@ class ConversationViewModel(
             infoMessage.value = context.getString(R.string.chat_lounge_no_links)
             return
         }
+        typingSender.stop()
         draft.value = ""
         scope.launch {
             try {
@@ -387,6 +426,7 @@ class ConversationViewModel(
             return
         }
         if (_editingMessage.value == null) draftBeforeEditing = draft.value
+        typingSender.stop()
         _editingMessage.value = message
         draft.value = message.text ?: ""
     }
@@ -848,6 +888,7 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
     val openedCardTableState by viewModel.openedCardTableState.collectAsStateWithLifecycle()
     val reportTarget by viewModel.reportTarget.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+    val typingNames by viewModel.typingNames.collectAsStateWithLifecycle()
     // Ricomposizione quando cambia lo stato Pro (abilita il pulsante di chiamata).
     LocalAppEnvironment.current.entitlementState.collectAsStateWithLifecycle()
 
@@ -923,7 +964,12 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
                                     )
                                 }
                             }
-                            RadioStatusView(reachability = reachability)
+                            // Al posto dello stato radio: "sta scrivendo…" (gruppo: chi, o quanti).
+                            if (typingNames.isEmpty()) {
+                                RadioStatusView(reachability = reachability)
+                            } else {
+                                TypingLabel(typingLabel(typingNames, isGroup = isGroup))
+                            }
                         }
                     }
                 },
@@ -966,7 +1012,7 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
                 }
                 ComposerBar(
                     text = draft,
-                    onTextChange = { viewModel.draft.value = it },
+                    onTextChange = viewModel::onDraftEdited,
                     isEditing = editingMessage != null,
                     onCancelEditing = viewModel::cancelEditing,
                     recorder = viewModel.recorder,
@@ -1051,6 +1097,31 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
     errorMessage?.let { message ->
         OopsAlert(message = message, onDismiss = { viewModel.errorMessage.value = null })
     }
+}
+
+/**
+ * Testo del "sta scrivendo": 1-a-1 "sta scrivendo…", gruppo "Marco sta scrivendo…", piu' persone
+ * "%d persone stanno scrivendo…".
+ */
+@Composable
+internal fun typingLabel(names: List<String>, isGroup: Boolean): String = when {
+    !isGroup || names.isEmpty() -> stringResource(R.string.typing_label)
+    names.size == 1 -> stringResource(R.string.typing_label_named, names.first())
+    else -> pluralStringResource(R.plurals.typing_label_many, names.size, names.size)
+}
+
+/** "Sta scrivendo…" in corsivo, colore accento (intestazione della chat e riga della lista). */
+@Composable
+internal fun TypingLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        style = AeroTheme.caption,
+        fontStyle = FontStyle.Italic,
+        color = AeroTheme.accentCyan,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
 }
 
 /** Avviso "Ops" con il messaggio d'errore (Swift `.alert("Ops", ...)`). */

@@ -43,6 +43,10 @@ enum RouterEvent: Sendable, Equatable {
     case messageReceived(conversationID: String, msgID: Data)
     case relayQueueChanged(count: Int)
     case groupMembersChanged(conversationID: String)
+    /// "Sta scrivendo" ricevuto (TYPING): mai salvato, solo stato in memoria.
+    case typingChanged(conversationID: String, senderNodeID: Data, nickname: String, isTyping: Bool)
+    /// Un QR con token e' stato scansionato da un nuovo contatto (PAIR_HELLO): la sua chat e' pronta.
+    case pairedByHello(conversationID: String, peerNodeID: Data)
 }
 
 /// Pacchetto decifrato e verificato che il router non gestisce da solo (media, giochi, Pro Pass):
@@ -91,6 +95,8 @@ enum RouterError: Error, Equatable {
     case revisionNotAllowed
     /// Sono passati piu' di 15 minuti dall'invio.
     case revisionWindowExpired
+    /// `PAIR_HELLO` che non si apre con nessuno dei nostri token validi (sconosciuto o scaduto).
+    case pairHelloRejected
 }
 
 /// Consegna notifiche locali a schermo spento. Implementato con `UNUserNotificationCenter`.
@@ -119,10 +125,10 @@ extension PacketType {
     var isStoreAndForwardEligible: Bool {
         switch self {
         // L'emergenza deve arrivare anche a chi passa di li' piu' tardi.
-        case .chatText, .deliveryAck, .readReceipt, .groupKeyGossip, .proPassGrant, .gameMove, .emergency, .messageRevision: return true
+        case .chatText, .deliveryAck, .readReceipt, .groupKeyGossip, .proPassGrant, .gameMove, .emergency, .messageRevision, .pairHello: return true
         // Il profilo viene ripetuto a ogni nuovo link: non serve tenerlo in coda.
-        // Le chiamate e il quiz hanno senso solo in tempo reale: niente coda.
-        case .publicLounge, .mediaHeader, .mediaChunk, .profileUpdate, .callSignal, .callAudio, .quiz, .UNRECOGNIZED: return false
+        // Le chiamate, il quiz e il "sta scrivendo" hanno senso solo in tempo reale: niente coda.
+        case .publicLounge, .mediaHeader, .mediaChunk, .profileUpdate, .callSignal, .callAudio, .quiz, .typing, .UNRECOGNIZED: return false
         }
     }
 

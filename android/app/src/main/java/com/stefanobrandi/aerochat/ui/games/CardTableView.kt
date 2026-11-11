@@ -1,5 +1,24 @@
 package com.stefanobrandi.aerochat.ui.games
 
+import android.app.Activity
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.View
+import android.view.WindowManager
+import androidx.compose.foundation.layout.mandatorySystemGestures
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -116,23 +135,104 @@ fun CardTableDialog(
     statusMessage: String? = null,
     onStatusExpire: () -> Unit = {},
 ) {
-    // Inset letti dalla finestra dell'Activity, non dal Dialog: nella finestra del Dialog arrivano a zero
-    // (o solo dopo il primo layout), e mano e "Gioca" finivano sotto la barra di navigazione, dove i tocchi
-    // li prendono i gesti di sistema: il turno sembrava bloccato finche' non si riapriva il tavolo.
-    val hostInsets = WindowInsets.safeDrawing.asPaddingValues()
+    // Inset del tavolo (Pixel 8a, navigazione a gesti: mano e "Gioca" finivano sulla maniglia di sistema).
+    // `WindowInsets.safeDrawing` letto nella composizione della chat arrivava a zero: e' lo stato Compose
+    // della ComposeView dell'Activity, letto (in modo pigro) dalla finestra del Dialog, e sotto lo Scaffold
+    // della chat (insets consumati) / con la finestra del Dialog in primo piano non veniva aggiornato. Ora:
+    // 1. inset reali della finestra dell'Activity dalle root insets della DecorView (barre di sistema,
+    //    ritaglio del display e gesti obbligatori, cioe' la maniglia in basso);
+    // 2. il massimo con gli inset della finestra del Dialog stesso (safeDrawing + gesti obbligatori);
+    // 3. in basso almeno [TableMinBottomInset], cosi' mano e "Gioca" stanno sempre sopra la maniglia.
+    val hostView = LocalView.current
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val hostInsets = remember(hostView, density, configuration) { activityRootInsets(hostView, density) }
     Dialog(
         onDismissRequest = onDismiss,
-        // Edge-to-edge: il feltro disegna sotto le barre di sistema, il contenuto rispetta `hostInsets`.
+        // Edge-to-edge: il feltro disegna sotto le barre di sistema, il contenuto rispetta gli inset sopra.
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        FullScreenDialogWindow()
+        val layoutDirection = LocalLayoutDirection.current
+        val dialogSafe = WindowInsets.safeDrawing.asPaddingValues()
+        val dialogGestures = WindowInsets.mandatorySystemGestures.asPaddingValues()
+        val contentPadding = tableContentPadding(
+            hostInsets,
+            TableInsets(dialogSafe, layoutDirection),
+            // Dei gesti del Dialog conta solo la maniglia in basso (i bordi laterali del "indietro" no).
+            TableInsets(bottom = dialogGestures.calculateBottomPadding()),
+        )
         // Il panno verde resta scuro anche con il tema chiaro di sistema.
         AeroForcedDark {
             CardTableView(
                 state, onAction, onDismiss, statusMessage = statusMessage, onStatusExpire = onStatusExpire,
-                contentPadding = hostInsets,
+                contentPadding = contentPadding,
             )
         }
     }
+}
+
+/** Spazio minimo sotto mano e "Gioca": sempre sopra la maniglia della navigazione a gesti. */
+internal val TableMinBottomInset = 24.dp
+
+/** Inset del tavolo in dp, in direzione logica (start/end). */
+internal data class TableInsets(val start: Dp = 0.dp, val top: Dp = 0.dp, val end: Dp = 0.dp, val bottom: Dp = 0.dp) {
+    constructor(padding: PaddingValues, layoutDirection: LayoutDirection) : this(
+        start = padding.calculateStartPadding(layoutDirection),
+        top = padding.calculateTopPadding(),
+        end = padding.calculateEndPadding(layoutDirection),
+        bottom = padding.calculateBottomPadding(),
+    )
+}
+
+/** Il massimo, lato per lato, degli inset noti; in basso almeno [minBottom]. */
+internal fun tableContentPadding(vararg insets: TableInsets, minBottom: Dp = TableMinBottomInset): PaddingValues =
+    PaddingValues(
+        start = insets.maxOfOrNull { it.start } ?: 0.dp,
+        top = insets.maxOfOrNull { it.top } ?: 0.dp,
+        end = insets.maxOfOrNull { it.end } ?: 0.dp,
+        bottom = maxOf(minBottom, insets.maxOfOrNull { it.bottom } ?: 0.dp),
+    )
+
+/**
+ * Inset della finestra dell'Activity dalle root insets della DecorView (non consumati da nessuno):
+ * barre di sistema, ritaglio del display e gesti obbligatori (la maniglia in basso), in dp.
+ */
+private fun activityRootInsets(view: View, density: Density): TableInsets {
+    val decorView = view.context.findActivity()?.window?.decorView ?: view.rootView
+    val insets = ViewCompat.getRootWindowInsets(decorView)
+        ?.getInsets(
+            WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or
+                WindowInsetsCompat.Type.mandatorySystemGestures(),
+        ) ?: return TableInsets()
+    val rtl = decorView.layoutDirection == View.LAYOUT_DIRECTION_RTL
+    return with(density) {
+        TableInsets(
+            start = (if (rtl) insets.right else insets.left).toDp(),
+            top = insets.top.toDp(),
+            end = (if (rtl) insets.left else insets.right).toDp(),
+            bottom = insets.bottom.toDp(),
+        )
+    }
+}
+
+/**
+ * La finestra del Dialog occupa tutto lo schermo (anche sotto la barra di navigazione) e non adatta il
+ * contenuto alle barre da sola: il feltro arriva ai bordi, gli inset li applica il tavolo.
+ */
+@Composable
+private fun FullScreenDialogWindow() {
+    val window = (LocalView.current.parent as? DialogWindowProvider)?.window ?: return
+    SideEffect {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 private val feltCenter = Color.hex(0x0B5D3B)

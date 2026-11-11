@@ -36,7 +36,6 @@ import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -86,6 +85,7 @@ import com.stefanobrandi.aerochat.ui.AeroRoutes
 import com.stefanobrandi.aerochat.ui.AeroTheme
 import com.stefanobrandi.aerochat.ui.LocalNavController
 import com.stefanobrandi.aerochat.ui.components.AvatarView
+import com.stefanobrandi.aerochat.ui.components.AeroConfirmMenu
 import com.stefanobrandi.aerochat.ui.components.AeroDropdownMenu
 import com.stefanobrandi.aerochat.ui.components.AeroMenuItem
 import com.stefanobrandi.aerochat.ui.components.Haptics
@@ -110,6 +110,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -130,15 +132,23 @@ class ChatListViewModel {
     /** Per `node_id` (hex). */
     private val _peers = MutableStateFlow(lastPeers)
     val peers: StateFlow<Map<String, PeerRecord>> = _peers.asStateFlow()
+    /** `ConversationRecord.id` delle chat in cui qualcuno sta scrivendo (`TYPING`). */
+    private val _typing = MutableStateFlow<Set<String>>(emptySet())
+    val typing: StateFlow<Set<String>> = _typing.asStateFlow()
+    /** Chat ancora senza messaggi (appena abbinate): anteprima "Nuovo contatto" / "Nessun messaggio". */
+    private val _emptyConversations = MutableStateFlow(lastEmptyConversations)
+    val emptyConversations: StateFlow<Set<String>> = _emptyConversations.asStateFlow()
 
     private companion object {
         // Ultimo stato visto (processo): seme della prossima istanza quando la tab viene ricreata.
         @Volatile var lastConversations: List<ConversationRecord>? = null
         @Volatile var lastReachability: Map<String, Reachability> = emptyMap()
         @Volatile var lastPeers: Map<String, PeerRecord> = emptyMap()
+        @Volatile var lastEmptyConversations: Set<String> = emptySet()
     }
     private val tasks = mutableListOf<Job>()
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun start(environment: AppEnvironment) {
         if (tasks.isNotEmpty()) return
         val database = environment.database.value ?: return
@@ -163,6 +173,20 @@ class ChatListViewModel {
                 if (map != _peers.value) _peers.value = map
                 lastPeers = map
             }
+        }
+        tasks += scope.launch {
+            database.conversations.observeEmptyConversationIDs().collect { ids ->
+                if (ids != _emptyConversations.value) _emptyConversations.value = ids
+                lastEmptyConversations = ids
+            }
+        }
+        tasks += scope.launch {
+            environment.router
+                .flatMapLatest { router -> router?.typing?.state ?: flowOf(emptyMap()) }
+                .collect { state ->
+                    val ids = state.keys.toSet()
+                    if (ids != _typing.value) _typing.value = ids
+                }
         }
         tasks += scope.launch {
             while (isActive) {
@@ -209,6 +233,8 @@ fun ChatListView() {
     val conversations by viewModel.conversations.collectAsStateWithLifecycle()
     val reachability by viewModel.reachability.collectAsStateWithLifecycle()
     val peers by viewModel.peers.collectAsStateWithLifecycle()
+    val typing by viewModel.typing.collectAsStateWithLifecycle()
+    val emptyConversations by viewModel.emptyConversations.collectAsStateWithLifecycle()
 
     var showPairing by remember { mutableStateOf(false) }
     var showStoreQR by remember { mutableStateOf(false) }
@@ -363,12 +389,21 @@ fun ChatListView() {
                             conversation = conversation,
                             reachability = reachability[conversation.id] ?: Reachability.OutOfRange,
                             peer = conversation.peerNodeID?.let { peers[it.toHex()] },
+                            isTyping = typing.contains(conversation.id),
+                            isEmpty = emptyConversations.contains(conversation.id),
                             onOpen = { navController.navigate(AeroRoutes.conversation(conversation.id)) },
                             onTogglePin = { togglePin(conversation) },
                             onDelete = {
                                 Haptics.tap()
                                 conversationToDelete = conversation
                             },
+                            // Conferma ancorata alla riga (non piu' un dialogo al centro dello schermo).
+                            confirmingDelete = conversationToDelete?.id == conversation.id,
+                            onConfirmDelete = {
+                                conversationToDelete = null
+                                delete(conversation)
+                            },
+                            onCancelDelete = { conversationToDelete = null },
                         )
                         HorizontalDivider(color = AeroTheme.surface, modifier = Modifier.padding(start = 74.dp))
                     }
@@ -416,27 +451,6 @@ fun ChatListView() {
         )
     }
 
-    conversationToDelete?.let { conversation ->
-        AlertDialog(
-            onDismissRequest = { conversationToDelete = null },
-            containerColor = AeroTheme.surface,
-            titleContentColor = AeroTheme.textPrimary,
-            textContentColor = AeroTheme.textSecondary,
-            title = { Text(stringResource(R.string.chat_delete_confirm_title)) },
-            text = { Text(stringResource(R.string.chat_delete_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    conversationToDelete = null
-                    delete(conversation)
-                }) { Text(stringResource(R.string.chat_delete_chat), color = Color.Red) }
-            },
-            dismissButton = {
-                TextButton(onClick = { conversationToDelete = null }) {
-                    Text(stringResource(R.string.chat_cancel), color = AeroTheme.accentCyan)
-                }
-            },
-        )
-    }
     actionError?.let { OopsAlert(message = it, onDismiss = { actionError = null }) }
 }
 
@@ -450,9 +464,14 @@ private fun ConversationRow(
     conversation: ConversationRecord,
     reachability: Reachability,
     peer: PeerRecord?,
+    isTyping: Boolean,
+    isEmpty: Boolean,
     onOpen: () -> Unit,
     onTogglePin: () -> Unit,
     onDelete: () -> Unit,
+    confirmingDelete: Boolean,
+    onConfirmDelete: () -> Unit,
+    onCancelDelete: () -> Unit,
 ) {
     val currentTogglePin by rememberUpdatedState(onTogglePin)
     val currentDelete by rememberUpdatedState(onDelete)
@@ -542,8 +561,28 @@ private fun ConversationRow(
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        RadioStatusView(reachability = reachability, compact = true)
-                        Spacer(Modifier.weight(1f))
+                        // Anteprima: "sta scrivendo…" (accento, corsivo) al posto dello stato radio; una chat
+                        // appena abbinata senza messaggi lo dice, invece di sembrare vuota.
+                        if (isTyping) {
+                            TypingLabel(stringResource(R.string.typing_label), Modifier.weight(1f))
+                        } else {
+                            RadioStatusView(reachability = reachability, compact = true)
+                            if (isEmpty) {
+                                Text(
+                                    stringResource(
+                                        if (conversation.type == ConversationType.direct) R.string.pairing_new_contact
+                                        else R.string.pairing_no_messages,
+                                    ),
+                                    style = AeroTheme.caption,
+                                    color = AeroTheme.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            } else {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
                         if (conversation.isPinned) {
                             Icon(
                                 Icons.Filled.PushPin,
@@ -580,6 +619,16 @@ private fun ConversationRow(
                         onDelete()
                     },
                 ),
+            )
+            AeroConfirmMenu(
+                expanded = confirmingDelete,
+                title = stringResource(R.string.chat_delete_confirm_title),
+                message = stringResource(R.string.chat_delete_message),
+                confirmText = stringResource(R.string.chat_delete_chat),
+                cancelText = stringResource(R.string.chat_cancel),
+                confirmIcon = Icons.Filled.Delete,
+                onConfirm = onConfirmDelete,
+                onDismissRequest = onCancelDelete,
             )
         }
     }

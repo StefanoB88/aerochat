@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,9 +29,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Report
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -157,15 +156,6 @@ fun MessageBubble(
             null
         },
     )
-    if (confirmDelete && onDeleteForEveryone != null) {
-        DeleteForEveryoneDialog(
-            onConfirm = {
-                confirmDelete = false
-                onDeleteForEveryone()
-            },
-            onDismiss = { confirmDelete = false },
-        )
-    }
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
@@ -203,6 +193,17 @@ fun MessageBubble(
                     menu = menu,
                 )
                 BubbleFooter(message)
+            }
+            // Conferma di "Elimina per tutti" ancorata alla bolla (non piu' un dialogo al centro dello schermo).
+            if (onDeleteForEveryone != null) {
+                DeleteForEveryoneConfirm(
+                    expanded = confirmDelete,
+                    onConfirm = {
+                        confirmDelete = false
+                        onDeleteForEveryone()
+                    },
+                    onDismiss = { confirmDelete = false },
+                )
             }
             val hops = message.hopCountReceived
             if (hops != null && hops > 1 && !isOutgoing) {
@@ -261,24 +262,18 @@ private fun revisionMenuItems(menu: BubbleMenu, message: MessageRecord, close: (
     )
 }
 
-/** Conferma di "Elimina per tutti". */
+/** Conferma di "Elimina per tutti", ancorata alla bolla. */
 @Composable
-private fun DeleteForEveryoneDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
+private fun BoxScope.DeleteForEveryoneConfirm(expanded: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AeroConfirmMenu(
+        expanded = expanded,
+        title = stringResource(R.string.revisions_delete_confirm_title),
+        message = stringResource(R.string.revisions_delete_confirm_body),
+        confirmText = stringResource(R.string.revisions_delete_for_everyone),
+        cancelText = stringResource(R.string.revisions_cancel),
+        confirmIcon = Icons.Outlined.Delete,
+        onConfirm = onConfirm,
         onDismissRequest = onDismiss,
-        containerColor = AeroTheme.surface,
-        titleContentColor = AeroTheme.textPrimary,
-        textContentColor = AeroTheme.textSecondary,
-        title = { Text(stringResource(R.string.revisions_delete_confirm_title)) },
-        text = { Text(stringResource(R.string.revisions_delete_confirm_body)) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(stringResource(R.string.revisions_delete_for_everyone), color = Color.Red)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.revisions_cancel), color = AeroTheme.accentCyan) }
-        },
     )
 }
 

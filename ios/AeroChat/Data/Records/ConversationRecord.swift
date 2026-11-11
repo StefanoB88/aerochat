@@ -77,7 +77,9 @@ struct ConversationRecord: Codable, Hashable, Sendable, FetchableRecord, Persist
                            proUnlockedUntilMs: nil,
                            createdAtMs: createdAt.unixMilliseconds,
                            expiresAtMs: nil,
-                           lastMessageAtMs: nil,
+                           // Chat appena abbinata (anche senza messaggi) in cima alla lista, ordinata per
+                           // `last_message_at_ms`: NULL finirebbe in fondo.
+                           lastMessageAtMs: createdAt.unixMilliseconds,
                            unreadCount: 0)
     }
 
@@ -92,7 +94,7 @@ struct ConversationRecord: Codable, Hashable, Sendable, FetchableRecord, Persist
                            proUnlockedUntilMs: nil,
                            createdAtMs: createdAt.unixMilliseconds,
                            expiresAtMs: nil,
-                           lastMessageAtMs: nil,
+                           lastMessageAtMs: createdAt.unixMilliseconds,
                            unreadCount: 0)
     }
 

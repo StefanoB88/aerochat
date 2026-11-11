@@ -63,6 +63,7 @@ final class AppDatabase: Sendable {
     var seenPackets: SeenPacketStore { SeenPacketStore(database: self) }
     var relayQueue: RelayQueueStore { RelayQueueStore(database: self) }
     var reports: ReportRepository { ReportRepository(database: self) }
+    var pairingTokens: PairingTokenStore { PairingTokenStore(database: self) }
 
     // MARK: - Diagnostica
 
@@ -93,6 +94,8 @@ final class AppDatabase: Sendable {
             try RelayQueueRecord.filter(RelayQueueRecord.Columns.expiresAtMs <= nowMs).deleteAll(db)
             try MessageRecord.purgeExpiredLoungeMessages(db, nowMs: nowMs)
             try ConversationRecord.purgeExpired(db, nowMs: nowMs)
+            try db.execute(sql: "DELETE FROM pairing_tokens WHERE created_at_ms <= ?",
+                           arguments: [nowMs - PairingTokenStore.lifetimeMs])
         }
     }
 }

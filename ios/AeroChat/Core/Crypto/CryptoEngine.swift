@@ -55,6 +55,18 @@ enum CryptoEngine {
         )
     }
 
+    /// Chiave del `PAIR_HELLO`: `HKDF-SHA256(IKM = token del QR (16 byte), salt "AeroMesh-Salt-v1",
+    /// info "AeroMesh-PairHello-v1", 32 byte)`.
+    static func pairHelloKey(token: Data) throws -> SymmetricKey {
+        guard token.count == PairingPayload.pairingTokenLength else {
+            throw Failure.invalidKeyLength(expected: PairingPayload.pairingTokenLength, actual: token.count)
+        }
+        return HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: token),
+                                      salt: MeshProtocol.hkdfSalt,
+                                      info: MeshProtocol.pairHelloHKDFInfo,
+                                      outputByteCount: MeshProtocol.symmetricKeyLength)
+    }
+
     /// Chiave simmetrica di gruppo da `group_secret_key` (32 byte raw).
     static func groupKey(fromSecret secret: Data) throws -> SymmetricKey {
         guard secret.count == MeshProtocol.symmetricKeyLength else {

@@ -242,6 +242,17 @@ struct CabinLoungeView: View {
                                                 }
                                             }
                                         }
+                                        // Conferma agganciata alla bolla: su iOS 26 il popover parte dal messaggio.
+                                        .confirmationDialog("Eliminare il messaggio per tutti?",
+                                                            isPresented: deleteConfirmationBinding(for: message),
+                                                            titleVisibility: .visible) {
+                                            Button("Elimina per tutti", role: .destructive) {
+                                                viewModel.deleteForEveryone(message, environment: environment)
+                                            }
+                                            Button("Annulla", role: .cancel) {}
+                                        } message: {
+                                            Text("Il messaggio sparirà anche dai dispositivi degli altri partecipanti.")
+                                        }
                                 }
                             }
                             .scrollTargetLayout()
@@ -326,16 +337,6 @@ struct CabinLoungeView: View {
                     .accessibilityLabel("Altre azioni")
                 }
             }
-            .confirmationDialog("Eliminare il messaggio per tutti?",
-                                isPresented: Binding(get: { viewModel.deleteTarget != nil },
-                                                     set: { if !$0 { viewModel.deleteTarget = nil } }),
-                                titleVisibility: .visible,
-                                presenting: viewModel.deleteTarget) { message in
-                Button("Elimina per tutti", role: .destructive) { viewModel.deleteForEveryone(message, environment: environment) }
-                Button("Annulla", role: .cancel) {}
-            } message: { _ in
-                Text("Il messaggio sparirà anche dai dispositivi degli altri partecipanti.")
-            }
             .sheet(isPresented: $showQuiz) { CabinQuizSheet() }
             .sheet(isPresented: $showRadar) { RadarSheet() }
             .sheet(isPresented: $showSummary) { LoungeSummarySheet(messages: viewModel.messages) }
@@ -390,6 +391,14 @@ struct CabinLoungeView: View {
         // Prima del ripristino la posizione e' quella provvisoria del caricamento: non va salvata.
         guard didRestorePosition, let loungeID = viewModel.lounge?.id else { return }
         CabinScrollMemory.save(.init(loungeID: loungeID, topMessageID: isNearBottom ? nil : topVisibleID))
+    }
+
+    /// Conferma "Elimina per tutti" presentata dalla bolla del messaggio scelto.
+    private func deleteConfirmationBinding(for message: MessageRecord) -> Binding<Bool> {
+        Binding(get: { viewModel.deleteTarget?.msgID == message.msgID },
+                set: { presented in
+                    if !presented, viewModel.deleteTarget?.msgID == message.msgID { viewModel.deleteTarget = nil }
+                })
     }
 
     private var header: some View {

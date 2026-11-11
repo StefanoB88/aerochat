@@ -557,6 +557,14 @@ nonisolated struct Aeromesh_V1_MessageRevision: Sendable {
   init() {}
 }
 
+nonisolated struct Aeromesh_V1_TypingIndicator: Sendable {
+  var isTyping: Bool = false
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "aeromesh.v1"
@@ -1180,6 +1188,35 @@ nonisolated extension Aeromesh_V1_MessageRevision: SwiftProtobuf.Message, SwiftP
     if lhs.action != rhs.action {return false}
     if lhs.newText != rhs.newText {return false}
     if lhs.revisedAtMs != rhs.revisedAtMs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_TypingIndicator: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".TypingIndicator"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "is_typing"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.isTyping) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.isTyping != false {
+      try visitor.visitSingularBoolField(value: self.isTyping, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_TypingIndicator, rhs: Aeromesh_V1_TypingIndicator) -> Bool {
+    if lhs.isTyping != rhs.isTyping {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

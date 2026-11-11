@@ -50,6 +50,7 @@ import com.stefanobrandi.aerochat.proto.MessageRevision
 import com.stefanobrandi.aerochat.proto.PacketType
 import com.stefanobrandi.aerochat.proto.ProfileUpdate
 import com.stefanobrandi.aerochat.proto.RevisionAction
+import com.stefanobrandi.aerochat.proto.TypingIndicator
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
@@ -200,6 +201,14 @@ class MeshRouterActor(
      * arrivo (max [MeshProtocol.pendingRevisionCapacity], dimenticate dopo [MeshProtocol.revisionWindow]).
      */
     private val pendingRevisions = LinkedHashMap<String, MutableList<PendingRevision>>()
+    /**
+     * `PAIR_HELLO` inviati e non ancora confermati: `msg_id` (hex) -> `node_id` di chi ha mostrato il QR.
+     * All'ACK il profilo gli viene rimandato (il primo era illeggibile finche' non ci conosceva).
+     */
+    private val pendingPairHellos = HashMap<String, ByteArray>()
+
+    /** "Sta scrivendo" ricevuto (`TYPING`), solo in memoria. */
+    val typing: TypingTracker = TypingTracker(scope)
 
     @Volatile
     private var currentStats = RouterStats()
@@ -461,17 +470,39 @@ class MeshRouterActor(
 
     // MARK: - Pairing e gruppi
 
-    /** Pairing da QR: salva il compagno come fidato, crea la chat 1-a-1 e, se il QR porta un gruppo, vi entra. */
+    /**
+     * Pairing da QR: salva il compagno come fidato, crea la chat 1-a-1 (in cima alla lista) e, se il QR porta
+     * un token `pt`, gli si presenta con un `PAIR_HELLO` (cosi' la chat compare anche da lui); se il QR porta
+     * un gruppo, vi entra (il gossip parte dopo il `PAIR_HELLO`, che gli insegna la nostra chiave).
+     */
     suspend fun pair(with: PairingPayload): ConversationRecord = withContext(actorContext) {
         val peer = database.peers.upsert(PeerRecord(pairing = with, isTrusted = true))
-        val direct = database.conversations.ensureDirectConversation(with = peer)
+        val direct = database.conversations.ensureDirectConversation(with = peer, touchedAtMs = nowUnixMilliseconds)
         refreshTrustedPeers()
+        with.pairingToken?.let { token -> attempt { sendPairHello(to = peer, token = token) } }
         sendProfile(peer)
         if (with.isGroupInvite) {
             return@withContext joinGroup(from = with, inviter = peer)
         }
         direct
     }
+
+    /**
+     * `PAIR_HELLO` verso chi ha mostrato il QR: cifrato con la chiave derivata dal token, con le nostre chiavi
+     * e il nickname dichiarati nel payload. Resta in coda (ritrasmesso) finche' non arriva il `DELIVERY_ACK`.
+     */
+    private suspend fun sendPairHello(to: PeerRecord, token: ByteArray) {
+        val key = CryptoEngine.pairHelloKey(token)
+        val payload = InnerPayloadFactory.signed(identity, nickname)
+        val envelope = EnvelopeBuilder(identity).build(
+            packetType = PacketType.PAIR_HELLO, recipientID = to.nodeID, payload = payload, key = key,
+        )
+        pendingPairHellos[envelope.msgId.toByteArray().toHex()] = to.nodeID
+        dispatch(envelope, storeIfUnreachable = true, retainUntilAck = true)
+    }
+
+    /** Token di abbinamento nuovo per il proprio QR / link d'invito (salvato prima di essere mostrato). */
+    suspend fun issuePairingToken(): ByteArray = withContext(actorContext) { database.pairingTokens.issue() }
 
     /** Crea un gruppo di viaggio locale (noi siamo il primo membro). */
     suspend fun createGroup(title: String): ConversationRecord = withContext(actorContext) {
@@ -578,6 +609,25 @@ class MeshRouterActor(
         // persa bloccava la partita per sempre).
         val reached = dispatch(envelope, storeIfUnreachable = storeIfUnreachable, retainUntilAck = retainUntilAck)
         SendResult(msgID, reached)
+    }
+
+    /**
+     * "Sta scrivendo" (`TYPING`): solo chat 1-a-1 e gruppi (mai Cabina Pubblica ne' Cabina del volo), ttl 2,
+     * niente coda, ACK o DB. Non parte se la chat e' scaduta o il compagno e' bloccato. Ritorna `true` se
+     * almeno un vicino e' stato raggiunto.
+     */
+    suspend fun sendTyping(isTyping: Boolean, conversation: ConversationRecord): Boolean = withContext(actorContext) {
+        if (!isRunning || !conversation.supportsTypingIndicator || conversation.isExpired()) return@withContext false
+        if (conversation.type == ConversationType.direct) {
+            val peerID = conversation.peerNodeID ?: return@withContext false
+            if (blocked.contains(peerID.toHex())) return@withContext false
+        }
+        val indicator = TypingIndicator.newBuilder().setIsTyping(isTyping).build()
+        val payload = InnerPayloadFactory.extra(MeshWire.serialize(indicator), identity = identity, nickname = nickname)
+        val envelope = attempt {
+            makeEnvelope(PacketType.TYPING, payload, conversation, msgID = CryptoEngine.randomMessageID(), ttl = MeshProtocol.typingTTL)
+        } ?: return@withContext false
+        dispatch(envelope, storeIfUnreachable = false)
     }
 
     /** Chiamate: solo sul link diretto, ttl 1, mai flooding ne' coda. Ritorna `false` se il vicino non c'e'. */
@@ -819,6 +869,7 @@ class MeshRouterActor(
         val pending = attempt { database.relayQueue.pending() }
         if (pending.isNullOrEmpty()) return
         val sentIDs = ArrayList<ByteArray>()
+        val sentPairHellos = HashSet<String>()
         for (record in pending) {
             var sent = false
             if (targets.contains(record.recipientID.toHex())) {
@@ -827,14 +878,18 @@ class MeshRouterActor(
             if (!sent) {
                 sent = transport.broadcast(record.rawEnvelopeBytes, excluding = emptySet()) > 0
             }
-            if (sent) sentIDs.add(record.msgID)
+            if (sent) {
+                sentIDs.add(record.msgID)
+                if (isOwnPairHello(record)) sentPairHellos.add(record.msgID.toHex())
+            }
         }
         if (sentIDs.isEmpty()) return
         attempt { database.messages.markSentMesh(msgIDs = sentIDs) }
         // I nostri messaggi restano in coda finche' il destinatario non conferma con l'ACK.
         val awaiting = attempt { database.messages.awaitingAckIDs(among = sentIDs) }
             ?: sentIDs.mapTo(HashSet()) { it.toHex() }
-        val flushed = sentIDs.filter { !awaiting.contains(it.toHex()) }
+        // Anche i nostri PAIR_HELLO restano in coda fino all'ACK (non hanno un messaggio proprio).
+        val flushed = sentIDs.filter { !awaiting.contains(it.toHex()) && !sentPairHellos.contains(it.toHex()) }
         if (flushed.isNotEmpty()) {
             attempt { database.relayQueue.remove(msgIDs = flushed) }
             emitRelayQueueCount()
@@ -861,7 +916,7 @@ class MeshRouterActor(
         val awaiting = attempt { database.messages.awaitingAckIDs(among = candidates.map { it.msgID }) } ?: return@withContext false
         var sentAny = false
         for (record in candidates) {
-            if (!awaiting.contains(record.msgID.toHex())) continue
+            if (!awaiting.contains(record.msgID.toHex()) && !isOwnPairHello(record)) continue
             val sent = if (isGroupRecipient(record.recipientID.toHex())) {
                 transport.broadcast(record.rawEnvelopeBytes, excluding = emptySet()) > 0
             } else {
@@ -870,6 +925,12 @@ class MeshRouterActor(
             if (sent) sentAny = true
         }
         sentAny
+    }
+
+    /** `PAIR_HELLO` partito da noi (in coda fino al `DELIVERY_ACK` di chi ha mostrato il QR). */
+    private fun isOwnPairHello(record: RelayQueueRecord): Boolean {
+        val envelope = attempt { MeshWire.parseEnvelope(record.rawEnvelopeBytes) } ?: return false
+        return envelope.packetType == PacketType.PAIR_HELLO && envelope.senderNodeId.toByteArray().contentEquals(myNodeID)
     }
 
     // MARK: - Ricezione
@@ -907,7 +968,10 @@ class MeshRouterActor(
             return@withContext
         }
         // La cache in memoria puo' aver dimenticato l'id (riavvio, eviction): il DB e' la verita'.
-        if (attempt { database.seenPackets.markSeenIfNew(msgID = msgID) } == false) {
+        // "Sta scrivendo": niente DB (pacchetti frequenti ed effimeri, quelli vecchi vengono scartati comunque).
+        if (envelope.packetType != PacketType.TYPING &&
+            attempt { database.seenPackets.markSeenIfNew(msgID = msgID) } == false
+        ) {
             updateStats { it.copy(duplicates = it.duplicates + 1) }
             return@withContext
         }
@@ -1008,6 +1072,8 @@ class MeshRouterActor(
                 type == PacketType.READ_RECEIPT && target is Target.Me -> handleReadReceipt(envelope)
                 type == PacketType.PROFILE_UPDATE && target is Target.Me -> handleProfileUpdate(envelope)
                 type == PacketType.MESSAGE_REVISION && target !is Target.Other -> handleRevision(envelope, target)
+                type == PacketType.PAIR_HELLO && target is Target.Me -> handlePairHello(envelope, hops, via)
+                type == PacketType.TYPING && (target is Target.Me || target is Target.Group) -> handleTyping(envelope, target)
                 type == PacketType.CALL_SIGNAL && target is Target.Me -> {
                     // Solo dal vicino diretto: con un ponte di mezzo la chiamata non reggerebbe.
                     if (envelope.hopCount != 0) return
@@ -1131,6 +1197,8 @@ class MeshRouterActor(
         if (nickname != sender.nickname) {
             attempt { database.peers.upsert(sender.copy(nickname = nickname), authoritativeNickname = true) }
         }
+        // Il messaggio e' arrivato: il mittente non sta piu' scrivendo.
+        typing.clear(conversation.id, sender.nodeID.toHex())
         if (database.messages.insert(message)) {
             emit(RouterEvent.MessageReceived(conversationID = conversation.id, msgID = message.msgID))
             // Modifica o cancellazione arrivata prima del messaggio: si applica ora (e la notifica la rispetta).
@@ -1160,7 +1228,8 @@ class MeshRouterActor(
     private suspend fun reacknowledgeDuplicate(envelope: MeshEnvelope) {
         val recipientID = envelope.recipientId.toByteArray()
         val type = envelope.packetType
-        if ((type != PacketType.CHAT_TEXT && type != PacketType.GAME_MOVE && type != PacketType.MESSAGE_REVISION) ||
+        if ((type != PacketType.CHAT_TEXT && type != PacketType.GAME_MOVE && type != PacketType.MESSAGE_REVISION &&
+                type != PacketType.PAIR_HELLO) ||
             !(recipientID.contentEquals(myNodeID) || isGroupRecipient(recipientID.toHex()))
         ) return
         val msgID = envelope.msgId.toByteArray()
@@ -1177,6 +1246,7 @@ class MeshRouterActor(
             val stored = attempt { database.messages.fetch(msgID = msgID) } ?: return
             if (stored.isOutgoing || !stored.senderNodeID.contentEquals(senderID)) return
         }
+        // PAIR_HELLO: il mittente e' noto solo se il primo e' stato verificato (token valido), quindi basta il peer.
         // Revisioni: come le mosse, non hanno un messaggio proprio; il duplicato verificato una volta (msg_id
         // gia' visto) da un peer noto viene riconfermato.
         // Mosse di gioco: non hanno un messaggio proprio (lo stato vive nella bolla dell'invito); il
@@ -1190,6 +1260,94 @@ class MeshRouterActor(
         database.messages.advanceDeliveryStatus(to = DeliveryStatus.deliveredAck, msgID = msgID)
         attempt { database.relayQueue.remove(msgID = msgID) }
         resetAckRetryBackoff()
+        // PAIR_HELLO confermato: ora chi ha mostrato il QR ci conosce e puo' leggere il nostro profilo.
+        pendingPairHellos.remove(msgID.toHex())?.let { nodeID ->
+            emitRelayQueueCount()
+            profileSentTo.remove(nodeID.toHex())
+            attempt { database.peers.fetch(nodeID = nodeID) }?.let { sendProfile(it) }
+        }
+    }
+
+    // MARK: - Abbinamento (PAIR_HELLO)
+
+    /**
+     * Qualcuno ha scansionato il nostro QR: il `PAIR_HELLO` si apre con uno dei nostri token validi, la firma
+     * con la chiave Ed25519 dichiarata e il `node_id` con la chiave X25519 dichiarata. Il mittente diventa un
+     * compagno fidato (senza toccare un nickname gia' arrivato con `PROFILE_UPDATE`), la chat 1-a-1 compare in
+     * cima alla lista, gli mandiamo il nostro profilo e l'ACK. Il token non viene consumato.
+     */
+    private suspend fun handlePairHello(envelope: MeshEnvelope, hops: Int, via: LinkID) {
+        val senderID = envelope.senderNodeId.toByteArray()
+        if (senderID.contentEquals(myNodeID)) return
+        val now = nowUnixMilliseconds
+        var payload: InnerPayload? = null
+        for (token in database.pairingTokens.valid(now = now)) {
+            payload = attempt { EnvelopeVerifier.open(envelope, CryptoEngine.pairHelloKey(token)) }
+            if (payload != null) break
+        }
+        // Nessun token valido (sconosciuto o scaduto): scartato.
+        if (payload == null) throw RouterError.UnknownPairingToken
+        // `open` ha gia' verificato la firma con la chiave Ed25519 dichiarata; il node_id deve derivare dalla X25519.
+        if (payload.declaredSenderNodeID?.contentEquals(senderID) != true) throw RouterError.SenderMismatch
+        val ed25519 = payload.senderEd25519Pub.toByteArray()
+        val known = database.peers.fetch(nodeID = senderID)
+        // Stesso node_id con un'altra chiave di firma: non si sostituisce l'identita' di un contatto noto.
+        if (known != null && !known.ed25519Pub.contentEquals(ed25519)) throw RouterError.SenderMismatch
+        if (known?.isBlocked == true) return
+        val declared = PairingPayload.prefixCharacters(
+            PairingPayload.trimWhitespacesAndNewlines(payload.senderNickname), MeshProtocol.maxNicknameLength,
+        )
+        val peer = database.peers.upsert(
+            PeerRecord(
+                nodeID = senderID,
+                x25519Pub = payload.senderX25519Pub.toByteArray(),
+                ed25519Pub = ed25519,
+                nickname = declared.ifEmpty { known?.nickname ?: defaultPassengerNickname },
+                isTrusted = true,
+            ),
+        )
+        val conversation = database.conversations.ensureDirectConversation(with = peer, touchedAtMs = now)
+        markSeenThrottled(peer.nodeID, hopCount = hops, rssi = links[via]?.rssi)
+        refreshTrustedPeers()
+        emit(RouterEvent.PeerPaired(conversationID = conversation.id, nickname = peer.nickname))
+        profileSentTo.remove(peer.nodeID.toHex())
+        sendProfile(peer)
+        sendAck(envelope, peer)
+    }
+
+    // MARK: - Sta scrivendo (TYPING)
+
+    /** "Sta scrivendo" ricevuto (diretto o di gruppo): aggiorna solo lo stato in memoria. */
+    private suspend fun handleTyping(envelope: MeshEnvelope, target: Target) {
+        // Vecchio (coda di un ponte, replay): non ha piu' senso.
+        if (kotlin.math.abs(nowUnixMilliseconds - envelope.createdAtMs) > typingMaxAge) return
+        val payload: InnerPayload
+        val conversationID: String
+        val sender: PeerRecord
+        when (target) {
+            Target.Me -> {
+                val (opened, peer) = openDirect(envelope)
+                // Nessuna chat creata per un "sta scrivendo": vale solo se la chat esiste gia'.
+                val conversation = database.conversations.fetch(id = ConversationRecord.direct(with = peer).id) ?: return
+                if (conversation.isExpired()) return
+                payload = opened
+                conversationID = conversation.id
+                sender = peer
+            }
+            is Target.Group -> {
+                val group = target.conversation
+                if (!group.supportsTypingIndicator || group.isExpired()) return
+                val secret = group.groupSecretKey ?: throw RouterError.MissingGroupKey
+                val (opened, peer) = openShared(envelope, CryptoEngine.groupKey(fromSecret = secret))
+                payload = opened
+                conversationID = group.id
+                sender = peer
+            }
+            else -> return
+        }
+        val indicator = MeshWire.parseTypingIndicator(payload.extraData.toByteArray())
+        val nickname = sender.nickname.ifEmpty { payload.senderNickname.ifEmpty { defaultPassengerNickname } }
+        typing.update(conversationID, sender.nodeID.toHex(), nickname, indicator.isTyping)
     }
 
     // MARK: - Modifica e cancellazione per tutti (MESSAGE_REVISION)
@@ -1485,6 +1643,8 @@ class MeshRouterActor(
         }
         markSeenThrottled(packet.sender.nodeID, hopCount = hops, rssi = null)
         val type = packet.envelope.packetType
+        // Foto o nota vocale in arrivo: il mittente non sta piu' scrivendo.
+        if (type == PacketType.MEDIA_HEADER) typing.clear(packet.conversation.id, packet.sender.nodeID.toHex())
         for ((id, channel) in inboundSubscribers) {
             // I chunk media non devono intasare (e far perdere, DROP_OLDEST) la coda di chi vuole solo le mosse.
             val filter = inboundFilters[id]
@@ -1626,6 +1786,9 @@ class MeshRouterActor(
         const val placeholderGroupTitle = "Gruppo di viaggio"
 
         const val readReceiptBatch = 64
+
+        /** Un `TYPING` piu' vecchio di cosi' (ms) viene ignorato. */
+        const val typingMaxAge = 30_000L
 
         /** Lato massimo (px) di un avatar ricevuto: iOS e Android inviano 128 px, il resto e' malformato. */
         const val maxAvatarSide = 4 * MeshProtocol.avatarPixelSize

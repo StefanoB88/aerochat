@@ -15,6 +15,7 @@ import com.stefanobrandi.aerochat.proto.MessageRevision
 import com.stefanobrandi.aerochat.proto.ProPassGrant
 import com.stefanobrandi.aerochat.proto.ProfileUpdate
 import com.stefanobrandi.aerochat.proto.QuizPacket
+import com.stefanobrandi.aerochat.proto.TypingIndicator
 import com.google.protobuf.ByteString
 import com.google.protobuf.InvalidProtocolBufferException
 
@@ -35,6 +36,10 @@ object MeshWire {
     fun serialize(quiz: QuizPacket): ByteArray = quiz.toByteArray()
     fun serialize(emergency: EmergencyBroadcast): ByteArray = emergency.toByteArray()
     fun serialize(revision: MessageRevision): ByteArray = revision.toByteArray()
+    fun serialize(typing: TypingIndicator): ByteArray = typing.toByteArray()
+
+    @Throws(InvalidProtocolBufferException::class)
+    fun parseTypingIndicator(data: ByteArray): TypingIndicator = TypingIndicator.parseFrom(data)
 
     @Throws(InvalidProtocolBufferException::class)
     fun parseMessageRevision(data: ByteArray): MessageRevision = MessageRevision.parseFrom(data)

@@ -23,6 +23,7 @@ import com.stefanobrandi.aerochat.data.records.ReportReason
  * - `v6_reports` + `v7_flight_lounge` (release 1.1): tabella `reports` (segnalazioni locali) e
  *   `conversations.flight_code` (Cabina del volo) -> Room versione 3
  * - `v8_message_revisions` (release 1.2): `messages.edited_at_ms`, `messages.is_deleted` -> Room versione 4
+ * - token di abbinamento del QR (release 1.2, `PAIR_HELLO`): tabella `pairing_tokens` -> Room versione 5
  *
  * Su Android (installazione nuova) la catena e' collassata nella versione Room 1, che contiene lo
  * schema finale con gli stessi nomi di tabelle, colonne e indici (le entity in `data.records`).
@@ -32,7 +33,7 @@ import com.stefanobrandi.aerochat.data.records.ReportReason
 object AppDatabaseMigrations {
 
     /** Versione Room dello schema corrente. */
-    const val schemaVersion = 4
+    const val schemaVersion = 5
 
     /**
      * 1 -> 2 (iOS `v5_message_reads`): lettori dei nostri messaggi di gruppo. La spunta blu arriva solo
@@ -77,8 +78,21 @@ object AppDatabaseMigrations {
         }
     }
 
+    /**
+     * 4 -> 5 (release 1.2): token di abbinamento `pt` dei propri QR (7 giorni, max 16), per riconoscere
+     * il `PAIR_HELLO` di chi ci ha scansionato.
+     */
+    val MIGRATION_4_5: androidx.room.migration.Migration = object : androidx.room.migration.Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `pairing_tokens` (`token` BLOB NOT NULL, `created_at_ms` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`token`))",
+            )
+        }
+    }
+
     /** Migrazioni Room successive alla versione 1, in ordine. */
-    val all: Array<androidx.room.migration.Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+    val all: Array<androidx.room.migration.Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 
     /**
      * Configurazione della connessione: `synchronous = NORMAL` (con WAL: durabilita' a livello di

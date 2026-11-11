@@ -21,6 +21,8 @@ enum PacketType {
   QUIZ = 12;          // quiz di cabina: recipient = Lounge (8 zeri), chiave della Lounge, mai in coda: extra_data = QuizPacket
   EMERGENCY = 13;     // avviso di emergenza: recipient = Lounge, chiave della Lounge, ttl massimo, in coda: extra_data = EmergencyBroadcast
   MESSAGE_REVISION = 14; // modifica/cancellazione per tutti del proprio messaggio, stessa conversazione dell'originale: extra_data = MessageRevision
+  PAIR_HELLO = 15;    // chi scansiona un QR con `pt` -> chi lo ha mostrato: chiave HKDF(token, "AeroMesh-Salt-v1", "AeroMesh-PairHello-v1"), mittente dichiarato in InnerPayload, in coda fino al DELIVERY_ACK
+  TYPING = 16;        // "sta scrivendo": diretto o gruppo, ttl 2, mai in coda ne' ACK, mai nella Lounge: extra_data = TypingIndicator
 }
 
 message MeshEnvelope {

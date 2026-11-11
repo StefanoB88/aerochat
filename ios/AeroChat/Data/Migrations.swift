@@ -192,6 +192,15 @@ extension AppDatabase {
             }
         }
 
+        // Token di abbinamento del proprio QR (`pt`, release 1.2): chi scansiona manda un PAIR_HELLO
+        // cifrato con una chiave derivata dal token, cosi' la chat compare anche a chi ha mostrato il QR.
+        migrator.registerMigration("v9_pairing_tokens") { db in
+            try db.create(table: "pairing_tokens") { t in
+                t.column("token", .blob).notNull().primaryKey()
+                t.column("created_at_ms", .integer).notNull()
+            }
+        }
+
         return migrator
     }
 }

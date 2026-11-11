@@ -135,6 +135,21 @@ object CryptoEngine {
         return SymmetricKey(fromSecret)
     }
 
+    /**
+     * Chiave di PAIR_HELLO: `HKDF-SHA256(IKM = token del QR (16 byte), salt = "AeroMesh-Salt-v1",
+     * info = "AeroMesh-PairHello-v1", 32 byte)`.
+     */
+    @Throws(Failure::class)
+    fun pairHelloKey(token: ByteArray): SymmetricKey {
+        if (token.size != MeshProtocol.pairingTokenLength) {
+            throw Failure.InvalidKeyLength(MeshProtocol.pairingTokenLength, token.size)
+        }
+        return SymmetricKey(hkdfSHA256(token, MeshProtocol.hkdfSalt, MeshProtocol.pairHelloInfo, MeshProtocol.symmetricKeyLength))
+    }
+
+    /** Token di abbinamento casuale (16 byte) per il parametro `pt` del QR. */
+    fun randomPairingToken(): ByteArray = randomBytes(MeshProtocol.pairingTokenLength)
+
     /** Chiave nota della Lounge Pubblica di Cabina: `SHA256("AeroMesh-Public-Cabin-v1")`. */
     val publicCabinKey: SymmetricKey get() = SymmetricKey(sha256(MeshProtocol.publicCabinLabel))
 

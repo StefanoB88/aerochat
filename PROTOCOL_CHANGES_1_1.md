@@ -110,3 +110,30 @@ Contratto completo in `MESSAGE_REVISIONS_SPEC.md`. In sintesi:
   in un buffer di 64 voci.
 - DB: `messages.edited_at_ms`, `messages.is_deleted` (iOS migrazione `v8_message_revisions`, Android Room v4).
 - Il badge dei non letti (icona app e tab "Chat & Gruppi") esclude la Cabina Pubblica.
+
+## 1.2 — PAIR_HELLO e TYPING
+
+Contratto completo in `PAIRING_TYPING_SPEC.md`. In sintesi:
+- **Token nel QR**: parametro opzionale `pt` = 16 byte casuali in base64url senza padding, nel QR personale,
+  nei QR di invito ai gruppi e nei link `aeromesh://`. Generato a ogni presentazione della scheda e stabile
+  finche' resta aperta; validi 7 giorni, al massimo 16 (i piu' vecchi scartati). Parametri sconosciuti ignorati;
+  senza `pt` il pairing funziona come prima. iOS: tabella `pairing_tokens(token BLOB PK, created_at_ms)`,
+  migrazione `v9_pairing_tokens`.
+- **`PAIR_HELLO = 15`**: da chi scansiona (B) a chi ha mostrato il QR (A), subito dopo il pairing e prima del
+  Group Key Gossip. `recipient_id` = node_id di A, ttl di default, firmato da B. Chiave
+  `HKDF-SHA256(IKM = token, salt "AeroMesh-Salt-v1", info "AeroMesh-PairHello-v1", 32 byte)`; `InnerPayload`
+  con `sender_x25519_pub`, `sender_ed25519_pub`, `sender_nickname`, `extra_data` vuoto. Store-and-forward con
+  `retainUntilAck` fino al `DELIVERY_ACK`, duplicati ri-confermati.
+  A prova ogni token valido; poi verifica firma (Ed25519 dichiarata), `SHA256(sender_x25519_pub)[0..<8] ==
+  sender_node_id`, mittente non bloccato. Se ok: peer fidato (nickname di un PROFILE_UPDATE non sovrascritto),
+  chat 1-a-1 in cima alla lista (`last_message_at_ms` = adesso), PROFILE_UPDATE e `DELIVERY_ACK` a B con la
+  chiave diretta. Nessuna notifica; il token non viene consumato. iOS: all'ACK B rimanda il proprio profilo.
+- **`TYPING = 16`**: `extra_data = TypingIndicator { bool is_typing = 1; }`. Diretto (chiave diretta) o di gruppo
+  (chiave del gruppo, mittente dichiarato), **mai** in Cabina Pubblica ne' Cabina del volo; ttl 2, niente coda,
+  ACK, DB o notifiche. Invio: `true` quando il testo diventa non vuoto, ripetuto al massimo ogni 4 s; `false` a
+  testo vuoto, invio, uscita dalla chat / background o dopo 5 s senza battiture; non in chat scadute/bloccate.
+  Ricezione: stato in memoria per conversazione+mittente, scade 6 s dopo l'ultimo `true`; `false` o un messaggio
+  dello stesso mittente lo azzerano. UI: "sta scrivendo…" / "Marco sta scrivendo…" / "%d persone stanno
+  scrivendo…" nell'intestazione, "sta scrivendo…" (accento, corsivo) nella riga della lista chat.
+- **Conferme ancorate**: "Eliminare la chat?" e "Eliminare il messaggio per tutti?" partono dalla riga / bolla.
+- Le chat nuove (1-a-1 e gruppi) nascono con `last_message_at_ms` = creazione, cosi' compaiono in cima.

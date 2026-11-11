@@ -46,6 +46,8 @@ enum MeshProtocol {
     static let defaultTTL: UInt32 = 5
     static let maxTTL: UInt32 = 7
     static let ackTTL: UInt32 = 5
+    /// `TYPING`: il "sta scrivendo" ha senso solo vicino (un solo ponte).
+    static let typingTTL: UInt32 = 2
 
     /// Oltre questa dimensione il payload **non** viene ritrasmesso multi-hop.
     static let maxRelayPayloadBytes = 16_384
@@ -122,6 +124,8 @@ enum MeshProtocol {
 
     static let hkdfSalt = Data("AeroMesh-Salt-v1".utf8)
     static let hkdfInfo = Data("AeroMesh-Msg-v1".utf8)
+    /// `info` HKDF della chiave del `PAIR_HELLO` (IKM = token `pt` del QR, salt = `hkdfSalt`).
+    static let pairHelloHKDFInfo = Data("AeroMesh-PairHello-v1".utf8)
     static let publicCabinLabel = Data("AeroMesh-Public-Cabin-v1".utf8)
 
     // MARK: - QR Code

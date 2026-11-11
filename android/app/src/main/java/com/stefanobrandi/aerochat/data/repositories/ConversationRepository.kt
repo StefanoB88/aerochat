@@ -16,6 +16,7 @@ import com.stefanobrandi.aerochat.data.records.PeerRecord
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 class ConversationRepository(val database: AppDatabase) {
 
@@ -30,13 +31,29 @@ class ConversationRepository(val database: AppDatabase) {
     /** Lookup usato dal router: `recipient_id` dell'envelope -> conversazione locale. */
     suspend fun fetch(recipientID: ByteArray): ConversationRecord? = dao.fetchByRecipientID(recipientID)
 
-    /** Restituisce (creandola se serve) la chat 1-a-1 con il peer. */
-    suspend fun ensureDirectConversation(with: PeerRecord): ConversationRecord = database.withTransaction {
-        val candidate = ConversationRecord.direct(with = with)
-        dao.fetchOne(candidate.id)?.let { return@withTransaction it }
-        dao.insert(candidate)
-        candidate
-    }
+    /**
+     * Restituisce (creandola se serve) la chat 1-a-1 con il peer.
+     * @param touchedAtMs abbinamento appena avvenuto (QR / `PAIR_HELLO`): `last_message_at_ms` portato a
+     *   quest'istante, cosi' la chat (anche vuota) compare in cima alla lista.
+     */
+    suspend fun ensureDirectConversation(with: PeerRecord, touchedAtMs: Long? = null): ConversationRecord =
+        database.withTransaction {
+            val candidate = ConversationRecord.direct(with = with)
+            dao.fetchOne(candidate.id)?.let { existing ->
+                if (touchedAtMs != null && (existing.lastMessageAtMs ?: Long.MIN_VALUE) < touchedAtMs) {
+                    dao.touch(existing.id, touchedAtMs)
+                    return@withTransaction existing.copy(lastMessageAtMs = touchedAtMs)
+                }
+                return@withTransaction existing
+            }
+            val record = if (touchedAtMs != null) candidate.copy(lastMessageAtMs = touchedAtMs) else candidate
+            dao.insert(record)
+            record
+        }
+
+    /** Chat permanenti senza nemmeno un messaggio (anteprima "Nuovo contatto" nella lista). */
+    fun observeEmptyConversationIDs(): Flow<Set<String>> =
+        dao.observeEmptyConversationIDs().map { it.toSet() }.distinctUntilChanged()
 
     /** Crea un gruppo di viaggio locale con chiave simmetrica nuova (o importata da un QR). */
     suspend fun createGroup(
@@ -213,6 +230,15 @@ interface ConversationDao {
 
     @Query("UPDATE conversations SET is_pinned = :pinned WHERE id = :id")
     suspend fun setPinned(id: String, pinned: Boolean)
+
+    @Query("UPDATE conversations SET last_message_at_ms = :atMs WHERE id = :id")
+    suspend fun touch(id: String, atMs: Long)
+
+    @Query(
+        "SELECT id FROM conversations WHERE type != 'cabin_lounge' AND NOT EXISTS " +
+            "(SELECT 1 FROM messages WHERE messages.conversation_id = conversations.id)",
+    )
+    fun observeEmptyConversationIDs(): Flow<List<String>>
 
     @Query("UPDATE conversations SET title = :title WHERE id = :id")
     suspend fun updateTitle(id: String, title: String)

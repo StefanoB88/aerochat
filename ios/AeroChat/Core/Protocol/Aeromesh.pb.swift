@@ -42,6 +42,8 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
   case quiz // = 12
   case emergency // = 13
   case messageRevision // = 14
+  case pairHello // = 15
+  case typing // = 16
   case UNRECOGNIZED(Int)
 
   init() {
@@ -65,6 +67,8 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
     case 12: self = .quiz
     case 13: self = .emergency
     case 14: self = .messageRevision
+    case 15: self = .pairHello
+    case 16: self = .typing
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -86,6 +90,8 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
     case .quiz: return 12
     case .emergency: return 13
     case .messageRevision: return 14
+    case .pairHello: return 15
+    case .typing: return 16
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -107,6 +113,8 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
     .quiz,
     .emergency,
     .messageRevision,
+    .pairHello,
+    .typing,
   ]
 
 }
@@ -202,6 +210,8 @@ nonisolated extension Aeromesh_V1_PacketType: SwiftProtobuf._ProtoNameProviding 
     12: .same(proto: "QUIZ"),
     13: .same(proto: "EMERGENCY"),
     14: .same(proto: "MESSAGE_REVISION"),
+    15: .same(proto: "PAIR_HELLO"),
+    16: .same(proto: "TYPING"),
   ]
 }
 

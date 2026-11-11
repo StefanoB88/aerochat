@@ -21,6 +21,9 @@ import java.util.UUID
  * `aeromesh://v1?x=<base64url_x25519_32B>&e=<base64url_ed25519_32B>&n=<url_encoded_nick>&g=<optional_group_uuid>&gk=<optional_base64url_group_key>&gt=<optional_url_encoded_group_title>`
  *
  * `gt` e' opzionale e retrocompatibile: chi non lo conosce lo ignora e riceve il titolo dal Group Key Gossip.
+ * `pt` (release 1.2, opzionale): token di abbinamento di 16 byte (base64url senza padding). Chi scansiona
+ * lo usa per presentarsi con un `PAIR_HELLO`, cosi' la chat compare subito anche da chi ha mostrato il QR.
+ * I parametri sconosciuti (e un `pt` malformato) vengono ignorati.
  */
 class PairingPayload(
     x25519PublicKeyRaw: ByteArray,
@@ -29,6 +32,7 @@ class PairingPayload(
     val groupID: UUID? = null,
     groupSecretKey: ByteArray? = null,
     groupTitle: String? = null,
+    pairingToken: ByteArray? = null,
 ) {
 
     sealed class Failure(message: String) : Exception(message) {
@@ -45,10 +49,13 @@ class PairingPayload(
     private val x25519: ByteArray = x25519PublicKeyRaw.copyOf()
     private val ed25519: ByteArray = ed25519PublicKeyRaw.copyOf()
     private val groupKey: ByteArray? = groupSecretKey?.copyOf()
+    private val token: ByteArray? = pairingToken?.takeIf { it.size == MeshProtocol.pairingTokenLength }?.copyOf()
 
     val x25519PublicKeyRaw: ByteArray get() = x25519.copyOf()
     val ed25519PublicKeyRaw: ByteArray get() = ed25519.copyOf()
     val groupSecretKey: ByteArray? get() = groupKey?.copyOf()
+    /** Token di abbinamento `pt` (16 byte), se il QR lo porta. */
+    val pairingToken: ByteArray? get() = token?.copyOf()
 
     /** Nome del gruppo di viaggio, cosi' chi scansiona lo vede subito (senza attendere il gossip). */
     val groupTitle: String? = groupTitle
@@ -62,15 +69,20 @@ class PairingPayload(
         groupID: UUID? = null,
         groupSecretKey: ByteArray? = null,
         groupTitle: String? = null,
-    ) : this(identity.x25519PublicKeyRaw, identity.ed25519PublicKeyRaw, nickname, groupID, groupSecretKey, groupTitle)
+        pairingToken: ByteArray? = null,
+    ) : this(identity.x25519PublicKeyRaw, identity.ed25519PublicKeyRaw, nickname, groupID, groupSecretKey, groupTitle, pairingToken)
 
     /** Parsing di un URI `aeromesh://v1?...` (Swift `init(uriString:)`). Lancia [Failure]. */
     @Throws(Failure::class)
     constructor(uriString: String) : this(parse(uriString))
 
     private constructor(other: PairingPayload) : this(
-        other.x25519, other.ed25519, other.nickname, other.groupID, other.groupKey, other.groupTitle,
+        other.x25519, other.ed25519, other.nickname, other.groupID, other.groupKey, other.groupTitle, other.token,
     )
+
+    /** Stesso QR con un token di abbinamento (nuovo a ogni presentazione del codice). */
+    fun withPairingToken(pairingToken: ByteArray?): PairingPayload =
+        PairingPayload(x25519, ed25519, nickname, groupID, groupKey, groupTitle, pairingToken)
 
     /** `node_id` derivato dalla chiave X25519 contenuta nel QR. */
     val nodeID: ByteArray get() = CryptoEngine.nodeID(forX25519PublicKey = x25519)
@@ -90,6 +102,7 @@ class PairingPayload(
             groupID?.let { items.add("g" to it.toString().lowercase(Locale.ROOT)) }
             groupKey?.let { items.add("gk" to it.base64URLEncodedString()) }
             groupTitle?.let { items.add("gt" to percentEncode(it)) }
+            token?.let { items.add("pt" to it.base64URLEncodedString()) }
             val query = items.joinToString("&") { "${it.first}=${it.second}" }
             return "${MeshProtocol.qrScheme}://${MeshProtocol.qrVersion}?$query"
         }
@@ -110,7 +123,8 @@ class PairingPayload(
             nickname == other.nickname &&
             groupID == other.groupID &&
             (groupKey?.let { k -> other.groupKey?.contentEquals(k) ?: false } ?: (other.groupKey == null)) &&
-            groupTitle == other.groupTitle
+            groupTitle == other.groupTitle &&
+            (token?.let { t -> other.token?.contentEquals(t) ?: false } ?: (other.token == null))
     }
 
     override fun hashCode(): Int {
@@ -120,6 +134,7 @@ class PairingPayload(
         result = 31 * result + (groupID?.hashCode() ?: 0)
         result = 31 * result + (groupKey?.contentHashCode() ?: 0)
         result = 31 * result + (groupTitle?.hashCode() ?: 0)
+        result = 31 * result + (token?.contentHashCode() ?: 0)
         return result
     }
 
@@ -173,7 +188,10 @@ class PairingPayload(
             // Titolo facoltativo: se non decodificabile si ignora (il gossip lo correggera').
             val groupTitle = fields["gt"]?.let { percentDecode(it.replace("+", " ")) }
 
-            return PairingPayload(x, e, nickname, groupID, groupSecretKey, groupTitle)
+            // Token di abbinamento facoltativo: se malformato si ignora (il pairing funziona come in 1.1).
+            val pairingToken = fields["pt"]?.base64URLDecoded()?.takeIf { it.size == MeshProtocol.pairingTokenLength }
+
+            return PairingPayload(x, e, nickname, groupID, groupSecretKey, groupTitle, pairingToken)
         }
 
         // MARK: - Percent encoding compatibile con Foundation

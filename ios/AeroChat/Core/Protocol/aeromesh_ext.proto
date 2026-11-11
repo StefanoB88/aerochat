@@ -169,3 +169,8 @@ message MessageRevision {
   string new_text = 3;       // solo EDIT, 1..4000 caratteri dopo trim
   int64 revised_at_ms = 4;   // istante della modifica (Unix ms)
 }
+
+// "Sta scrivendo" (TYPING): solo 1-a-1 e gruppi, mai in coda, nessun ACK, ttl 2.
+message TypingIndicator {
+  bool is_typing = 1;
+}

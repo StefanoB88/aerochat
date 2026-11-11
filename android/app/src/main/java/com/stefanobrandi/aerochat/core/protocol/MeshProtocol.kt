@@ -107,6 +107,23 @@ object MeshProtocol {
     /** Revisioni arrivate prima del messaggio originale tenute in memoria. */
     const val pendingRevisionCapacity = 64
 
+    // MARK: - Abbinamento (PAIR_HELLO) e "sta scrivendo" (TYPING)
+
+    /** Lunghezza del token di abbinamento `pt` nel QR (byte casuali). */
+    const val pairingTokenLength = 16
+    /** Validita' di un token di abbinamento (ms). */
+    const val pairingTokenLifetime: Long = 7 * 24 * 3_600_000L
+    /** Token di abbinamento validi tenuti al massimo (i piu' vecchi vengono scartati). */
+    const val maxPairingTokens = 16
+    /** ttl dei pacchetti TYPING (diretto e gruppo): ha senso solo vicino. */
+    const val typingTTL: Int = 2
+    /** Il ricevente fa scadere il "sta scrivendo" dopo questo tempo dall'ultimo `true` (ms). */
+    const val typingExpiry: Long = 6_000L
+    /** Il mittente ripete `true` al massimo ogni ... (ms). */
+    const val typingRefreshInterval: Long = 4_000L
+    /** Senza battiture per questo tempo il mittente invia `false` (ms). */
+    const val typingIdleTimeout: Long = 5_000L
+
     /** `recipient_id` della Lounge Pubblica: 8 byte a zero. Restituisce sempre una copia nuova. */
     val loungeRecipientID: ByteArray get() = ByteArray(nodeIDLength)
     /** `sender_node_id` per relay anonimo: 8 byte a zero. Restituisce sempre una copia nuova. */
@@ -126,6 +143,8 @@ object MeshProtocol {
     val hkdfSalt: ByteArray get() = "AeroMesh-Salt-v1".toByteArray(Charsets.UTF_8)
     val hkdfInfo: ByteArray get() = "AeroMesh-Msg-v1".toByteArray(Charsets.UTF_8)
     val publicCabinLabel: ByteArray get() = "AeroMesh-Public-Cabin-v1".toByteArray(Charsets.UTF_8)
+    /** `info` HKDF della chiave di PAIR_HELLO (IKM = token del QR, salt = [hkdfSalt]). */
+    val pairHelloInfo: ByteArray get() = "AeroMesh-PairHello-v1".toByteArray(Charsets.UTF_8)
 
     // MARK: - QR Code
 

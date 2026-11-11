@@ -72,9 +72,12 @@ actor MeshRouterActor {
     private var profileSentTo: Set<Data> = []
     /// Revisioni (`MESSAGE_REVISION`) arrivate prima del messaggio originale: applicate quando arriva.
     private var pendingRevisions: [PendingRevision] = []
-    /// `msg_id` delle nostre revisioni 1-a-1/gruppo ancora senza `DELIVERY_ACK` (non hanno un messaggio
-    /// proprio in `messages`, quindi `awaitingAckIDs` non le vede).
-    private var awaitingRevisionAcks: Set<Data> = []
+    /// `msg_id` delle nostre revisioni 1-a-1/gruppo e dei `PAIR_HELLO` ancora senza `DELIVERY_ACK` (non hanno
+    /// un messaggio proprio in `messages`, quindi `awaitingAckIDs` non li vede).
+    private var awaitingPacketAcks: Set<Data> = []
+    /// `PAIR_HELLO` in attesa di conferma: `msg_id` -> `node_id` di chi ha mostrato il QR. All'ACK gli
+    /// rimandiamo il profilo (quello inviato subito dopo la scansione non poteva ancora decifrarlo).
+    private var pendingHellos: [Data: Data] = [:]
     /// File media da rimuovere quando un messaggio viene cancellato per tutti (impostato dall'app).
     private var mediaStore: MediaStore?
     private(set) var stats = RouterStats()
@@ -304,8 +307,13 @@ actor MeshRouterActor {
     @discardableResult
     func pair(with payload: PairingPayload) async throws -> ConversationRecord {
         let peer = try await database.peers.upsert(PeerRecord(pairing: payload, isTrusted: true))
-        let direct = try await database.conversations.ensureDirectConversation(with: peer)
+        let direct = try await database.conversations.ensureDirectConversation(with: peer, showAtTop: true)
         await refreshTrustedPeers()
+        // QR con token: prima il PAIR_HELLO (cosi' chi ha mostrato il QR ci conosce e vede la chat),
+        // poi profilo e, per gli inviti, il Group Key Gossip che ora sa decifrare.
+        if let token = payload.pairingToken {
+            _ = try? await sendPairHello(token: token, to: peer)
+        }
         await sendProfile(to: peer)
         if payload.isGroupInvite {
             return try await joinGroup(from: payload, inviter: peer)
@@ -452,10 +460,52 @@ actor MeshRouterActor {
         // Come i testi: 1-a-1 e gruppi restano in coda fino all'ACK, la Lounge no.
         let retainUntilAck = conversation.type != .cabinLounge
         if retainUntilAck {
-            awaitingRevisionAcks.insert(msgID)
+            awaitingPacketAcks.insert(msgID)
         }
         _ = await dispatch(envelope, storeIfUnreachable: true, retainUntilAck: retainUntilAck)
         return msgID
+    }
+
+    // MARK: PAIR_HELLO e "sta scrivendo"
+
+    /// `PAIR_HELLO` verso chi ha mostrato il QR: cifrato con la chiave derivata dal token del QR, con le
+    /// nostre chiavi dichiarate nel payload; in coda finche' non arriva il `DELIVERY_ACK`.
+    @discardableResult
+    func sendPairHello(token: Data, to peer: PeerRecord) async throws -> Data {
+        guard isRunning else { throw RouterError.notRunning }
+        let key = try CryptoEngine.pairHelloKey(token: token)
+        let payload = InnerPayload.signed(by: identity, nickname: nickname)
+        let envelope = try EnvelopeBuilder(identity: identity).build(packetType: .pairHello, recipientID: peer.nodeID,
+                                                                     payload: payload, key: key)
+        awaitingPacketAcks.insert(envelope.msgID)
+        pendingHellos[envelope.msgID] = peer.nodeID
+        _ = await dispatch(envelope, storeIfUnreachable: true, retainUntilAck: true)
+        return envelope.msgID
+    }
+
+    /// "Sta scrivendo" (`TYPING`): solo 1-a-1 e gruppi (mai Cabina Pubblica ne' Cabina del volo), ttl 2,
+    /// niente coda ne' ACK. Ritorna `true` se almeno un vicino e' stato raggiunto.
+    @discardableResult
+    func sendTyping(_ isTyping: Bool, in conversation: ConversationRecord, now: Date = Date()) async -> Bool {
+        guard isRunning, Self.allowsTyping(in: conversation, now: now) else { return false }
+        if let peerID = conversation.peerNodeID, blocked.contains(peerID) { return false }
+        var indicator = TypingIndicator()
+        indicator.isTyping = isTyping
+        guard let data = try? MeshWire.serialize(indicator),
+              let envelope = try? await makeEnvelope(type: .typing,
+                                                     payload: InnerPayload.extra(data, identity: identity, nickname: nickname),
+                                                     conversation: conversation, msgID: CryptoEngine.randomMessageID(),
+                                                     ttl: MeshProtocol.typingTTL) else { return false }
+        return await dispatch(envelope, storeIfUnreachable: false)
+    }
+
+    /// Il "sta scrivendo" esiste solo nelle chat 1-a-1 e nei gruppi non scaduti (no Lounge, no Cabina del volo).
+    static func allowsTyping(in conversation: ConversationRecord, now: Date = Date()) -> Bool {
+        switch conversation.type {
+        case .direct: return !conversation.isExpired(now: now)
+        case .group: return conversation.flightCode == nil && !conversation.isExpired(now: now)
+        case .cabinLounge: return false
+        }
     }
 
     /// Invio generico (media, giochi, Pro Pass). Ritorna il `msg_id` e se almeno un vicino e' stato raggiunto.
@@ -686,7 +736,7 @@ actor MeshRouterActor {
         try? await database.messages.markSentMesh(msgIDs: sentIDs)
         // I nostri messaggi restano in coda finche' il destinatario non conferma con l'ACK.
         let awaiting = ((try? await database.messages.awaitingAckIDs(among: sentIDs)) ?? Set(sentIDs))
-            .union(awaitingRevisionAcks.intersection(sentIDs))
+            .union(awaitingPacketAcks.intersection(sentIDs))
         let flushed = sentIDs.filter { !awaiting.contains($0) }
         if !flushed.isEmpty {
             try? await database.relayQueue.remove(msgIDs: flushed)
@@ -704,7 +754,7 @@ actor MeshRouterActor {
         let candidates = pending.filter { neighborIDs.contains($0.recipientID) || isGroupRecipient($0.recipientID) }
         guard !candidates.isEmpty,
               let stored = try? await database.messages.awaitingAckIDs(among: candidates.map(\.msgID)) else { return }
-        let awaiting = stored.union(awaitingRevisionAcks)
+        let awaiting = stored.union(awaitingPacketAcks)
         for record in candidates where awaiting.contains(record.msgID) {
             let isGroup = isGroupRecipient(record.recipientID)
             if isGroup {
@@ -852,6 +902,10 @@ actor MeshRouterActor {
                 // Solo dal vicino diretto: con un ponte di mezzo la chiamata non reggerebbe.
                 guard envelope.hopCount == 0 else { return }
                 try await forwardToSubsystems(envelope, hops: hops, target: target)
+            case (.pairHello, .me):
+                try await handlePairHello(envelope, hops: hops, via: link)
+            case (.typing, .me), (.typing, .group):
+                try await handleTyping(envelope, target: target)
             case (.messageRevision, .me), (.messageRevision, .group), (.messageRevision, .lounge):
                 try await handleRevision(envelope, target: target, hops: hops, via: link)
             case (.mediaHeader, _):
@@ -960,6 +1014,8 @@ actor MeshRouterActor {
         }
         if try await database.messages.insert(message) {
             emit(.messageReceived(conversationID: conversation.id, msgID: message.msgID))
+            // Il messaggio e' arrivato: il suo "sta scrivendo" si spegne subito.
+            emit(.typingChanged(conversationID: conversation.id, senderNodeID: sender.nodeID, nickname: nickname, isTyping: false))
             // Revisione arrivata prima dell'originale: se lo cancella, niente notifica.
             if await applyPendingRevisions(for: message) == .deleted { return }
             if notify {
@@ -978,7 +1034,8 @@ actor MeshRouterActor {
     /// Rimanda l'ACK per un testo gia' consegnato e salvato (mai per pacchetti non verificati),
     /// al massimo una volta ogni `reackThrottle` per non rispondere a ogni copia del flooding.
     private func reacknowledgeDuplicate(_ envelope: MeshEnvelope) async {
-        guard envelope.packetType == .chatText || envelope.packetType == .gameMove || envelope.packetType == .messageRevision,
+        guard envelope.packetType == .chatText || envelope.packetType == .gameMove || envelope.packetType == .messageRevision
+                || envelope.packetType == .pairHello,
               envelope.recipientID == identity.nodeID || isGroupRecipient(envelope.recipientID) else { return }
         let now = Date()
         if let last = lastAckSentAt[envelope.msgID], now.timeIntervalSince(last) < configuration.reackThrottle { return }
@@ -990,7 +1047,7 @@ actor MeshRouterActor {
             guard let stored = try? await database.messages.fetch(msgID: envelope.msgID),
                   !stored.isOutgoing, stored.senderNodeID == envelope.senderNodeID else { return }
         }
-        // Mosse di gioco e revisioni: non hanno un messaggio proprio (lo stato vive nella bolla dell'invito); il
+        // Mosse di gioco, revisioni e PAIR_HELLO: non hanno un messaggio proprio (lo stato vive nella bolla dell'invito); il
         // duplicato di un msg_id gia' visto da un peer noto viene riconfermato cosi' smette di ritrasmettere.
         try? await sendAck(for: envelope, to: peer)
     }
@@ -999,8 +1056,83 @@ actor MeshRouterActor {
         let (payload, _) = try await openDirect(envelope)
         guard let msgID = payload.replyToMessageID else { return }
         try await database.messages.advanceDeliveryStatus(to: .deliveredAck, msgID: msgID)
-        awaitingRevisionAcks.remove(msgID)
+        awaitingPacketAcks.remove(msgID)
         _ = try? await database.relayQueue.remove(msgID: msgID)
+        // PAIR_HELLO confermato: ora chi ha mostrato il QR ci conosce e puo' decifrare il nostro profilo.
+        if let nodeID = pendingHellos.removeValue(forKey: msgID),
+           let peer = try? await database.peers.fetch(nodeID: nodeID) {
+            profileSentTo.remove(nodeID)
+            await sendProfile(to: peer)
+        }
+    }
+
+    // MARK: - PAIR_HELLO ricevuto
+
+    /// Qualcuno ha scansionato il nostro QR: il payload si apre solo con la chiave di uno dei nostri token
+    /// validi; il mittente dichiarato deve firmare l'envelope e il suo `node_id` deve derivare dalla sua
+    /// chiave X25519. Diventa un contatto fidato con la chat 1-a-1 in cima alla lista.
+    private func handlePairHello(_ envelope: MeshEnvelope, hops: Int, via link: LinkID) async throws {
+        let tokens = (try? await database.pairingTokens.validTokens()) ?? []
+        var opened: InnerPayload?
+        for token in tokens {
+            guard let key = try? CryptoEngine.pairHelloKey(token: token) else { continue }
+            // `open` verifica anche la firma con la chiave Ed25519 dichiarata nel payload.
+            if let payload = try? EnvelopeVerifier.open(envelope, key: key) {
+                opened = payload
+                break
+            }
+        }
+        guard let payload = opened else { throw RouterError.pairHelloRejected }
+        guard payload.senderEd25519Pub.count == MeshProtocol.publicKeyLength,
+              payload.declaredSenderNodeID == envelope.senderNodeID,
+              envelope.senderNodeID != identity.nodeID,
+              !blocked.contains(envelope.senderNodeID) else { throw RouterError.senderMismatch }
+        if let known = try await database.peers.fetch(nodeID: envelope.senderNodeID) {
+            guard !known.isBlocked else { return }
+            guard known.ed25519Pub == payload.senderEd25519Pub else { throw RouterError.senderMismatch }
+        }
+        let trimmed = String(payload.senderNickname.trimmingCharacters(in: .whitespacesAndNewlines).prefix(MeshProtocol.maxNicknameLength))
+        let declared = PeerRecord(nodeID: envelope.senderNodeID, x25519Pub: payload.senderX25519Pub,
+                                  ed25519Pub: payload.senderEd25519Pub,
+                                  nickname: trimmed.isEmpty ? String(localized: "Passeggero") : trimmed,
+                                  isTrusted: true)
+        // Upsert non autorevole: un nickname gia' arrivato con PROFILE_UPDATE non viene sovrascritto.
+        let peer = try await database.peers.upsert(declared)
+        let conversation = try await database.conversations.ensureDirectConversation(with: peer, showAtTop: true)
+        await markSeenThrottled(nodeID: peer.nodeID, hopCount: hops, rssi: links[link]?.rssi)
+        await refreshTrustedPeers()
+        emit(.pairedByHello(conversationID: conversation.id, peerNodeID: peer.nodeID))
+        profileSentTo.remove(peer.nodeID)
+        await sendProfile(to: peer)
+        try await sendAck(for: envelope, to: peer)
+    }
+
+    // MARK: - "Sta scrivendo" ricevuto
+
+    /// Stato solo in memoria (nessun DB, nessuna notifica): la UI lo fa scadere dopo 6 s.
+    private func handleTyping(_ envelope: MeshEnvelope, target: Target) async throws {
+        let conversationID: String
+        let senderNodeID: Data
+        let nickname: String
+        let payload: InnerPayload
+        switch target {
+        case .me:
+            let (opened, peer) = try await openDirect(envelope)
+            // Niente chat creata da un "sta scrivendo": serve una conversazione gia' esistente.
+            let candidate = ConversationRecord.direct(with: peer)
+            guard let existing = try await database.conversations.fetch(id: candidate.id),
+                  Self.allowsTyping(in: existing) else { return }
+            (payload, conversationID, senderNodeID, nickname) = (opened, existing.id, peer.nodeID, peer.nickname)
+        case .group(let group):
+            guard Self.allowsTyping(in: group), let secret = group.groupSecretKey else { return }
+            let (opened, sender) = try await openShared(envelope, key: try CryptoEngine.groupKey(fromSecret: secret))
+            (payload, conversationID, senderNodeID, nickname) = (opened, group.id, sender.nodeID, sender.nickname)
+        case .lounge, .other:
+            return
+        }
+        let indicator = try MeshWire.parseTypingIndicator(payload.extraData)
+        emit(.typingChanged(conversationID: conversationID, senderNodeID: senderNodeID, nickname: nickname,
+                            isTyping: indicator.isTyping))
     }
 
     // MARK: - Revisioni ricevute (MESSAGE_REVISION)
@@ -1245,6 +1377,11 @@ actor MeshRouterActor {
             return
         }
         await markSeenThrottled(nodeID: packet.sender.nodeID, hopCount: hops, rssi: nil)
+        // Foto / nota vocale / mossa in arrivo: chi la manda ha smesso di scrivere.
+        if envelope.packetType == .mediaHeader || envelope.packetType == .gameMove, packet.conversation.type != .cabinLounge {
+            emit(.typingChanged(conversationID: packet.conversation.id, senderNodeID: packet.sender.nodeID,
+                                nickname: packet.sender.nickname, isTyping: false))
+        }
         for continuation in inboundSubscribers.values {
             continuation.yield(packet)
         }

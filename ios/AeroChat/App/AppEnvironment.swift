@@ -50,6 +50,8 @@ final class AppEnvironment {
     private(set) var mediaProgress: [Data: Double] = [:]
     /// Non letti delle chat permanenti (Cabina Pubblica esclusa): badge del tab "Chat & Gruppi" e dell'icona.
     private(set) var unreadTotal = 0
+    /// "Sta scrivendo" ricevuti, per conversazione (intestazione della chat e riga della lista).
+    let typing = TypingStore()
 
     private let identityStore: IdentityStore
     private let databaseFactory: @Sendable () throws -> AppDatabase
@@ -387,6 +389,7 @@ final class AppEnvironment {
         entitlements = nil
         router = nil
         neighbors = []
+        typing.removeAll()
     }
 
     // MARK: - Azioni di alto livello
@@ -532,6 +535,21 @@ final class AppEnvironment {
         }
     }
 
+    // MARK: - Token di abbinamento
+
+    /// Nuovo token `pt` per il QR / link d'invito mostrato (7 giorni, max 16); nil se il DB non e' pronto.
+    func issuePairingToken() async -> Data? {
+        try? await database?.pairingTokens.issue()
+    }
+
+    // MARK: - Sta scrivendo
+
+    /// Invia il "sta scrivendo" (mai in Cabina Pubblica / Cabina del volo, ne' in chat scadute o bloccate).
+    func sendTyping(_ isTyping: Bool, in conversation: ConversationRecord) async {
+        guard let router, MeshRouterActor.allowsTyping(in: conversation) else { return }
+        await router.sendTyping(isTyping, in: conversation)
+    }
+
     func setPinned(_ pinned: Bool, conversation: ConversationRecord) async throws {
         try await database?.conversations.setPinned(pinned, conversationID: conversation.id)
     }
@@ -563,6 +581,11 @@ final class AppEnvironment {
             refreshLiveActivity()
         case .relayQueueChanged(let count):
             if count != relayQueueCount { relayQueueCount = count }
+        case .typingChanged(let conversationID, let senderNodeID, let nickname, let isTyping):
+            typing.update(conversationID: conversationID, senderNodeID: senderNodeID, nickname: nickname, isTyping: isTyping)
+        case .pairedByHello:
+            // La nuova chat compare da sola in cima alla lista (osservazione del DB): niente notifica.
+            Haptics.success()
         case .groupMembersChanged(let conversationID):
             // Nuovi membri nel gruppo: se siamo Pro, il pass li raggiunge subito.
             guard isPro, let database, let proPass,

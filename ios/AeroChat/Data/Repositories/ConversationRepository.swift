@@ -29,11 +29,17 @@ struct ConversationRepository: Sendable {
     }
 
     /// Restituisce (creandola se serve) la chat 1-a-1 con il peer.
+    /// - Parameter showAtTop: abbinamento (QR o `PAIR_HELLO`): una chat esistente ma mai usata
+    ///   (`last_message_at_ms` NULL, finirebbe in fondo alla lista) sale in cima.
     @discardableResult
-    func ensureDirectConversation(with peer: PeerRecord) async throws -> ConversationRecord {
+    func ensureDirectConversation(with peer: PeerRecord, showAtTop: Bool = false, now: Date = Date()) async throws -> ConversationRecord {
         try await database.pool.write { db in
-            let candidate = ConversationRecord.direct(with: peer)
-            if let existing = try ConversationRecord.fetchOne(db, key: candidate.id) {
+            let candidate = ConversationRecord.direct(with: peer, createdAt: now)
+            if var existing = try ConversationRecord.fetchOne(db, key: candidate.id) {
+                if showAtTop, existing.lastMessageAtMs == nil {
+                    existing.lastMessageAtMs = now.unixMilliseconds
+                    try existing.update(db, columns: [ConversationRecord.Columns.lastMessageAtMs])
+                }
                 return existing
             }
             try candidate.insert(db)

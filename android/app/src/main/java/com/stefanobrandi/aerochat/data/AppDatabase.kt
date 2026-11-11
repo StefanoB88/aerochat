@@ -6,12 +6,14 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.withTransaction
+import com.stefanobrandi.aerochat.core.protocol.MeshProtocol
 import com.stefanobrandi.aerochat.data.records.ConversationRecord
 import com.stefanobrandi.aerochat.data.records.GroupMemberRecord
 import com.stefanobrandi.aerochat.data.records.IdentityRecord
 import com.stefanobrandi.aerochat.data.records.MessageFtsRecord
 import com.stefanobrandi.aerochat.data.records.MessageReadRecord
 import com.stefanobrandi.aerochat.data.records.MessageRecord
+import com.stefanobrandi.aerochat.data.records.PairingTokenRecord
 import com.stefanobrandi.aerochat.data.records.PeerRecord
 import com.stefanobrandi.aerochat.data.records.RelayQueueRecord
 import com.stefanobrandi.aerochat.data.records.ReportRecord
@@ -23,6 +25,8 @@ import com.stefanobrandi.aerochat.data.repositories.IdentityDao
 import com.stefanobrandi.aerochat.data.repositories.IdentityRepository
 import com.stefanobrandi.aerochat.data.repositories.MessageDao
 import com.stefanobrandi.aerochat.data.repositories.MessageRepository
+import com.stefanobrandi.aerochat.data.repositories.PairingTokenDao
+import com.stefanobrandi.aerochat.data.repositories.PairingTokenStore
 import com.stefanobrandi.aerochat.data.repositories.PeerDao
 import com.stefanobrandi.aerochat.data.repositories.PeerRepository
 import com.stefanobrandi.aerochat.data.repositories.RelayQueueDao
@@ -54,6 +58,7 @@ import kotlinx.coroutines.withContext
         RelayQueueRecord::class,
         MessageReadRecord::class,
         ReportRecord::class,
+        PairingTokenRecord::class,
     ],
     version = AppDatabaseMigrations.schemaVersion,
     exportSchema = true,
@@ -71,6 +76,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun seenPacketDao(): SeenPacketDao
     abstract fun relayQueueDao(): RelayQueueDao
     abstract fun reportDao(): ReportDao
+    abstract fun pairingTokenDao(): PairingTokenDao
 
     // MARK: - Repository
 
@@ -81,6 +87,7 @@ abstract class AppDatabase : RoomDatabase() {
     val seenPackets: SeenPacketStore get() = SeenPacketStore(this)
     val relayQueue: RelayQueueStore get() = RelayQueueStore(this)
     val reports: ReportRepository get() = ReportRepository(this)
+    val pairingTokens: PairingTokenStore get() = PairingTokenStore(this)
 
     /** Percorso del file (diagnostica); `":memory:"` per il DB temporaneo. */
     val path: String
@@ -113,6 +120,7 @@ abstract class AppDatabase : RoomDatabase() {
             relayQueueDao().purgeExpired(now)
             MessageRecord.purgeExpiredLoungeMessages(this, nowMs = now)
             ConversationRecord.purgeExpired(this, nowMs = now)
+            pairingTokenDao().purgeOlderThan(now - MeshProtocol.pairingTokenLifetime)
         }
     }
 

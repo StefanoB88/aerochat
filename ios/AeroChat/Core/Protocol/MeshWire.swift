@@ -23,6 +23,7 @@ typealias EmergencyBroadcast = Aeromesh_V1_EmergencyBroadcast
 typealias EmergencyStatus = Aeromesh_V1_EmergencyStatus
 typealias MessageRevision = Aeromesh_V1_MessageRevision
 typealias RevisionAction = Aeromesh_V1_RevisionAction
+typealias TypingIndicator = Aeromesh_V1_TypingIndicator
 
 /// Punto unico di (de)serializzazione Protobuf, cosi' il resto dell'app (e i test)
 /// non dipendono direttamente dalle API di SwiftProtobuf.
@@ -70,6 +71,14 @@ enum MeshWire {
 
     static func serialize(_ revision: MessageRevision) throws -> Data {
         try revision.serializedBytes()
+    }
+
+    static func serialize(_ typing: TypingIndicator) throws -> Data {
+        try typing.serializedBytes()
+    }
+
+    static func parseTypingIndicator(_ data: Data) throws -> TypingIndicator {
+        try TypingIndicator(serializedBytes: data)
     }
 
     static func parseMessageRevision(_ data: Data) throws -> MessageRevision {

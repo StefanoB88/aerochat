@@ -146,13 +146,46 @@ class DatabaseMigrationTests {
 
         val migrated = AppDatabase.makeFile(context, databaseName)
         try {
-            assertEquals(4, migrated.openHelper.readableDatabase.version)
+            assertEquals(AppDatabaseMigrations.schemaVersion, migrated.openHelper.readableDatabase.version)
             val existing = migrated.messages.fetch(msgID)
             assertEquals("Ciao", existing?.text)
             assertEquals("mai modificato", null, existing?.editedAtMs)
             assertEquals("non cancellato", false, existing?.isDeleted)
             assertTrue(migrated.messages.applyEdit(msgID, newText = "Ciao a tutti", editedAtMs = 10))
             assertEquals(10L, migrated.messages.fetch(msgID)?.editedAtMs)
+        } finally {
+            migrated.close()
+        }
+    }
+
+    @Test
+    fun migrate4To5AddsPairingTokens() = runBlocking {
+        createDatabase(4).use { db ->
+            db.execSQL(
+                "INSERT INTO conversations (id, type, title, recipient_id, created_at_ms, unread_count, is_pinned) " +
+                    "VALUES ('g1', 'group', 'Volo', ?, 1, 0, 0)",
+                arrayOf<Any>(ByteArray(8)),
+            )
+        }
+
+        val migrated = AppDatabase.makeFile(context, databaseName)
+        try {
+            assertEquals(5, migrated.openHelper.readableDatabase.version)
+            assertTrue(migrated.tableNames().contains("pairing_tokens"))
+            assertEquals("i dati esistenti restano", "Volo", migrated.conversations.fetch(id = "g1")?.title)
+            assertEquals(0, migrated.pairingTokens.count())
+
+            // 7 giorni di validita', al massimo 16 token (i piu' vecchi vengono scartati).
+            val now = 1_800_000_000_000L
+            val first = migrated.pairingTokens.issue(now = now - 8 * 24 * 3_600_000L)
+            assertEquals(16, first.size)
+            assertTrue("scaduto", migrated.pairingTokens.valid(now = now).isEmpty())
+            val issued = (0 until 20).map { migrated.pairingTokens.issue(now = now + it) }
+            assertEquals(16, migrated.pairingTokens.count())
+            val valid = migrated.pairingTokens.valid(now = now + 100)
+            assertEquals(16, valid.size)
+            assertTrue("il piu' recente per primo", valid.first().contentEquals(issued.last()))
+            assertTrue("i piu' vecchi scartati", valid.none { it.contentEquals(issued.first()) })
         } finally {
             migrated.close()
         }
