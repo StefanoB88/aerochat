@@ -107,6 +107,13 @@ protocol TransportProvider: Sendable {
     func broadcast(_ frame: Data, excluding: Set<LinkID>) async -> Int
     /// Compagni fidati da tenere in connessione perenne (UUID CoreBluetooth dei loro peripheral).
     func setTrustedPeripheralIdentifiers(_ identifiers: Set<UUID>) async
+    /// Misura continua dell'RSSI dei vicini (radar a schermo). Costa radio e batteria: va spenta appena
+    /// il radar non e' visibile o l'app passa in background.
+    func setProximityRanging(_ enabled: Bool) async
+}
+
+extension TransportProvider {
+    func setProximityRanging(_ enabled: Bool) async {}
 }
 
 /// Wrapper `Sendable` per passare un `CBL2CAPChannel` dalla coda CoreBluetooth all'actor.

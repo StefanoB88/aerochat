@@ -6,7 +6,7 @@ talk to each other over the BLE mesh). Every byte on the wire / in QR codes / in
 
 ## Build
 - `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`
-- Compile: `./gradlew :app:compileDebugKotlin -q` — unit tests: `./gradlew :app:testDebugUnitTest --tests 'com.example.aerochat.<pkg>.*'`
+- Compile: `./gradlew :app:compileDebugKotlin -q` — unit tests: `./gradlew :app:testDebugUnitTest --tests 'com.stefanobrandi.aerochat.<pkg>.*'`
 - Other agents may be editing other packages concurrently. If the build fails **only** because of files
   outside your packages, that is not your problem: note it and continue (re-run later). Never edit files
   owned by another phase unless told to; if you need a tiny API addition there, prefer adding an extension
@@ -18,7 +18,7 @@ talk to each other over the BLE mesh). Every byte on the wire / in QR codes / in
 
 ## Protobuf
 - `app/src/main/proto/aeromesh.proto` and `aeromesh_ext.proto` are copies of the iOS `.proto` files, generated
-  as Java-lite + Kotlin DSL in package `com.example.aerochat.proto` (`MeshEnvelope`, `InnerPayload`,
+  as Java-lite + Kotlin DSL in package `com.stefanobrandi.aerochat.proto` (`MeshEnvelope`, `InnerPayload`,
   `PacketType`, `GroupKeyGossip`, `GroupMember`, `ProPassGrant`, `GameMove`, `GameKind`, `GameAction`,
   `ShotReport`, `ProfileUpdate`, `CallSignal`, `CallAudio`, `CallAction`).
 - **Difference**: `CallAction` values are named `CALL_OFFER`, `CALL_ACCEPT`, `CALL_REJECT`, `CALL_HANGUP`,
@@ -27,7 +27,7 @@ talk to each other over the BLE mesh). Every byte on the wire / in QR codes / in
   `bytes` fields are `com.google.protobuf.ByteString` (`ByteString.copyFrom(ba)`, `.toByteArray()`).
 
 ## Package layout (mirrors the iOS folders)
-Root package `com.example.aerochat`:
+Root package `com.stefanobrandi.aerochat`:
 | iOS folder | Kotlin package |
 |---|---|
 | App/ | `app` |
@@ -42,7 +42,7 @@ Root package `com.example.aerochat`:
 | Core/Transport | `core.transport` |
 | Data, Data/Records, Data/Repositories | `data`, `data.records`, `data.repositories` |
 | UI/... | `ui`, `ui.chat`, `ui.components`, `ui.groups`, `ui.lounge`, `ui.onboarding`, `ui.pairing`, `ui.paywall` |
-| AeroMeshTests | `app/src/test/java/com/example/aerochat/<same package as code under test>` |
+| AeroMeshTests | `app/src/test/java/com/stefanobrandi/aerochat/<same package as code under test>` |
 
 One Kotlin file per Swift file, same base name (`MeshRouterActor.swift` → `MeshRouterActor.kt`).
 

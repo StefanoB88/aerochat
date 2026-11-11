@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.aerochat"
+    namespace = "com.stefanobrandi.aerochat"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.aerochat"
+        applicationId = "com.stefanobrandi.aerochat"
         // API 29: canali L2CAP CoC BLE (BluetoothDevice.createInsecureL2capChannel) ed encoder Opus di MediaCodec.
         minSdk = 29
         targetSdk = 35

@@ -46,10 +46,16 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
     private var scanRefreshTimer: DispatchSourceTimer?
     /// Lettura periodica dell'RSSI dei link aperti (radar di prossimita'): la scansione non la ripete.
     private var rssiTimer: DispatchSourceTimer?
+    /// Il polling RSSI serve solo al radar: attivo solo mentre e' visibile (batteria), vedi `setRSSIPolling`.
+    private var wantsRSSIPolling = false
     /// Tentativi falliti consecutivi per fidato: backoff esponenziale invece di un loop connect/fail.
     private var connectFailures: [UUID: Int] = [:]
     /// Ultimo riavvio della scansione: molti disconnect ravvicinati non devono martellare la radio.
     private var lastScanRestart = Date.distantPast
+    /// Backoff per i dispositivi non fidati il cui handshake fallisce: senza, ogni `restartScan` li
+    /// ririporta subito e la radio resta in un ciclo connect/fail (es. un nodo con GATT rotto).
+    private var retryNotBefore: [UUID: Date] = [:]
+    static let maxTrackedFailures = 128
 
     static let connectTimeout: TimeInterval = 12
     static let handshakeTimeout: TimeInterval = 15
@@ -100,11 +106,25 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
             handshakeTimeouts.removeAll()
             suppressedReconnects.removeAll()
             connectFailures.removeAll()
+            retryNotBefore.removeAll()
             peripherals.removeAll()
             psms.removeAll()
             pendingOpen.removeAll()
             openChannels.removeAll()
             self.manager = nil
+        }
+    }
+
+    /// Polling RSSI dei link aperti ogni `rssiPollInterval`: da accendere solo con il radar a schermo.
+    func setRSSIPolling(_ enabled: Bool) {
+        queue.async { [self] in
+            wantsRSSIPolling = enabled
+            guard enabled, let manager, manager.state == .poweredOn else {
+                stopRSSIPolling()
+                return
+            }
+            pollRSSI()
+            startRSSIPolling()
         }
     }
 
@@ -207,7 +227,7 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
     }
 
     private func startRSSIPolling() {
-        guard rssiTimer == nil else { return }
+        guard wantsRSSIPolling, rssiTimer == nil else { return }
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + Self.rssiPollInterval, repeating: Self.rssiPollInterval, leeway: .seconds(1))
         timer.setEventHandler { [weak self] in self?.pollRSSI() }
@@ -239,6 +259,9 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
             guard !self.openChannels.contains(id), let manager = self.manager,
                   let peripheral = self.peripherals[id] else { return }
             let wasPending = peripheral.state == .connecting
+            // Connessione perenne verso un fidato (es. ripristinata da State Restoration): resta pendente.
+            if wasPending && self.trustedIdentifiers.contains(id) { return }
+            self.recordFailure(for: id)
             manager.cancelPeripheralConnection(peripheral)
             if wasPending {
                 // Una connessione mai riuscita non genera sempre `didDisconnect`: liberiamo lo slot noi.
@@ -252,6 +275,27 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
 
     private func disarmHandshakeTimeout(for id: UUID) {
         handshakeTimeouts.removeValue(forKey: id)?.cancel()
+    }
+
+    /// Handshake fallito verso un non fidato: niente nuovo tentativo da scansione per 2, 4, 8… 60 s.
+    /// (I fidati hanno il loro backoff in `didFailToConnect` e la connessione perenne.)
+    private func recordFailure(for id: UUID) {
+        guard !trustedIdentifiers.contains(id) else { return }
+        let failures = (connectFailures[id] ?? 0) + 1
+        connectFailures[id] = failures
+        let delay = min(Self.maximumReconnectBackoff, pow(2, Double(failures)))
+        retryNotBefore[id] = Date().addingTimeInterval(delay)
+        // Gli UUID degli Android ruotano: la mappa non deve crescere senza fine.
+        if retryNotBefore.count > Self.maxTrackedFailures {
+            let now = Date()
+            retryNotBefore = retryNotBefore.filter { $0.value > now }
+            connectFailures = connectFailures.filter { retryNotBefore[$0.key] != nil || trustedIdentifiers.contains($0.key) }
+        }
+    }
+
+    private func isBackingOff(_ id: UUID) -> Bool {
+        guard let until = retryNotBefore[id] else { return false }
+        return until > Date()
     }
 
     private func connectTrustedPeripherals() {
@@ -328,6 +372,12 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
     /// Peripheral ripristinati gia' connessi ma senza canale L2CAP: rifacciamo l'handshake (con
     /// timeout), altrimenti occuperebbero per sempre uno degli slot di connessione.
     private func resumeRestoredPeripherals() {
+        // Connessioni pendenti ripristinate: senza timeout un non fidato fuori portata occuperebbe uno slot
+        // per sempre (`activeOrPendingLinkCount`); i fidati sono esclusi al momento dello scadere.
+        for peripheral in peripherals.values
+        where peripheral.state == .connecting && handshakeTimeouts[peripheral.identifier] == nil {
+            armHandshakeTimeout(for: peripheral, after: Self.connectTimeout + Self.handshakeTimeout)
+        }
         for peripheral in peripherals.values
         where peripheral.state == .connected && !openChannels.contains(peripheral.identifier) && !pendingOpen.contains(peripheral.identifier) {
             armHandshakeTimeout(for: peripheral, after: Self.handshakeTimeout)
@@ -341,6 +391,7 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
                         rssi RSSI: NSNumber) {
         handler(.discovered(deviceID: peripheral.identifier, rssi: RSSI.intValue))
         guard !suppressedReconnects.contains(peripheral.identifier) else { return }
+        guard trustedIdentifiers.contains(peripheral.identifier) || !isBackingOff(peripheral.identifier) else { return }
         let existing = peripherals[peripheral.identifier]
         guard existing == nil || existing?.state == .disconnected else { return }
         guard activeOrPendingLinkCount < maxConcurrentLinks || trustedIdentifiers.contains(peripheral.identifier) else { return }
@@ -357,6 +408,7 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
         handler(.connectionFailed(deviceID: peripheral.identifier, reason: error?.localizedDescription))
         forget(peripheral)
         let id = peripheral.identifier
+        recordFailure(for: id)
         if trustedIdentifiers.contains(id), !suppressedReconnects.contains(id) {
             // Errori ripetibili (chiavi rimosse, limite connessioni): ritenta con backoff 1, 2, 4… 60 s.
             let failures = (connectFailures[id] ?? 0) + 1
@@ -396,6 +448,7 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard error == nil, let services = peripheral.services else {
+            recordFailure(for: peripheral.identifier)
             manager?.cancelPeripheralConnection(peripheral)
             return
         }
@@ -409,6 +462,7 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         guard error == nil, let characteristics = service.characteristics else {
+            recordFailure(for: peripheral.identifier)
             manager?.cancelPeripheralConnection(peripheral)
             return
         }
@@ -464,11 +518,13 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
         pendingOpen.remove(peripheral.identifier)
         guard let channel, error == nil else {
             // Riproviamo da zero: la disconnessione innesca una nuova discovery alla prossima scansione.
+            recordFailure(for: peripheral.identifier)
             manager?.cancelPeripheralConnection(peripheral)
             return
         }
         openChannels.insert(peripheral.identifier)
         connectFailures.removeValue(forKey: peripheral.identifier)
+        retryNotBefore.removeValue(forKey: peripheral.identifier)
         disarmHandshakeTimeout(for: peripheral.identifier)
         handler(.channelOpened(L2CAPChannelBox(channel: channel), deviceID: peripheral.identifier))
     }

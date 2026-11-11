@@ -50,6 +50,9 @@ actor MeshRouterActor {
     private var eventTask: Task<Void, Never>?
     private var maintenanceTask: Task<Void, Never>?
     private var ackRetryTask: Task<Void, Never>?
+    /// Ultima ritrasmissione dei messaggi senza ACK. Con l'app sospesa in background il timer da 30 s
+    /// non scatta: la ritrasmissione arretrata parte allora al primo frame ricevuto (iOS ci risveglia).
+    private var lastAckRetryAt = Date()
     /// Ultimo `DELIVERY_ACK` inviato per `msg_id`, per non rispondere a ogni duplicato del flooding.
     private var lastAckSentAt: [Data: Date] = [:]
     private var subscribers: [UUID: AsyncStream<RouterEvent>.Continuation] = [:]
@@ -128,6 +131,7 @@ actor MeshRouterActor {
         }
 
         let retryInterval = configuration.ackRetryInterval
+        lastAckRetryAt = Date()
         ackRetryTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(retryInterval))
@@ -150,6 +154,11 @@ actor MeshRouterActor {
         pendingRelays.removeAll()
         await transport.stop()
         links.removeAll()
+    }
+
+    /// Radar di prossimita' visibile (e app in primo piano): accende/spegne il polling RSSI della radio.
+    func setProximityRanging(_ enabled: Bool) async {
+        await transport.setProximityRanging(enabled)
     }
 
     func setNickname(_ nickname: String) {
@@ -626,6 +635,9 @@ actor MeshRouterActor {
             emit(.neighborsChanged(neighbors()))
         case .frameReceived(let data, let from, _):
             await receive(data, from: from)
+            if Date().timeIntervalSince(lastAckRetryAt) >= configuration.ackRetryInterval {
+                await retryUnacknowledged()
+            }
         }
     }
 
@@ -686,6 +698,7 @@ actor MeshRouterActor {
     /// diretti (o gruppi), cosi' la coda non viene ri-inondata a tutta la cabina ogni 30 secondi.
     /// I destinatari lontani vengono ritentati all'apertura di ogni nuovo link (`flushRelayQueue`).
     func retryUnacknowledged() async {
+        lastAckRetryAt = Date()
         guard !links.isEmpty, let pending = try? await database.relayQueue.pending(), !pending.isEmpty else { return }
         let neighborIDs = Set(neighbors().map(\.nodeID))
         let candidates = pending.filter { neighborIDs.contains($0.recipientID) || isGroupRecipient($0.recipientID) }

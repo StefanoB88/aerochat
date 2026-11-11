@@ -166,7 +166,8 @@ struct LaunchFeaturesTests {
 
     @Test func flightLoungeJoinIsIdempotent() async throws {
         let database = try AppDatabase.makeTemporary()
-        let day = ISO8601DateFormatter().date(from: "2026-11-10T20:30:00Z")!
+        // Volo di oggi: con una data fissa la cabina scade e il test fallisce dal giorno dopo.
+        let day = Date()
         let pass = try #require(BoardingPass(flightText: "FR1234", departureDay: day))
         let first = try await database.conversations.joinFlightLounge(pass)
         let second = try await database.conversations.joinFlightLounge(pass)

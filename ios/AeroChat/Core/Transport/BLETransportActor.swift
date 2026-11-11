@@ -44,6 +44,8 @@ actor BLETransportActor: TransportProvider {
     private var central: BLECentralController?
     private var peripheral: BLEPeripheralController?
     private var isStarted = false
+    /// Radar di prossimita' a schermo: solo allora il central legge l'RSSI dei link ogni pochi secondi.
+    private var wantsProximityRanging = false
 
     private var centralState: RadioState = .unknown
     private var peripheralState: RadioState = .unknown
@@ -95,6 +97,7 @@ actor BLETransportActor: TransportProvider {
         peripheral = peripheralController
         centralController.start()
         peripheralController.start()
+        centralController.setRSSIPolling(wantsProximityRanging)
     }
 
     func stop() {
@@ -148,6 +151,11 @@ actor BLETransportActor: TransportProvider {
 
     func setScanning(_ enabled: Bool) {
         central?.setScanning(enabled)
+    }
+
+    func setProximityRanging(_ enabled: Bool) {
+        wantsProximityRanging = enabled
+        central?.setRSSIPolling(enabled)
     }
 
     func setAdvertising(_ enabled: Bool) {

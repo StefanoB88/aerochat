@@ -60,6 +60,9 @@ final class AppEnvironment {
     /// `bootstrap()` puo' partire sia dall'AppDelegate (rilancio in background via State Restoration)
     /// sia dal `.task` della UI: senza questo flag due chiamate sovrapposte avvierebbero due mesh.
     private var isBootstrapping = false
+    /// Radar di prossimita' a schermo e app in primo piano: solo allora la radio legge l'RSSI ogni 4 s.
+    @ObservationIgnored private var isRadarVisible = false
+    @ObservationIgnored private var isSceneActive = true
 
     init(identityStore: IdentityStore = IdentityStore(),
          databaseFactory: @escaping @Sendable () throws -> AppDatabase = { try AppDatabase.makeShared() },
@@ -208,6 +211,7 @@ final class AppEnvironment {
             }
         })
         await router.start()
+        await router.setProximityRanging(isRadarVisible && isSceneActive)
         radioState = await router.radioState
         neighbors = await router.neighbors()
 
@@ -333,11 +337,27 @@ final class AppEnvironment {
 
     /// Ritorno in primo piano: riprova subito i messaggi in attesa di conferma di consegna.
     func sceneDidBecomeActive() async {
+        isSceneActive = true
+        await updateProximityRanging()
         await router?.flushRelayQueue()
+    }
+
+    /// Il radar e' comparso/scomparso: il polling RSSI (batteria) segue la sua visibilita'.
+    func setRadarVisible(_ visible: Bool) {
+        isRadarVisible = visible
+        // Lo stato viene riletto quando il Task parte: apri/chiudi rapidi convergono sull'ultimo valore.
+        Task { await updateProximityRanging() }
+    }
+
+    private func updateProximityRanging() async {
+        await router?.setProximityRanging(isRadarVisible && isSceneActive)
     }
 
     /// Passaggio in background: il badge dell'icona riparte dal totale reale dei non letti.
     func sceneDidEnterBackground() async {
+        // Il foglio del radar resta "aperto" in background, ma nessuno lo guarda: niente polling RSSI.
+        isSceneActive = false
+        await updateProximityRanging()
         guard let database else { return }
         let total = (try? await database.conversations.totalUnread()) ?? unreadTotal
         unreadTotal = total

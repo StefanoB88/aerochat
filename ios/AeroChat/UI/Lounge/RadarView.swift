@@ -58,6 +58,7 @@ struct RadarSheet: View {
             }
         }
         .onAppear {
+            environment.setRadarVisible(true)
             guard task == nil, let database = environment.database else { return }
             task = Task {
                 for await list in database.peers.observeAll() {
@@ -66,7 +67,10 @@ struct RadarSheet: View {
                 }
             }
         }
-        .onDisappear { task?.cancel(); task = nil }
+        .onDisappear {
+            task?.cancel(); task = nil
+            environment.setRadarVisible(false)
+        }
     }
 
     /// Distanza stimata dall'RSSI (Bluetooth in cabina: molto approssimativa, ma utile a orientarsi).
