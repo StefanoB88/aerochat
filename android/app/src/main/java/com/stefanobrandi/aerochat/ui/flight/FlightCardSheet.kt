@@ -72,7 +72,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -372,7 +371,8 @@ private fun FlightCardContent(stats: FlightStats, nickname: String, modifier: Mo
     }
 }
 
-/** QR `https://aeromesh.app/get` con "Scarica AeroChat" in basso a destra della cartolina. */
+/** QR `https://stefanob88.github.io/aerochatwebsite/get` con "Scarica AeroChat" in basso a destra della cartolina
+ * (l'indirizzo non e' scritto: con il dominio github.io sarebbe troppo lungo per il badge). */
 @Composable
 internal fun StoreQRBadge() {
     val qr = remember { QRCodeGenerator.image(QRCodeGenerator.storeLandingURL, scale = 8)?.asImageBitmap() }
@@ -389,10 +389,6 @@ internal fun StoreQRBadge() {
             )
         }
         Text(stringResource(R.string.growth14_card_download), style = rounded(12f, FontWeight.Bold, AeroColors.Dark.accentCyan))
-        Text(
-            "aeromesh.app/get",
-            style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, color = Color.White.copy(alpha = 0.7f)),
-        )
     }
 }
 

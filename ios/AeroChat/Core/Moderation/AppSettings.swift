@@ -152,11 +152,11 @@ enum TravelMode: String, CaseIterable, Identifiable, Sendable {
 
 /// Riferimenti esterni mostrati nell'app (listino, legale, supporto).
 enum AppLinks {
-    static let website = URL(string: "https://aeromesh.app")!
-    static let privacyPolicy = URL(string: "https://aeromesh.app/privacy")!
-    static let termsOfUse = URL(string: "https://aeromesh.app/terms")!
+    static let website = URL(string: "https://stefanob88.github.io/aerochatwebsite/")!
+    static let privacyPolicy = URL(string: "https://stefanob88.github.io/aerochatwebsite/privacy")!
+    static let termsOfUse = URL(string: "https://stefanob88.github.io/aerochatwebsite/terms")!
     /// EULA standard di Apple, richiesta dalle linee guida per gli acquisti in-app.
     static let appleEULA = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
-    static let supportEmail = "support@aeromesh.app"
-    static let safetyEmail = "safety@aeromesh.app"
+    static let supportEmail = "aerochat.help@gmail.com"
+    static let safetyEmail = "aerochat.help@gmail.com"
 }

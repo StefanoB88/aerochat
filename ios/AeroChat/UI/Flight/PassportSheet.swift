@@ -184,7 +184,8 @@ struct PassportCardContent: View {
     }
 }
 
-/// Fondo delle immagini condivise: QR verso `https://aeromesh.app/get` con la scritta "Scarica AeroChat".
+/// Fondo delle immagini condivise: QR verso `https://stefanob88.github.io/aerochatwebsite/get` con la scritta "Scarica AeroChat"
+/// (l'indirizzo non e' scritto: con il dominio github.io sarebbe troppo lungo per la cartolina).
 struct DownloadQRFooter: View {
 
     var body: some View {
@@ -203,9 +204,6 @@ struct DownloadQRFooter: View {
                 Text("Scarica AeroChat")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                Text(verbatim: "aeromesh.app/get")
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(AeroTheme.accentCyan)
             }
             Spacer(minLength: 0)
         }

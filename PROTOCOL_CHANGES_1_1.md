@@ -79,7 +79,7 @@ group_uuid       = UUID(uuid_bytes) ; recipient_id = SHA256(uuid_bytes)[0..8] (c
 ## 5. Moderazione (comportamento locale, nessun wire)
 
 - Filtro linguaggio in Cabina (`ContentFilter`): rifiuto in invio, mascheramento in ricezione.
-- Segnalazioni salvate in locale (`reports`) e inoltrabili via email a `safety@aeromesh.app`.
+- Segnalazioni salvate in locale (`reports`) e inoltrabili via email a `aerochat.help@gmail.com`.
 - Blocco: niente consegna e **niente relay** dei pacchetti del nodo bloccato.
 - Foto da mittenti non `is_trusted` (mai scansionati via QR) mostrate sfocate finche' toccate.
 

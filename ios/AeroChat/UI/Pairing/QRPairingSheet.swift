@@ -205,6 +205,8 @@ struct StoreQRSheet: View {
                     Text(verbatim: QRCodeGenerator.storeLandingURL)
                         .font(AeroTheme.monospaced())
                         .foregroundStyle(AeroTheme.accentCyan)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
                     // Gia' in volo: su Android l'app si passa senza internet, su iPhone no.
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Già in volo?", systemImage: "airplane")

@@ -24,7 +24,7 @@ The demo companion lives only in the local database; it never uses the radio.
 | Guideline | Where |
 |---|---|
 | 1.2 User-generated content – terms | First open of the **Cabina** tab shows the rules sheet; acceptance is mandatory. Full terms: Settings › Legale. |
-| 1.2 – report & block | Long-press any received message (chat or Cabina) › **Segnala messaggio** / **Blocca**. Blocking is immediate; reports are stored locally and can be forwarded to safety@aeromesh.app. |
+| 1.2 – report & block | Long-press any received message (chat or Cabina) › **Segnala messaggio** / **Blocca**. Blocking is immediate; reports are stored locally and can be forwarded to aerochat.help@gmail.com. |
 | 1.2 – filtering | Profanity is refused on send and masked on receive in the Public Cabin (Settings › Sicurezza toggle). |
 | 1.2 – unsolicited images | Photos from contacts never verified in person stay blurred until tapped (Settings › Sicurezza). |
 | 3.1.1 In-app purchases | Settings › Flight Group Pass, or the "Pass" button in the chat list. Three one-time products: 24 h, 72 h, lifetime. Terms, Privacy and Apple EULA links are on the paywall. |
@@ -60,7 +60,7 @@ None required (no accounts exist).
 - [ ] Encryption: answer "Yes – standard algorithms" and upload the self-classification report (or set the
       compliance code in `ITSEncryptionExportComplianceCode`).
 - [ ] Age rating: 12+ (infrequent/mild user-generated content; unrestricted web access = No).
-- [ ] Host privacy policy and terms at `aeromesh.app/privacy` and `aeromesh.app/terms` (the in-app copies are
+- [ ] Host privacy policy and terms at `stefanob88.github.io/aerochatwebsite/privacy` and `stefanob88.github.io/aerochatwebsite/terms` (the in-app copies are
       in `UI/Settings/LegalView.swift`). Point `AppLinks` to the real domain if it changes.
 - [ ] Verify the Apple Root CA G3 fingerprint pinned in `JWSTransactionVerifier`.
 - [ ] Replace the personal-team bundle identifier (`com.stefanobrandipersonalteam.AeroChat`) with the

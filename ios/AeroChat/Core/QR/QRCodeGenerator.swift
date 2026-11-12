@@ -7,7 +7,7 @@ import UIKit
 enum QRCodeGenerator {
 
     /// Link mostrato al gate finche' c'e' ancora rete: punta alla pagina con i badge degli store.
-    static let storeLandingURL = "https://aeromesh.app/get"
+    static let storeLandingURL = "https://stefanob88.github.io/aerochatwebsite/get"
 
     /// Creare un `CIContext` e' costoso: uno solo per l'app, e i QR gia' generati restano in cache
     /// (la stessa stringa viene richiesta a ogni ridisegno dello sheet).

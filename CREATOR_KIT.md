@@ -1,7 +1,7 @@
 # AeroChat – Kit per creator e influencer
 
 > Versione novembre 2026. Domande, materiali in alta risoluzione o il tuo codice personale:
-> support@aeromesh.app
+> aerochat.help@gmail.com
 
 ## 1. AeroChat in una frase
 
@@ -119,7 +119,7 @@ Consigli:
 - Attiva la modalità aereo **e riaccendi il Bluetooth** davanti alla camera: è la prova più convincente.
 - Mostra l'app su iPhone e Android insieme, se puoi: è un punto di forza.
 - Ricorda di installarla **prima** del viaggio (ed è il momento in cui il tuo pubblico deve scaricarla).
-- Usa il tuo link personale `https://aeromesh.app/get?code=TUOCODICE` e, se te lo diamo, il codice offerta.
+- Usa il tuo link personale `https://stefanob88.github.io/aerochatwebsite/get?code=TUOCODICE` e, se te lo diamo, il codice offerta.
 - Dichiara la collaborazione (#adv / #ad / "Contenuto sponsorizzato", come richiesto da AGCOM e dalle
   piattaforme) quando sei pagato o ricevi un Pass gratuito.
 
@@ -152,7 +152,7 @@ Lo stesso identificativo si usa ovunque:
 
 | Dove | Cosa crei | Come appare |
 |---|---|---|
-| Link | `https://aeromesh.app/get?code=GIULIA` | La pagina mostra il codice e manda allo store giusto passando la campagna |
+| Link | `https://stefanob88.github.io/aerochatwebsite/get?code=GIULIA` | La pagina mostra il codice e manda allo store giusto passando la campagna |
 | App Store | Custom Product Page "Creator – Giulia" (o una per tema: Volo, Festival, Crociera) + **offer code** `GIULIA` | Link `…/app/idXXXXXXXXX?ppid=<id pagina>` |
 | Google Play | **Custom store listing** con URL dedicato + **codici promozionali** | Link `…details?id=com.stefanobrandi.aerochat&listing=<nome>` |
 

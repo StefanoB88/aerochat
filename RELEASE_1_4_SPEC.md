@@ -108,7 +108,7 @@ message BoardPost {
 - Subito dopo l'aggiunta della carta: azione "Invita chi viaggia con te" nel foglio di conferma.
 
 ### B8. Cartolina condivisibile con QR
-- La cartolina (formato Storie 1080x1920) mostra in basso un QR verso `https://aeromesh.app/get` con la
+- La cartolina (formato Storie 1080x1920) mostra in basso un QR verso `https://stefanob88.github.io/aerochatwebsite/get` con la
   scritta "Scarica AeroChat".
 
 ### B9. Passaporto di viaggio

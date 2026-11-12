@@ -287,13 +287,13 @@ enum class TravelMode(val rawValue: String) {
 
 /** Riferimenti esterni mostrati nell'app (listino, legale, supporto). */
 object AppLinks {
-    const val website = "https://aeromesh.app"
-    const val privacyPolicy = "https://aeromesh.app/privacy"
-    const val termsOfUse = "https://aeromesh.app/terms"
+    const val website = "https://stefanob88.github.io/aerochatwebsite/"
+    const val privacyPolicy = "https://stefanob88.github.io/aerochatwebsite/privacy"
+    const val termsOfUse = "https://stefanob88.github.io/aerochatwebsite/terms"
     /** EULA standard di Apple, citata dalle linee guida iOS (stesso testo legale dell'app iOS). */
     const val appleEULA = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
-    const val supportEmail = "support@aeromesh.app"
-    const val safetyEmail = "safety@aeromesh.app"
+    const val supportEmail = "aerochat.help@gmail.com"
+    const val safetyEmail = "aerochat.help@gmail.com"
     /** Riscatto di un codice promozionale Google Play (`?code=`). */
     const val playRedeem = "https://play.google.com/redeem"
 }

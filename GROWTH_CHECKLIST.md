@@ -31,7 +31,7 @@
 | S7 | Cabina sociale 1.4 | 10+ telefoni con lo stesso volo | Persone vicine, posto condiviso, mappa, "Proponi scambio posto", bacheca (max 3 annunci, chiusura, scadenza) |
 | S8 | Lunga durata | 10 telefoni, 3 h di uso realistico (volo medio) | Consumo batteria, temperatura, crash, memoria |
 | S9 | Modalità aereo reale | Tutti in modalità aereo + Bluetooth | Nessuna dipendenza dalla rete; diagnosi "Perché non vedo nessuno?" |
-| S10 | Installazione e invito | 5 persone nuove senza app | QR → `aeromesh.app/get` → store → pairing: tempo totale e punti di attrito |
+| S10 | Installazione e invito | 5 persone nuove senza app | QR → `stefanob88.github.io/aerochatwebsite/get` → store → pairing: tempo totale e punti di attrito |
 | S11 | Prova in volo vera | 3-6 persone su un volo commerciale (rispettando le regole della compagnia) | Tutto quanto sopra in condizioni reali; video per l'App Review e i social |
 
 ### 1.3 Metriche da registrare
@@ -70,9 +70,9 @@
 - [ ] **Campagne App Analytics**: provider token (`pt`) copiato in `web/get/index.html`.
 - [ ] **Privacy nutrition labels**: "Dati non raccolti" (nessun dato raccolto dallo sviluppatore; la segnalazione via
       email è iniziativa dell'utente). Verificare la coerenza con `PrivacyInfo.xcprivacy` e con
-      `aeromesh.app/privacy`. Nessun tracciamento.
-- [ ] URL: privacy `https://aeromesh.app/privacy`, supporto `https://aeromesh.app/support`, marketing
-      `https://aeromesh.app` (tutti online e raggiungibili prima dell'invio).
+      `stefanob88.github.io/aerochatwebsite/privacy`. Nessun tracciamento.
+- [ ] URL: privacy `https://stefanob88.github.io/aerochatwebsite/privacy`, supporto `https://stefanob88.github.io/aerochatwebsite/support`, marketing
+      `https://stefanob88.github.io/aerochatwebsite` (tutti online e raggiungibili prima dell'invio).
 - [ ] Metadati fastlane (`ios/fastlane/metadata/*`): nome ≤ 30, sottotitolo ≤ 30, keywords ≤ 100, testo promozionale
       ≤ 170 per ogni lingua; release notes 1.4 aggiornate.
 - [ ] Screenshot 6.9", 6.5", iPad 13" in tutte le lingue; anteprima video (facoltativa, consigliata: scena radar o Scopa).
@@ -104,19 +104,19 @@
 
 ## 4. Sito e dominio
 
-- [ ] Dominio `aeromesh.app` registrato, rinnovo automatico, DNSSEC se disponibile.
+- [x] Sito su GitHub Pages (https://stefanob88.github.io/aerochatwebsite/, repo `StefanoB88/aerochatwebsite`), nessun dominio da rinnovare.
 - [ ] `web/` pubblicato (Cloudflare Pages / Netlify / GitHub Pages, vedi `web/README.md`), HTTPS forzato,
       `www` → dominio principale.
 - [ ] Controllati: `/`, `/en/`, `/get`, `/get?code=TEST` (iPhone, Android, desktop, browser interni di Instagram e
       TikTok), `/privacy`, `/terms`, `/support`, pagina 404.
 - [ ] Segnaposto compilati: id App Store, provider token, titolare e indirizzo in privacy/termini.
 - [ ] **Privacy e termini revisionati da un legale** e allineati al testo in-app (`LegalView.swift` e Android).
-- [ ] QR della cartolina e del foglio "Invita" puntano a `https://aeromesh.app/get` e funzionano.
+- [ ] QR della cartolina e del foglio "Invita" puntano a `https://stefanob88.github.io/aerochatwebsite/get` e funzionano.
 - [ ] (Futuro) `apple-app-site-association` e `assetlinks.json` per i link universali.
 
 ## 5. Email e supporto
 
-- [ ] Caselle `support@aeromesh.app` e `safety@aeromesh.app` attive (inoltro o casella dedicata), con SPF, DKIM, DMARC.
+- [ ] Caselle `aerochat.help@gmail.com` e `aerochat.help@gmail.com` attive (inoltro o casella dedicata), con SPF, DKIM, DMARC.
 - [ ] Risposta automatica con link alle FAQ e tempi di risposta (48 h supporto, 24 h segnalazioni come dichiarato
       nei termini).
 - [ ] Procedura segnalazioni: registro, decisione, cancellazione dei dati entro 90 giorni (come da informativa).
@@ -132,12 +132,12 @@ voto in cambio di qualcosa. Firmare "Il team AeroChat".
 > Ciao, grazie per averla provata! AeroChat ha bisogno del Bluetooth acceso (in modalità aereo va riacceso a
 > mano) e di almeno un altro telefono con l'app aperta entro qualche decina di metri. Nella schermata Persone
 > vicine trovi "Perché non vedo nessuno?" con i controlli passo passo; puoi anche provarla subito da solo con
-> "Prova subito". Se il problema resta scrivici a support@aeromesh.app con il modello del telefono: lo risolviamo
+> "Prova subito". Se il problema resta scrivici a aerochat.help@gmail.com con il modello del telefono: lo risolviamo
 > insieme.
 
 **Recensione positiva**
 > Grazie mille! Ci fa piacere che AeroChat ti abbia tenuto compagnia in viaggio. Se hai un'idea per una nuova
-> funzione o un gioco, scrivici a support@aeromesh.app. Buon prossimo viaggio!
+> funzione o un gioco, scrivici a aerochat.help@gmail.com. Buon prossimo viaggio!
 
 **Prezzo / paywall**
 > Grazie per il feedback. La chat di testo resta gratuita per sempre; il Pass è un acquisto una tantum, senza
@@ -147,25 +147,25 @@ voto in cambio di qualcosa. Firmare "Il team AeroChat".
 **Pass non ricevuto dal gruppo / acquisto non visibile**
 > Ci dispiace! Apri la schermata del Pass e tocca "Ripristina acquisti"; per il Pass del gruppo, chi ha
 > acquistato deve essere vicino agli altri membri con l'app aperta. Se non basta scrivici a
-> support@aeromesh.app (senza dati di pagamento): ti aiutiamo subito. I rimborsi sono gestiti da Apple/Google.
+> aerochat.help@gmail.com (senza dati di pagamento): ti aiutiamo subito. I rimborsi sono gestiti da Apple/Google.
 
 **Batteria**
 > Grazie della segnalazione. AeroChat usa Bluetooth Low Energy, ma con tanti telefoni intorno il lavoro da
 > "ponte" aumenta. Quando non ti serve puoi chiudere l'app o disattivare "Visibile alle persone vicine".
-> Ci aiuterebbe sapere modello e durata d'uso: support@aeromesh.app.
+> Ci aiuterebbe sapere modello e durata d'uso: aerochat.help@gmail.com.
 
 **Comportamento scorretto di un altro utente**
 > Ci dispiace per quanto successo. Tieni premuto il messaggio e scegli "Blocca": l'utente sparisce subito dal
-> tuo telefono. Puoi inoltrarci la segnalazione a safety@aeromesh.app, la esaminiamo entro 24 ore.
+> tuo telefono. Puoi inoltrarci la segnalazione a aerochat.help@gmail.com, la esaminiamo entro 24 ore.
 
 **Bug / crash**
-> Grazie e scusa per il disagio. Ci scrivi a support@aeromesh.app con modello, versione del sistema e cosa
+> Grazie e scusa per il disagio. Ci scrivi a aerochat.help@gmail.com con modello, versione del sistema e cosa
 > stavi facendo? Correggiamo i crash con priorità nel prossimo aggiornamento.
 
 English (short):
 > Thanks for trying AeroChat! It needs Bluetooth on (turn it back on after enabling airplane mode) and another
 > phone with the app open within a few dozen meters. Check "Why can't I see anyone?" in Nearby people, or try
-> it solo with "Try it now". Still stuck? Email support@aeromesh.app with your phone model and we'll help.
+> it solo with "Try it now". Still stuck? Email aerochat.help@gmail.com with your phone model and we'll help.
 
 ## 7. Lancio
 

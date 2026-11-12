@@ -13,7 +13,7 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 object QRCodeGenerator {
 
     /** Link mostrato al gate finche' c'e' ancora rete: punta alla pagina con i badge degli store. */
-    const val storeLandingURL = "https://aeromesh.app/get"
+    const val storeLandingURL = "https://stefanob88.github.io/aerochatwebsite/get"
 
     /** I QR gia' generati restano in cache (la stessa stringa viene richiesta a ogni ricomposizione). */
     private val cache = LruCache<String, Bitmap>(16)

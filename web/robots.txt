@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /get
 
-Sitemap: https://aeromesh.app/sitemap.xml
+Sitemap: https://stefanob88.github.io/aerochatwebsite/sitemap.xml
