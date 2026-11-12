@@ -110,6 +110,8 @@ dependencies {
     implementation(libs.zxing.core)
 
     implementation(libs.play.billing.ktx)
+    // Richiesta di recensione (Play In-App Review) nei momenti felici: cartolina di fine volo, partita vinta.
+    implementation(libs.play.review.ktx)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

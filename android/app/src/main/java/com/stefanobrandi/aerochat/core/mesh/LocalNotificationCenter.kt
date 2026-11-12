@@ -288,6 +288,38 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
         }
     }
 
+    /** Promemoria del giorno di partenza (07:00): tocco -> foglio "Invita amici". */
+    fun notifyFlightReminder(flightLabel: String) {
+        try {
+            createChannels()
+            if (!canPostNotifications()) return
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(extraInvite, true)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context, ("invite-$flightLabel").hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val text = context.getString(R.string.growth14_reminder_body, flightLabel)
+            val builder = NotificationCompat.Builder(context, nearbyChannelID)
+                .setSmallIcon(android.R.drawable.ic_menu_send)
+                .setContentTitle(context.getString(R.string.growth14_reminder_title, flightLabel))
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+            try {
+                NotificationManagerCompat.from(context).notify("reminder-$flightLabel", notificationID, builder.build())
+            } catch (_: SecurityException) {
+                // Permesso revocato tra il controllo e la pubblicazione.
+            }
+        } catch (e: Exception) {
+            Log.w("AeroMesh.Notify", "promemoria non notificato: $e")
+        }
+    }
+
     override suspend fun cancelMessage(msgID: ByteArray, conversationID: String) {
         try {
             NotificationManagerCompat.from(context).cancel(msgID.toHex(), notificationID)
@@ -373,6 +405,8 @@ class LocalNotificationCenter(context: Context) : MeshNotifier {
         const val extraNearby = "nearby"
         /** Extra dell'Intent di apertura: chiave del volo della cartolina da mostrare. */
         const val extraTripKey = "tripKey"
+        /** Tocco sul promemoria del volo: apre "Invita amici". */
+        const val extraInvite = "invite"
 
         /** Id numerico comune: le notifiche si distinguono per tag (`msg_id` hex), come l'identifier iOS. */
         private const val notificationID = 1

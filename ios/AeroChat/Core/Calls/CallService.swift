@@ -104,7 +104,7 @@ final class CallService {
               let peer = try? await database.peers.fetch(nodeID: peerID) else { return }
         let call = Call(id: UUID().uuidString.lowercased(), peer: peer, conversation: conversation, direction: .outgoing)
         current = call
-        guard await AVAudioApplication.requestRecordPermission() else {
+        guard await PermissionPrompt.ensureMicrophone() else {
             finish(call.id, reason: .microphoneDenied, notifyPeer: false)
             return
         }
@@ -118,7 +118,7 @@ final class CallService {
     func accept() {
         guard let call = current, call.direction == .incoming, call.phase == .ringing else { return }
         Task {
-            guard await AVAudioApplication.requestRecordPermission() else {
+            guard await PermissionPrompt.ensureMicrophone() else {
                 _ = await send(.reject, callID: call.id, to: call.peer)
                 finish(call.id, reason: .microphoneDenied, notifyPeer: false)
                 return

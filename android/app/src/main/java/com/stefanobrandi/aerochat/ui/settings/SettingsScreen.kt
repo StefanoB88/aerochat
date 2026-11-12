@@ -1,5 +1,10 @@
 package com.stefanobrandi.aerochat.ui.settings
 
+import androidx.compose.material.icons.outlined.Badge
+import com.stefanobrandi.aerochat.ui.components.AppPermissions
+import com.stefanobrandi.aerochat.ui.components.PermissionPrompts
+import com.stefanobrandi.aerochat.ui.components.rememberPermissionRequest
+import com.stefanobrandi.aerochat.ui.components.DeniedPermission
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -287,6 +292,7 @@ private fun SettingsProfile(
     environment.identityRecord.collectAsStateWithLifecycle()
     val settings by AppSettings.state.collectAsStateWithLifecycle()
     var showProfile by remember { mutableStateOf(false) }
+    var showPassport by remember { mutableStateOf(false) }
     SettingsPageColumn {
         Spacer(Modifier.height(8.dp))
         FormSection { ProfileHeaderRow(onClick = { showProfile = true }) }
@@ -301,6 +307,9 @@ private fun SettingsProfile(
                 FormRow(title = stringResource(title), icon = icon, onClick = action)
                 FormDivider()
             }
+            // Passaporto di viaggio: numeri di tutti i voli e badge.
+            FormRow(title = stringResource(R.string.growth14_passport_title), icon = Icons.Outlined.Badge, onClick = { showPassport = true })
+            FormDivider()
             FormToggle(
                 title = stringResource(R.string.safety_settings_smart_replies),
                 icon = Icons.Outlined.AutoAwesome,
@@ -311,6 +320,7 @@ private fun SettingsProfile(
         FormFooter(stringResource(R.string.safety_settings_travel_footer))
     }
     if (showProfile) ProfileEditSheet(onDismiss = { showProfile = false })
+    if (showPassport) com.stefanobrandi.aerochat.ui.flight.PassportSheet(onDismiss = { showPassport = false })
 }
 
 /** Privacy: visibilita' alle persone vicine, sfide, filtro, foto sfocate, bloccati e segnalazioni. */
@@ -386,6 +396,7 @@ private fun SettingsNotifications() {
     // Riletto a ogni ritorno sulla pagina (il permesso si cambia nelle impostazioni di sistema).
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var enabled by remember { mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled()) }
+    val notificationPermission = rememberPermissionRequest(DeniedPermission.notifications, "android.permission.POST_NOTIFICATIONS")
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
@@ -402,7 +413,20 @@ private fun SettingsNotifications() {
                 title = stringResource(R.string.nearby_settings_notifications_status),
                 icon = Icons.Outlined.Notifications,
                 value = stringResource(if (enabled) R.string.nearby_settings_on else R.string.nearby_settings_off),
-                onClick = null,
+                // Spente: Android 13+ puo' ancora mostrare il dialogo di sistema, altrimenti "Apri Impostazioni".
+                onClick = if (enabled) null else {
+                    {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                            !AppPermissions.hasNotifications(context)
+                        ) {
+                            notificationPermission.run {
+                                enabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+                            }
+                        } else {
+                            PermissionPrompts.show(DeniedPermission.notifications)
+                        }
+                    }
+                },
             )
             FormDivider()
             FormRow(

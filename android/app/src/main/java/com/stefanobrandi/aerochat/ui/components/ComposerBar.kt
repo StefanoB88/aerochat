@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.Layers
@@ -107,6 +108,8 @@ fun ComposerBar(
     onCameraDenied: () -> Unit = {},
     isEditing: Boolean = false,
     onCancelEditing: () -> Unit = {},
+    /** "Posizione" nel menu allegati (chat 1-a-1 e gruppi); `null` = voce assente. */
+    onShareLocation: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val attachmentsVisible = showsAttachments && !isEditing
@@ -138,9 +141,8 @@ fun ComposerBar(
             launchGallery()
         }
     }
-    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) launchCamera() else onCameraDenied()
-    }
+    // Negata in passato: di nuovo il dialogo di sistema se possibile, altrimenti "Apri Impostazioni".
+    val cameraPermission = rememberPermissionRequest(DeniedPermission.camera, Manifest.permission.CAMERA)
 
     Column(modifier = modifier.fillMaxWidth().background(AeroTheme.background)) {
     if (isEditing) EditingStrip(onCancel = onCancelEditing)
@@ -177,8 +179,8 @@ fun ComposerBar(
             Box {
                 HapticButton(
                     onClick = {
-                        // Con la fotocamera disponibile il pulsante offre scatto o galleria (come iOS).
-                        if (hasCamera) showPhotoMenu = true else launchGallery()
+                        // Con la fotocamera (o la posizione) il pulsante apre il menu allegati (come iOS).
+                        if (hasCamera || onShareLocation != null) showPhotoMenu = true else launchGallery()
                     },
                     tint = AeroTheme.accentCyan,
                     modifier = Modifier.semantics { contentDescription = photoDescription },
@@ -189,25 +191,35 @@ fun ComposerBar(
                 AeroDropdownMenu(
                     expanded = showPhotoMenu,
                     onDismissRequest = { showPhotoMenu = false },
-                    items = listOf(
-                        AeroMenuItem(stringResource(R.string.chat_take_photo), Icons.Outlined.PhotoCamera, hapticOnTap = true) {
-                            showPhotoMenu = false
-                            // Come iOS: niente scatto se le foto non possono partire (serve link diretto).
-                            if (canTakePhoto()) {
-                                // Il manifest dichiara CAMERA (scanner QR): senza permesso concesso
-                                // ACTION_IMAGE_CAPTURE lancerebbe SecurityException.
-                                if (AppPermissions.isGranted(context, Manifest.permission.CAMERA)) {
-                                    launchCamera()
-                                } else {
-                                    cameraPermission.launch(Manifest.permission.CAMERA)
-                                }
-                            }
-                        },
-                        AeroMenuItem(stringResource(R.string.chat_choose_from_gallery), Icons.Outlined.PhotoLibrary, hapticOnTap = true) {
-                            showPhotoMenu = false
-                            launchGallery()
-                        },
-                    ),
+                    items = buildList {
+                        if (hasCamera) {
+                            add(
+                                AeroMenuItem(stringResource(R.string.chat_take_photo), Icons.Outlined.PhotoCamera, hapticOnTap = true) {
+                                    showPhotoMenu = false
+                                    // Come iOS: niente scatto se le foto non possono partire (serve link diretto).
+                                    if (canTakePhoto()) {
+                                        // Il manifest dichiara CAMERA (scanner QR): senza permesso concesso
+                                        // ACTION_IMAGE_CAPTURE lancerebbe SecurityException.
+                                        cameraPermission.run(onDenied = onCameraDenied) { launchCamera() }
+                                    }
+                                },
+                            )
+                        }
+                        add(
+                            AeroMenuItem(stringResource(R.string.chat_choose_from_gallery), Icons.Outlined.PhotoLibrary, hapticOnTap = true) {
+                                showPhotoMenu = false
+                                launchGallery()
+                            },
+                        )
+                        if (onShareLocation != null) {
+                            add(
+                                AeroMenuItem(stringResource(R.string.growth14_location), Icons.Outlined.LocationOn, hapticOnTap = true) {
+                                    showPhotoMenu = false
+                                    onShareLocation()
+                                },
+                            )
+                        }
+                    },
                 )
             }
         }

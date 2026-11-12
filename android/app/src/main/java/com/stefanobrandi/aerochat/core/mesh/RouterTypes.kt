@@ -92,7 +92,14 @@ sealed interface RouterEvent {
     data class RelayQueueChanged(val count: Int) : RouterEvent
 
     /** Qualcuno ha scansionato il nostro QR (`PAIR_HELLO` verificato): la sua chat 1-a-1 e' pronta. */
-    data class PeerPaired(val conversationID: String, val nickname: String) : RouterEvent
+    data class PeerPaired(
+        val conversationID: String,
+        val nickname: String,
+        /** `node_id` (hex) di chi ha scansionato il QR. */
+        val nodeHex: String = "",
+        /** `node_id` mai visto prima nel database: conta per il premio inviti. */
+        val isNewPeer: Boolean = false,
+    ) : RouterEvent
     data class GroupMembersChanged(val conversationID: String) : RouterEvent
 
     /** "Saluta" / "Sfida" ricevuto da una persona vicina (`CONTACT_REQUEST` REQUEST): entra in "Richieste". */
@@ -205,6 +212,16 @@ sealed class RouterError(message: String) : Exception(message) {
         private fun readResolve(): Any = UnknownContactRequest
     }
 
+    /** Bacheca: gia' 3 annunci aperti (chiuderne uno prima di pubblicarne un altro). */
+    data object BoardLimitReached : RouterError("board limit reached") {
+        private fun readResolve(): Any = BoardLimitReached
+    }
+
+    /** Annuncio non valido: testo vuoto, oltre 140 caratteri, con un link o tipo sconosciuto. */
+    data object InvalidBoardPost : RouterError("invalid board post") {
+        private fun readResolve(): Any = InvalidBoardPost
+    }
+
     /** Modifica/cancellazione non consentita: non e' nostro, fuori dai 15 minuti, gia' cancellato o tipo errato. */
     data object RevisionNotAllowed : RouterError("revision not allowed") {
         private fun readResolve(): Any = RevisionNotAllowed
@@ -250,7 +267,9 @@ val PacketType.isStoreAndForwardEligible: Boolean
         // "Sta scrivendo" ha senso solo in quel momento.
         PacketType.CALL_SIGNAL, PacketType.CALL_AUDIO, PacketType.QUIZ, PacketType.TYPING,
         // Persone vicine: la presenza vale solo adesso; la richiesta ha la sua risposta (niente coda ne' ACK).
-        PacketType.PRESENCE, PacketType.CONTACT_REQUEST, PacketType.UNRECOGNIZED -> false
+        PacketType.PRESENCE, PacketType.CONTACT_REQUEST,
+        // Bacheca: l'autore ripete gli annunci aperti ogni 60 s, la coda non serve.
+        PacketType.BOARD_POST, PacketType.UNRECOGNIZED -> false
     }
 
 val PacketType.isMedia: Boolean

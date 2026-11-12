@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Permessi negati: avviso con "Apri Impostazioni" (PermissionSettingsDialogHost). -->
+    <string name="permission_open_settings">Åbn Indstillinger</string>
+    <string name="permission_not_now">Ikke nu</string>
+    <string name="permission_bluetooth_title">Bluetooth er påkrævet</string>
+    <string name="permission_bluetooth_message">AeroChat taler kun med telefoner i nærheden via Bluetooth: uden “Enheder i nærheden” virker chats, spil og radar ikke. Tillad det for AeroChat i Indstillinger.</string>
+    <string name="permission_camera_title">Kameraet er påkrævet</string>
+    <string name="permission_camera_message">Kameraet bruges til at tage billeder og scanne QR-koder og boardingkort. Tillad det for AeroChat i Indstillinger.</string>
+    <string name="permission_microphone_title">Mikrofonen er påkrævet</string>
+    <string name="permission_microphone_message">Mikrofonen bruges til talebeskeder og opkald. Tillad den for AeroChat i Indstillinger.</string>
+    <string name="permission_location_title">Lokation er påkrævet</string>
+    <string name="permission_location_message">Lokationen bruges kun til at vedhæfte den til en nødalarm. Tillad den for AeroChat i Indstillinger.</string>
+    <string name="permission_notifications_title">Notifikationer slået fra</string>
+    <string name="permission_notifications_message">Uden notifikationer ved du ikke, hvornår der kommer en besked, mens appen er lukket. Slå dem til for AeroChat i Indstillinger.</string>
+</resources>

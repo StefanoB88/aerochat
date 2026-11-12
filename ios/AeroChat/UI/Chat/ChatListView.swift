@@ -88,6 +88,13 @@ struct ChatListView: View {
     @State private var showProfile = false
     @State private var showBoardingPass = false
     @State private var showFlightCard = false
+    @AppStorage(AppSettings.Key.inviteCardDismissed) private var isInviteCardDismissed = false
+    @AppStorage(AppSettings.Key.travelMode) private var travelMode: TravelMode = .flight
+    @State private var showRadar = false
+    @State private var showDiagnosis = false
+    @State private var showTranslationHelp = false
+    /// "Invita chi viaggia con te" dal foglio della carta d'imbarco: "Invita amici" dopo la sua chiusura.
+    @State private var inviteAfterBoarding = false
     /// Cabina del volo appena creata: aperta subito dopo la chiusura del foglio.
     @State private var joinedFlightLounge: ConversationRecord?
     @State private var pendingFlightLounge: ConversationRecord?
@@ -156,6 +163,16 @@ struct ChatListView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Haptics.tap()
+                        environment.requestedNearby = .all
+                    } label: {
+                        Image(systemName: "person.wave.2")
+                            .foregroundStyle(AeroTheme.accentCyan)
+                    }
+                    .accessibilityLabel("Persone vicine")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Haptics.tap()
                         showPairing = true
                     } label: {
                         Image(systemName: "qrcode.viewfinder")
@@ -166,7 +183,6 @@ struct ChatListView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button { Haptics.tap(); showNewGroup = true } label: { Label("Nuovo gruppo di viaggio", systemImage: "person.3") }
-                        Button { Haptics.tap(); environment.requestedNearby = .all } label: { Label("Persone vicine", systemImage: "person.wave.2") }
                         Button { Haptics.tap(); showBoardingPass = true } label: { Label("Cabina del volo (carta d'imbarco)", systemImage: "airplane.departure") }
                         Divider()
                         // Voci usate di rado: in fondo.
@@ -193,12 +209,24 @@ struct ChatListView: View {
         }
         .sheet(isPresented: $showPairing) { QRPairingSheet() }
         .sheet(isPresented: $showBoardingPass, onDismiss: {
-            if let lounge = pendingFlightLounge {
+            if inviteAfterBoarding {
+                // La Cabina resta pronta (si apre dalla card); prima "Invita amici", finche' c'e' rete.
+                inviteAfterBoarding = false
+                pendingFlightLounge = nil
+                showPairing = true
+            } else if let lounge = pendingFlightLounge {
                 pendingFlightLounge = nil
                 joinedFlightLounge = lounge
             }
         }) {
-            BoardingPassSheet { pendingFlightLounge = $0 }
+            BoardingPassSheet(onJoined: { pendingFlightLounge = $0 }, onInvite: { inviteAfterBoarding = true })
+        }
+        .sheet(isPresented: $showRadar) { RadarSheet() }
+        .sheet(isPresented: $showDiagnosis) { NobodyNearbySheet() }
+        .alert("Traduzione offline", isPresented: $showTranslationHelp) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Tieni premuto un messaggio ricevuto e scegli «Traduci». Per usarlo senza internet scarica prima le lingue nell'app Traduci di Apple, finché c'è rete.")
         }
         .sheet(isPresented: $showFlightCard) { FlightCardSheet() }
         .sheet(isPresented: $showStoreQR) { StoreQRSheet() }
@@ -232,7 +260,7 @@ struct ChatListView: View {
 
     private var list: some View {
         List {
-            if !environment.isHomeCardDismissed {
+            if showsHomeCard {
                 homeCard
                     .listRowBackground(AeroTheme.background)
                     .listRowSeparator(.hidden)
@@ -411,7 +439,7 @@ struct ChatListView: View {
                     .foregroundStyle(AeroTheme.textPrimary)
                     .multilineTextAlignment(.center)
                     .padding(.top, 12)
-                if !environment.isHomeCardDismissed {
+                if showsHomeCard {
                     homeCard
                 }
                 // Prova con il passeggero virtuale: tutto da questo iPhone, nulla passa dalla radio.
@@ -452,10 +480,17 @@ struct ChatListView: View {
 
     // MARK: Card contestuale
 
-    /// Card grande in cima: si adatta a "in volo" / "a terra"; si chiude per questa sessione.
+    /// In volo la card si chiude solo per questa sessione; quella a terra ("Porta i tuoi amici a bordo")
+    /// una volta chiusa non ricompare piu'.
+    private var showsHomeCard: Bool {
+        environment.isLikelyInFlight ? !environment.isHomeCardDismissed : !isInviteCardDismissed
+    }
+
+    /// Card grande in cima: si adatta a "in volo" / "a terra".
     private var homeCard: some View {
         HomeContextCard(
             isInFlight: environment.isLikelyInFlight,
+            travelMode: $travelMode,
             flightNumber: environment.activeFlightNumber,
             hasFlightCabin: environment.activeFlightLounge != nil,
             nearbyCount: environment.presence.count,
@@ -467,8 +502,34 @@ struct ChatListView: View {
             onInvite: { showPairing = true },
             onNewGroup: { showNewGroup = true },
             onNearby: { environment.requestedNearby = .all },
-            onDismiss: { withAnimation { environment.isHomeCardDismissed = true } }
+            onRadar: { showRadar = true },
+            onShareLocation: shareLocationFromHome,
+            onTranslationHelp: { showTranslationHelp = true },
+            onDiagnosis: { showDiagnosis = true },
+            onDismiss: {
+                withAnimation {
+                    if environment.isLikelyInFlight {
+                        environment.isHomeCardDismissed = true
+                    } else {
+                        isInviteCardDismissed = true
+                    }
+                }
+            }
         )
+    }
+
+    /// Montagna: la chat (o il gruppo) piu' recente, dove allegare la posizione dal menu allegati; altrimenti un
+    /// gruppo nuovo.
+    private func shareLocationFromHome() {
+        let chat = viewModel.conversations.first { conversation in
+            (conversation.type == .direct || (conversation.type == .group && !conversation.isFlightLounge))
+                && !DemoPeerIdentity.isDemoPeer(conversation.peerNodeID)
+        }
+        if let chat {
+            openedConversation = chat
+        } else {
+            showNewGroup = true
+        }
     }
 
     private func ctaButton(_ title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {

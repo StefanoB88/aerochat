@@ -20,6 +20,8 @@ struct BoardingPassSheet: View {
 
     /// Chiamato con la Cabina del volo appena creata o ritrovata.
     var onJoined: (ConversationRecord) -> Void = { _ in }
+    /// "Invita chi viaggia con te" nel foglio di conferma (chi presenta il foglio apre "Invita amici").
+    var onInvite: (() -> Void)? = nil
 
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
@@ -30,6 +32,8 @@ struct BoardingPassSheet: View {
     @State private var isError = false
     @State private var isBusy = false
     @State private var detected: BoardingPass?
+    /// Cabina appena raggiunta: conferma con "Invita chi viaggia con te" ed "Entra nella Cabina del volo".
+    @State private var joined: ConversationRecord?
 
     var body: some View {
         NavigationStack {
@@ -50,6 +54,35 @@ struct BoardingPassSheet: View {
 
                     if let detected {
                         detectedCard(detected)
+                    }
+
+                    if joined != nil, let onInvite {
+                        VStack(spacing: 10) {
+                            Button {
+                                Haptics.tap()
+                                onInvite()
+                                dismiss()
+                            } label: {
+                                Label("Invita chi viaggia con te", systemImage: "person.badge.plus")
+                                    .font(AeroTheme.title(17, weight: .bold))
+                                    .frame(maxWidth: .infinity, minHeight: 28)
+                                    .padding(.vertical, 12)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(AeroTheme.accentEmerald)
+                            .foregroundStyle(.black)
+                            Text("Fallo adesso, finché c'è rete: in aereo non potrà scaricare AeroChat.")
+                                .font(.footnote)
+                                .foregroundStyle(AeroTheme.textSecondary)
+                                .multilineTextAlignment(.center)
+                            Button("Entra nella Cabina del volo") {
+                                Haptics.tap()
+                                dismiss()
+                            }
+                            .font(.body.weight(.semibold))
+                            .tint(AeroTheme.accentCyan)
+                        }
+                        .padding(.horizontal, 20)
                     }
 
                     if let status {
@@ -78,6 +111,7 @@ struct BoardingPassSheet: View {
                     Task { await handle(code: code) }
                 }, onError: { error in
                     isError = true
+                    if error == .permissionDenied { PermissionPrompt.showDenied(.camera) }
                     status = error == .permissionDenied
                         ? String(localized: "Consenti la fotocamera in Impostazioni per inquadrare la carta d'imbarco.")
                         : String(localized: "Fotocamera non disponibile.")
@@ -165,7 +199,7 @@ struct BoardingPassSheet: View {
     }
 
     private func handle(code: String) async {
-        guard !isBusy else { return }
+        guard !isBusy, joined == nil else { return }
         do {
             let pass = try BoardingPass(bcbp: code)
             detected = pass
@@ -187,9 +221,14 @@ struct BoardingPassSheet: View {
             Haptics.success()
             isError = false
             status = String(localized: "Sei a bordo di \(pass.flightCode)! Chi scansiona la stessa carta ti trova qui.")
-            try? await Task.sleep(for: .seconds(1))
             onJoined(lounge)
-            dismiss()
+            if onInvite == nil {
+                try? await Task.sleep(for: .seconds(1))
+                dismiss()
+            } else {
+                // Conferma: si resta sul foglio per invitare chi viaggia con noi (in aereo non potra' scaricare l'app).
+                joined = lounge
+            }
         } catch {
             Haptics.error()
             isError = true

@@ -1,5 +1,13 @@
 package com.stefanobrandi.aerochat.ui.paywall
 
+import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import com.stefanobrandi.aerochat.core.growth.ReferralProgram
+import com.stefanobrandi.aerochat.core.moderation.AppSettings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -161,6 +169,16 @@ fun PaywallView(onDismiss: () -> Unit) {
                     style = AeroTheme.title(28f),
                     color = AeroTheme.textPrimary,
                 )
+                val settings by AppSettings.state.collectAsStateWithLifecycle()
+                val referralUntil = settings.referralPassUntilMs
+                if (!entitlementState.isPro() && referralUntil > System.currentTimeMillis()) {
+                    val formatted = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(referralUntil))
+                    Text(
+                        stringResource(R.string.growth14_referral_pass_until, formatted),
+                        style = AeroTheme.footnote,
+                        color = AeroTheme.accentEmerald,
+                    )
+                }
                 val until = entitlementState.validUntilMs
                 if (environment.isPro && until != null && entitlementState.tier.isTimeLimited) {
                     val formatted = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(until))
@@ -186,6 +204,12 @@ fun PaywallView(onDismiss: () -> Unit) {
             }
 
             message?.let { Text(it, style = AeroTheme.footnote, color = AeroTheme.textSecondary) }
+
+            // Premio inviti: "2 su 3 amici invitati" (al terzo, 24 h di Pass solo per te).
+            ReferralProgressCard()
+
+            // Codici promozionali Google Play: "Hai un codice?" -> pagina di riscatto del Play Store.
+            PromoCodeSection()
 
             HapticButton(
                 onClick = {
@@ -222,6 +246,94 @@ fun PaywallView(onDismiss: () -> Unit) {
         }
     }
     legalDocument?.let { LegalSheet(document = it, onDismiss = { legalDocument = null }) }
+}
+
+/** Contatore del premio inviti (paywall e "Invita amici"). */
+@Composable
+fun ReferralProgressCard(modifier: Modifier = Modifier) {
+    val settings by AppSettings.state.collectAsStateWithLifecycle()
+    val progress = minOf(settings.referralInvited.size, ReferralProgram.goal)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(AeroTheme.surface, AeroTheme.cardShape)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(Icons.Filled.CardGiftcard, contentDescription = null, tint = AeroTheme.accentEmerald, modifier = Modifier.size(24.dp))
+            Text(
+                stringResource(R.string.growth14_referral_progress, progress, ReferralProgram.goal),
+                style = AeroTheme.title(17f, FontWeight.SemiBold),
+                color = AeroTheme.textPrimary,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        LinearProgressIndicator(
+            progress = { progress / ReferralProgram.goal.toFloat() },
+            modifier = Modifier.fillMaxWidth(),
+            color = AeroTheme.accentEmerald,
+            trackColor = AeroTheme.background,
+        )
+        Text(
+            stringResource(if (settings.referralRewardGranted) R.string.growth14_referral_done else R.string.growth14_referral_hint),
+            style = AeroTheme.footnote,
+            color = AeroTheme.textSecondary,
+        )
+    }
+}
+
+/** "Hai un codice?": campo testo e apertura di `https://play.google.com/redeem?code=<codice>`. */
+@Composable
+private fun PromoCodeSection() {
+    val uriHandler = LocalUriHandler.current
+    var expanded by remember { mutableStateOf(false) }
+    var code by remember { mutableStateOf("") }
+    if (!expanded) {
+        HapticButton(onClick = { expanded = true }, tint = AeroTheme.accentCyan, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.growth14_promo_have_code), style = AeroTheme.body, fontWeight = FontWeight.SemiBold)
+        }
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = code,
+            onValueChange = { value -> code = value.filter { !it.isWhitespace() }.take(64) },
+            placeholder = { Text(stringResource(R.string.growth14_promo_placeholder)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = AeroTheme.surface,
+                unfocusedContainerColor = AeroTheme.surface,
+                focusedBorderColor = AeroTheme.accentCyan,
+                unfocusedBorderColor = Color.Transparent,
+                focusedTextColor = AeroTheme.textPrimary,
+                unfocusedTextColor = AeroTheme.textPrimary,
+                cursorColor = AeroTheme.accentCyan,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Button(
+            onClick = {
+                Haptics.tap()
+                runCatching { uriHandler.openUri(PromoCode.redeemURL(code)) }
+            },
+            enabled = code.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AeroTheme.accentCyan, contentColor = Color.Black),
+        ) {
+            Text(stringResource(R.string.growth14_promo_redeem), fontWeight = FontWeight.Bold)
+        }
+        Text(stringResource(R.string.growth14_promo_hint), style = AeroTheme.caption, color = AeroTheme.textSecondary)
+    }
+}
+
+/** Riscatto dei codici promozionali sul Play Store. */
+object PromoCode {
+    fun redeemURL(code: String): String =
+        AppLinks.playRedeem + "?code=" + java.net.URLEncoder.encode(code.trim(), "UTF-8")
 }
 
 @Composable

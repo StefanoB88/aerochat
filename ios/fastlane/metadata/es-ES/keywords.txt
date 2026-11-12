@@ -1,1 +1,1 @@
-modo avión,mesh,internet,vuelo,viaje,festival,cifrado,cercano,mensajería,avión,tren,crucero,apagón
+internet,modo,avión,vuelo,walkie,talkie,crucero,festival,mesh,viaje,cobertura,offline,juegos,cerca

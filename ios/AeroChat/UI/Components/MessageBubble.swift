@@ -94,6 +94,16 @@ struct MessageBubble: View {
                 .font(.body)
                 .foregroundStyle(AeroTheme.textPrimary)
                 .textSelection(.enabled)
+            // Posizione condivisa ("📍 lat, lon (±m)"): apertura in Mappe.
+            if message.contentType == .text, let point = LocationShare.parse(message.text ?? ""),
+               let url = LocationShare.mapsURL(for: point) {
+                Link(destination: url) {
+                    Label("Apri in Mappe", systemImage: "map.fill")
+                        .font(.footnote.weight(.semibold))
+                }
+                .tint(AeroTheme.accentCyan)
+                .padding(.top, 2)
+            }
         case .image:
             MediaImageView(blurhash: message.blurhash,
                            relativePath: message.mediaLocalPath,

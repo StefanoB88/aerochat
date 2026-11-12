@@ -1,1 +1,1 @@
-offline,flytilstand,fly,rejse,festival,krypteret,i nærheden,krydstogt,tog,p2p,wifi,messenger
+offline,flytilstand,fly,walkie,talkie,krydstogt,festival,wifi,rejse,dækning,besked,nærheden,spil

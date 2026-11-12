@@ -134,6 +134,19 @@ actor ProPassService {
         guard grant.validUntilMs > current else { return }
         try? await database.conversations.setProUnlocked(until: grant.validUntilMs, conversationID: packet.conversation.id)
         emit(.unlocked(conversationID: packet.conversation.id, validUntilMs: grant.validUntilMs, issuerNodeID: packet.sender.nodeID))
+        // Pass del gruppo visibile: chi l'ha regalato e fino a quando (ora locale breve).
+        let message = MessageRecord(msgID: packet.envelope.msgID, conversationID: packet.conversation.id,
+                                    senderNodeID: packet.sender.nodeID, senderNickname: packet.sender.nickname,
+                                    contentType: .system,
+                                    text: Self.groupPassText(nickname: packet.sender.nickname, validUntilMs: grant.validUntilMs),
+                                    isOutgoing: false, deliveryStatus: .deliveredAck, hopCountReceived: packet.hopCount)
+        _ = try? await database.messages.insert(message)
+    }
+
+    /// "🎁 Marco ha sbloccato il Pass per tutto il gruppo fino alle 18:30".
+    static func groupPassText(nickname: String, validUntilMs: Int64) -> String {
+        let time = Date(unixMilliseconds: validUntilMs).formatted(date: .omitted, time: .shortened)
+        return String(localized: "🎁 \(nickname) ha sbloccato il Pass per tutto il gruppo fino alle \(time)")
     }
 
     private func emit(_ event: Event) {

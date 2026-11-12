@@ -147,6 +147,27 @@ object MeshProtocol {
     /** `request_id` di una CONTACT_REQUEST. */
     const val contactRequestIDLength = 16
 
+    // MARK: Bacheca della cabina e posto (release 1.4, RELEASE_1_4_SPEC.md)
+
+    /** `BOARD_POST`: flooding della Lounge fino a 3 salti. */
+    const val boardPostTTL: Int = 3
+    /** L'autore ripete i propri annunci aperti ogni 60 s (solo in primo piano). */
+    const val boardRepeatInterval: Long = 60_000L
+    /** Annunci aperti al massimo per autore. */
+    const val maxOwnBoardPosts = 3
+    /** Un annuncio scade da solo 6 ore dopo `created_at_ms`. */
+    const val boardPostLifetime: Long = 6 * 3_600_000L
+    /** Il ricevente toglie un annuncio non ripetuto da 10 minuti. */
+    const val boardPostStaleAfter: Long = 10 * 60_000L
+    /** Annunci tenuti al massimo nella cache del ricevente. */
+    const val boardCacheCapacity = 50
+    /** Annunci distinti per mittente nella cache del ricevente. */
+    const val maxBoardPostsPerSender = 10
+    /** Testo di un annuncio: 1...140 caratteri dopo il trim. */
+    const val maxBoardTextLength = 140
+    /** `post_id` di un `BoardPost`. */
+    const val boardPostIDLength = 16
+
     /** `recipient_id` della Lounge Pubblica: 8 byte a zero. Restituisce sempre una copia nuova. */
     val loungeRecipientID: ByteArray get() = ByteArray(nodeIDLength)
     /** `sender_node_id` per relay anonimo: 8 byte a zero. Restituisce sempre una copia nuova. */

@@ -3,6 +3,7 @@ package com.stefanobrandi.aerochat.ui.components
 import android.util.LruCache
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +30,9 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Report
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material.icons.outlined.Map
+import com.stefanobrandi.aerochat.core.growth.LocationShare
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -365,6 +369,9 @@ private fun BubbleContent(
                         ),
                     )
                     val copyLabel = stringResource(android.R.string.copy)
+                    val translateLabel = stringResource(R.string.growth14_translate)
+                    val context = LocalContext.current
+                    val translateAvailable = remember { canTranslate(context) }
                     val safetyItems = if (safety) safetyMenuItems(menu) { showMenu = false } else emptyList()
                     val revisionItems = if (revisable && showMenu) {
                         revisionMenuItems(menu, message) { showMenu = false }
@@ -383,6 +390,15 @@ private fun BubbleContent(
                                         Haptics.tap()
                                     },
                                 )
+                                // Traduzione offline: il traduttore installato (es. Google Traduttore con le lingue scaricate).
+                                if (isText && translateAvailable) {
+                                    add(
+                                        AeroMenuItem(translateLabel, Icons.Outlined.Translate) {
+                                            showMenu = false
+                                            translateText(context, content)
+                                        },
+                                    )
+                                }
                             }
                             addAll(revisionItems)
                             addAll(safetyItems)
@@ -391,6 +407,11 @@ private fun BubbleContent(
                 }
             } else {
                 Text(content, style = AeroTheme.body, color = AeroTheme.textPrimary)
+            }
+            // Posizione condivisa ("📍 lat, lon (±N m)"): pulsante "Apri in Mappe".
+            if (message.contentType == MessageContentType.text) {
+                val point = remember(content) { LocationShare.parse(content) }
+                if (point != null) OpenInMapsButton(point)
             }
         }
         MessageContentType.image -> {
@@ -721,5 +742,55 @@ private object GameStateCache {
         }
         cache.put(key, state)
         return state
+    }
+}
+
+/** "Apri in Mappe" sotto una posizione condivisa: `geo:lat,lon?q=lat,lon` nell'app di mappe predefinita. */
+@Composable
+private fun OpenInMapsButton(point: LocationShare.Point) {
+    val context = LocalContext.current
+    Row(
+        Modifier
+            .padding(top = 6.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(AeroTheme.accentCyan.copy(alpha = 0.18f))
+            .clickable {
+                Haptics.tap()
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(LocationShare.geoURI(point)))
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                try {
+                    context.startActivity(intent)
+                } catch (_: android.content.ActivityNotFoundException) {
+                    Haptics.error()
+                }
+            }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(Icons.Outlined.Map, contentDescription = null, tint = AeroTheme.accentCyan, modifier = Modifier.size(16.dp))
+        Text(stringResource(R.string.growth14_open_in_maps), style = AeroTheme.captionSemibold, color = AeroTheme.accentCyan)
+    }
+}
+
+private fun translateIntent(text: String): android.content.Intent =
+    android.content.Intent(android.content.Intent.ACTION_PROCESS_TEXT)
+        .setType("text/plain")
+        .putExtra(android.content.Intent.EXTRA_PROCESS_TEXT, text)
+        .putExtra(android.content.Intent.EXTRA_PROCESS_TEXT_READONLY, true)
+
+/** C'e' un'app che elabora il testo (traduttore)? */
+private fun canTranslate(context: android.content.Context): Boolean = runCatching {
+    context.packageManager.queryIntentActivities(translateIntent(""), 0).isNotEmpty()
+}.getOrDefault(false)
+
+/** Apre il testo nel traduttore installato (scelta dell'app se ce ne sono piu' di una). */
+private fun translateText(context: android.content.Context, text: String) {
+    val chooser = android.content.Intent.createChooser(translateIntent(text), null)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
+        context.startActivity(chooser)
+    } catch (_: android.content.ActivityNotFoundException) {
+        Haptics.error()
     }
 }

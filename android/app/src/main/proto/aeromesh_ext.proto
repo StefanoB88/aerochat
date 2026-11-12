@@ -184,6 +184,7 @@ message Presence {
   string flight_code = 2;       // canonico "CARRIER|FLIGHT|yyyy-MM-dd" se nella Cabina di un volo, altrimenti vuoto
   bool open_to_games = 3;       // accetta sfide a carte
   int64 sent_at_ms = 4;
+  string seat = 5;              // posto del passeggero, es. "14C"; vuoto = non condiviso (release 1.4)
 }
 
 // "Saluta" / "Sfida" (CONTACT_REQUEST, release 1.3): diretto, chiave diretta, ttl 2, niente coda ne' ACK.
@@ -201,4 +202,24 @@ message ContactRequest {
   bytes request_id = 2;     // 16 byte casuali scelti da chi chiede; ACCEPT/DECLINE lo ripetono
   string greeting = 3;      // solo REQUEST, opzionale, <= 140 caratteri (filtro linguaggio, niente link)
   int32 game_kind = 4;      // solo REQUEST: 0 = semplice "Saluta"; altrimenti GameKind (SCOPA, BRISCOLA...) = "Sfida"
+}
+
+// Bacheca della cabina (BOARD_POST, release 1.4): chiave della Lounge, ttl 3, relay consentito, mai in coda ne' nel DB.
+// L'autore ripete i propri annunci aperti ogni 60 s (nuovo msg_id); dedup del ricevente per `post_id`.
+enum BoardKind {
+  BOARD_KIND_UNSPECIFIED = 0;
+  BOARD_KIND_LOOKING_FOR = 1;  // "Cerco"
+  BOARD_KIND_OFFERING = 2;     // "Offro"
+  BOARD_KIND_FOUND = 3;        // "Trovato" (oggetti smarriti)
+  BOARD_KIND_SEAT_SWAP = 4;    // "Scambio posto"
+}
+
+message BoardPost {
+  bytes post_id = 1;        // 16 byte casuali, scelti dall'autore
+  BoardKind kind = 2;
+  string text = 3;          // 1..140 caratteri dopo trim, niente link
+  string flight_code = 4;   // volo attivo dell'autore (canonico) o vuoto
+  string seat = 5;          // facoltativo, stesse regole di Presence.seat
+  int64 created_at_ms = 6;
+  bool is_closed = 7;       // l'autore ha chiuso l'annuncio: i riceventi lo tolgono
 }

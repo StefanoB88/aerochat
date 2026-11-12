@@ -1,1 +1,1 @@
-flygplansläge,mesh,utan internet,flyg,resa,festival,krypterad,nära,kryssning,tåg,p2p,wifi
+internet,flygplansläge,flyg,flygplan,walkie,talkie,kryssning,festival,mesh,wifi,resa,täckning

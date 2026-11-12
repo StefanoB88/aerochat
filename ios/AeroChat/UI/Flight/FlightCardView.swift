@@ -11,6 +11,7 @@ struct FlightCardSheet: View {
     @State private var period: FlightStats.Period = .trip
     @State private var stats: FlightStats?
     @State private var rendered: UIImage?
+    @State private var showPassport = false
 
     var body: some View {
         NavigationStack {
@@ -56,6 +57,15 @@ struct FlightCardSheet: View {
                     if let stats, stats.leaderboard.contains(where: { $0.played > 0 }) {
                         leaderboardView(stats.leaderboard)
                     }
+                    Button {
+                        Haptics.tap()
+                        showPassport = true
+                    } label: {
+                        Label("Passaporto di viaggio", systemImage: "book.closed.fill")
+                            .font(.body.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(AeroTheme.accentEmerald)
                     Spacer(minLength: 0)
                 }
                 .padding(.top, 8)
@@ -68,6 +78,9 @@ struct FlightCardSheet: View {
             }
         }
         .task(id: period) { await reload() }
+        .sheet(isPresented: $showPassport) { PassportSheet() }
+        // Cartolina di fine volo mostrata: momento felice per chiedere la recensione.
+        .onAppear { if trip != nil { environment.reviewMoment(.tripCardShown) } }
     }
 
     /// Classifica del volo: solo nell'app, non nella cartolina condivisa (che resta senza nomi altrui).
@@ -153,10 +166,10 @@ struct FlightCardContent: View {
                     .foregroundStyle(AeroTheme.accentCyan)
                     .padding(.top, 4)
             }
-            Spacer().frame(height: 18)
+            Spacer().frame(height: 10)
             heroNumber(value: stats.totalMessages, label: String(localized: "messaggi senza internet"))
-            Spacer().frame(height: 16)
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            Spacer().frame(height: 10)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                 tile(icon: "person.2.fill", value: stats.peopleMet, label: String(localized: "passeggeri incontrati"))
                 tile(icon: "gamecontroller.fill", value: stats.gamesWon, label: String(localized: "partite vinte su \(stats.gamesPlayed)"))
                 tile(icon: "photo.fill", value: stats.photos, label: String(localized: "foto via Bluetooth"))
@@ -168,23 +181,15 @@ struct FlightCardContent: View {
                     tile(icon: "bubble.left.and.text.bubble.right.fill", value: stats.loungeMessages, label: String(localized: "voci in Cabina"))
                 }
             }
-            Spacer()
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Chat a 10.000 metri.")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text("Senza Wi-Fi, senza account, solo Bluetooth.")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-                Spacer()
-                Text(verbatim: "aeromesh.app")
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(AeroTheme.accentCyan)
-            }
+            Spacer(minLength: 8)
+            Text("Chat a 10.000 metri. Senza Wi-Fi, senza account, solo Bluetooth.")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Spacer().frame(height: 10)
+            // QR verso la pagina di download: chi vede la Storia puo' scaricare l'app.
+            DownloadQRFooter()
         }
         .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -214,7 +219,7 @@ struct FlightCardContent: View {
     private func heroNumber(value: Int, label: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("\(value)")
-                .font(.system(size: 80, weight: .black, design: .rounded))
+                .font(.system(size: 64, weight: .black, design: .rounded))
                 .foregroundStyle(AeroTheme.accentCyan)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
@@ -230,16 +235,16 @@ struct FlightCardContent: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AeroTheme.accentEmerald)
             Text("\(value)")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
             Text(label)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.7))
                 .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(10)
         .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

@@ -295,68 +295,68 @@
       "localizations" : {
         "da" : {
           "stringUnit" : {
-            "state" : "machine_translated",
-            "value" : "AeroChat bruger kun din lokalitet, når du selv beder om det, for at vedhæfte den til en nødbesked til telefoner i nærheden. Den sendes aldrig til servere."
+            "state" : "translated",
+            "value" : "AeroChat bruger kun din placering, når du beder om det: for at dele den i en chat eller vedhæfte den til en nødbesked til telefoner i nærheden. Den sendes aldrig til en server."
           }
         },
         "de" : {
           "stringUnit" : {
-            "state" : "machine_translated",
-            "value" : "AeroChat verwendet deinen Standort nur, wenn du es ausdrücklich möchtest, um ihn an eine Notfallnachricht an Telefone in der Nähe anzuhängen. Er wird nie an Server gesendet."
+            "state" : "translated",
+            "value" : "AeroChat verwendet deinen Standort nur, wenn du es möchtest: um ihn in einem Chat zu teilen oder an eine Notfallnachricht an Telefone in der Nähe anzuhängen. Er wird nie an einen Server gesendet."
           }
         },
         "en" : {
           "stringUnit" : {
-            "state" : "machine_translated",
-            "value" : "AeroChat uses your location only when you ask it to, to attach it to an emergency message for nearby phones. It’s never sent to a server."
+            "state" : "translated",
+            "value" : "AeroChat uses your location only when you ask: to share it in a chat or attach it to an emergency message for nearby phones. It is never sent to a server."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "machine_translated",
-            "value" : "AeroChat usa la ubicación solo cuando tú lo pides, para adjuntarla a un mensaje de emergencia dirigido a los teléfonos cercanos. Nunca se envía a ningún servidor."
+            "state" : "translated",
+            "value" : "AeroChat usa tu ubicación solo cuando tú lo pides: para compartirla en un chat o adjuntarla a un mensaje de emergencia a los teléfonos cercanos. Nunca se envía a un servidor."
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "machine_translated",
-            "value" : "AeroChat n’utilise ta position que lorsque tu le demandes, pour la joindre à un message d’urgence destiné aux téléphones à proximité. Elle n’est jamais envoyée à un serveur."
+            "state" : "translated",
+            "value" : "AeroChat utilise ta position uniquement quand tu le demandes : pour la partager dans une discussion ou la joindre à un message d'urgence aux téléphones proches. Elle n'est jamais envoyée à un serveur."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "AeroChat usa la posizione solo quando lo chiedi tu, per allegarla a un messaggio di emergenza ai telefoni vicini. Non viene mai inviata a server."
+            "value" : "AeroChat usa la posizione solo quando lo chiedi tu: per condividerla in una chat o allegarla a un messaggio di emergenza ai telefoni vicini. Non viene mai inviata a server."
           }
         },
         "nb" : {
           "stringUnit" : {
-            "state" : "machine_translated",
-            "value" : "AeroChat bruker posisjonen din bare når du ber om det, for å legge den ved en nødmelding til telefoner i nærheten. Den sendes aldri til servere."
+            "state" : "translated",
+            "value" : "AeroChat bruker posisjonen din bare når du ber om det: for å dele den i en chat eller legge den ved en nødmelding til telefoner i nærheten. Den sendes aldri til en server."
           }
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "machine_translated",
-            "value" : "AeroChat gebruikt je locatie alleen wanneer jij daarom vraagt, om die toe te voegen aan een noodbericht voor telefoons in de buurt. Ze wordt nooit naar een server gestuurd."
+            "state" : "translated",
+            "value" : "AeroChat gebruikt je locatie alleen als jij daarom vraagt: om hem in een chat te delen of aan een noodbericht voor telefoons in de buurt toe te voegen. Hij wordt nooit naar een server gestuurd."
           }
         },
         "pl" : {
           "stringUnit" : {
-            "state" : "machine_translated",
-            "value" : "AeroChat używa lokalizacji tylko wtedy, gdy o to poprosisz, aby dołączyć ją do wiadomości alarmowej wysyłanej do pobliskich telefonów. Nigdy nie jest wysyłana na serwery."
+            "state" : "translated",
+            "value" : "AeroChat używa Twojej lokalizacji tylko na Twoją prośbę: aby udostępnić ją w czacie lub dołączyć do wiadomości alarmowej dla pobliskich telefonów. Nigdy nie jest wysyłana na serwer."
           }
         },
         "pt-PT" : {
           "stringUnit" : {
-            "state" : "machine_translated",
-            "value" : "O AeroChat usa a localização apenas quando tu o pedes, para a anexar a uma mensagem de emergência para os telemóveis próximos. Nunca é enviada para servidores."
+            "state" : "translated",
+            "value" : "O AeroChat usa a tua localização apenas quando o pedes: para a partilhar numa conversa ou anexá-la a uma mensagem de emergência para os telemóveis próximos. Nunca é enviada para um servidor."
           }
         },
         "sv" : {
           "stringUnit" : {
-            "state" : "machine_translated",
-            "value" : "AeroChat använder din position bara när du själv ber om det, för att bifoga den till ett nödmeddelande till telefoner i närheten. Den skickas aldrig till någon server."
+            "state" : "translated",
+            "value" : "AeroChat använder din plats bara när du ber om det: för att dela den i en chatt eller bifoga den till ett nödmeddelande till telefoner i närheten. Den skickas aldrig till en server."
           }
         }
       }
@@ -429,6 +429,77 @@
           "stringUnit" : {
             "state" : "machine_translated",
             "value" : "AeroChat använder mikrofonen för att spela in röstmeddelanden som du skickar till dina resekompisar."
+          }
+        }
+      }
+    },
+    "NSNearbyInteractionUsageDescription" : {
+      "comment" : "Privacy - Nearby Interaction Usage Description",
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AeroChat bruger UWB-chippen til at måle afstand og retning til iPhones i nærheden, der har radaren åben, så du kan finde dine rejsekammerater."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AeroChat misst mit dem UWB-Chip Entfernung und Richtung von iPhones in der Nähe, die das Radar geöffnet haben, damit du deine Mitreisenden findest."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AeroChat uses the UWB chip to measure the distance and direction of nearby iPhones that have the radar open, to help you find your travel companions."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AeroChat usa el chip UWB para medir la distancia y la dirección de los iPhone cercanos con el radar abierto, para ayudarte a encontrar a tus compañeros de viaje."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AeroChat utilise la puce UWB pour mesurer la distance et la direction des iPhone proches dont le radar est ouvert, afin de vous aider à retrouver vos compagnons de voyage."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AeroChat misura con il chip UWB la distanza e la direzione degli iPhone vicini che hanno il radar aperto, per aiutarti a ritrovare i tuoi compagni di viaggio."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AeroChat bruker UWB-brikken til å måle avstand og retning til iPhoner i nærheten som har radaren åpen, så du finner reisefølget ditt."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AeroChat meet met de UWB-chip de afstand en richting van iPhones in de buurt die de radar open hebben, zodat je je reisgenoten terugvindt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AeroChat mierzy chipem UWB odległość i kierunek pobliskich iPhone’ów z otwartym radarem, aby pomóc Ci odnaleźć towarzyszy podróży."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O AeroChat usa o chip UWB para medir a distância e a direção dos iPhones próximos com o radar aberto, para ajudar a encontrar os seus companheiros de viagem."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AeroChat använder UWB-chippet för att mäta avstånd och riktning till iPhones i närheten som har radarn öppen, så att du hittar dina reskamrater."
           }
         }
       }

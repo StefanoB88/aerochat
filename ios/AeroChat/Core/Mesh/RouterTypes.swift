@@ -46,13 +46,18 @@ enum RouterEvent: Sendable, Equatable {
     /// "Sta scrivendo" ricevuto (TYPING): mai salvato, solo stato in memoria.
     case typingChanged(conversationID: String, senderNodeID: Data, nickname: String, isTyping: Bool)
     /// Un QR con token e' stato scansionato da un nuovo contatto (PAIR_HELLO): la sua chat e' pronta.
-    case pairedByHello(conversationID: String, peerNodeID: Data)
+    /// `isNewPeer`: il `node_id` non era mai stato visto prima (conta per il premio inviti).
+    case pairedByHello(conversationID: String, peerNodeID: Data, isNewPeer: Bool)
     /// PRESENCE ricevuto da un vicino diretto (solo cache in memoria, mai nel DB).
     case presenceUpdated(NearbyPerson)
     /// "Saluta" / "Sfida" ricevuto (CONTACT_REQUEST REQUEST): entra in "Richieste".
     case contactRequestReceived(IncomingContactRequest)
     /// Risposta (ACCEPT / DECLINE) a una nostra richiesta. Con ACCEPT la chat 1-a-1 e' gia' pronta.
     case contactRequestAnswered(requestID: Data, peerNodeID: Data, nickname: String, outcome: ContactRequestOutcome, gameKind: Int32)
+    /// RADAR_PING da un vicino diretto: il suo radar e' aperto (`isActive`) ed eventualmente il suo token UWB per noi.
+    case radarPingReceived(nodeID: Data, discoveryToken: Data?, isActive: Bool)
+    /// Bacheca della cabina cambiata (annunci nostri e ricevuti, solo in memoria).
+    case boardChanged([BoardPostEntry])
 }
 
 /// Cosa annunciamo con il PRESENCE (impostazione "Visibile alle persone vicine", Cabina del volo, sfide).
@@ -63,6 +68,8 @@ struct PresenceSettings: Sendable, Equatable {
     var openToGames = true
     /// Codice canonico della Cabina del volo attiva ("CARRIER|FLIGHT|yyyy-MM-dd").
     var flightCode: String?
+    /// Posto da annunciare (gia' validato): solo con "Mostra il mio posto ai vicini" attivo e un volo attivo.
+    var seat: String?
 }
 
 /// Pacchetto decifrato e verificato che il router non gestisce da solo (media, giochi, Pro Pass):
@@ -117,6 +124,10 @@ enum RouterError: Error, Equatable {
     case contactRequestNotAllowed
     /// Richiesta ricevuta inesistente o scaduta (Accetta / Rifiuta).
     case contactRequestNotFound
+    /// Annuncio della bacheca non valido (testo vuoto, oltre 140 caratteri, con link, tipo mancante).
+    case invalidBoardPost
+    /// Gia' 3 annunci aperti in bacheca.
+    case boardLimitReached
 }
 
 /// Consegna notifiche locali a schermo spento. Implementato con `UNUserNotificationCenter`.
@@ -152,9 +163,10 @@ extension PacketType {
         case .chatText, .deliveryAck, .readReceipt, .groupKeyGossip, .proPassGrant, .gameMove, .emergency, .messageRevision, .pairHello: return true
         // Il profilo viene ripetuto a ogni nuovo link: non serve tenerlo in coda.
         // Le chiamate, il quiz e il "sta scrivendo" hanno senso solo in tempo reale: niente coda.
-        // PRESENCE e CONTACT_REQUEST valgono solo tra vicini, adesso.
+        // PRESENCE, CONTACT_REQUEST e RADAR_PING valgono solo tra vicini, adesso.
+        // BOARD_POST viene ripetuto dall'autore ogni 60 s: niente coda.
         case .publicLounge, .mediaHeader, .mediaChunk, .profileUpdate, .callSignal, .callAudio, .quiz, .typing,
-             .presence, .contactRequest, .UNRECOGNIZED: return false
+             .presence, .contactRequest, .radarPing, .boardPost, .UNRECOGNIZED: return false
         }
     }
 

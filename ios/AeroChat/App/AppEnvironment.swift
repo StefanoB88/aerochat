@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import Network
+import UIKit
 
 /// Composition root dell'app: apre il database, carica (o crea) l'identita', avvia radio BLE, router
 /// mesh e servizi (media, giochi, monetizzazione) e riflette il loro stato verso SwiftUI.
@@ -56,6 +57,8 @@ final class AppEnvironment {
     /// "Persone vicine" (PRESENCE) e "Richieste" (CONTACT_REQUEST), solo in memoria.
     let presence = PresenceStore()
     let contactRequests = ContactRequestStore()
+    /// Distanza precisa UWB verso gli iPhone vicini con il radar aperto (vedi `UWBRanger`).
+    let uwb = UWBRanger()
     /// Chat da aprire (dopo Accetta, "Saluta" a un contatto, "Prova subito"): la lista chat la apre.
     var requestedConversation: ConversationRecord?
     /// "Persone vicine" da aprire (banner, notifica, Cabina, schermata principale) con il filtro scelto.
@@ -64,6 +67,22 @@ final class AppEnvironment {
     var requestedTripCard: FlightTrip?
     /// Card contestuale della schermata principale chiusa per questa sessione.
     var isHomeCardDismissed = false
+    /// "Invita amici" da aprire (tocco sul promemoria del giorno del volo).
+    var requestedInvite = false
+    /// Bacheca della cabina (annunci nostri e dei vicini, solo in memoria).
+    private(set) var boardPosts: [BoardPostEntry] = []
+    /// Il nostro posto sul volo attivo (carta d'imbarco o inserito a mano), nil se sconosciuto.
+    private(set) var mySeat: String?
+    /// Premio inviti: contatore "2 su 3" e Pass locale di 24 h.
+    private(set) var referral = ReferralProgram.load()
+    /// Premio inviti appena sbloccato: avviso una volta.
+    var isReferralJustUnlocked = false
+    /// Passaporto di viaggio (statistiche cumulative e badge).
+    private(set) var passport: PassportStats
+    /// Badge appena sbloccati alla fine di un volo (avviso "Nuovo badge nel passaporto!").
+    var newPassportBadges: [PassportBadge] = []
+    /// Momento felice con le condizioni della recensione soddisfatte: la schermata principale chiede la recensione.
+    var isReviewRequestPending = false
     /// Cabina del volo attiva (carta d'imbarco), aggiornata ogni minuto e quando si entra in un volo.
     private(set) var activeFlightLounge: ConversationRecord?
     /// Rete cellulare assente su un iPhone che di solito ce l'ha: con ogni probabilita' modalita' aereo.
@@ -71,7 +90,14 @@ final class AppEnvironment {
     /// Ricordo del viaggio (contatori per volo, notifica una sola volta).
     @ObservationIgnored private var tripMemory: TripMemory
     @ObservationIgnored private let tripStore: TripMemoryStore
+    @ObservationIgnored private let passportStore = TravelPassportStore()
+    /// Partite gia' viste finire (richiesta di recensione dopo una vittoria, una sola volta per partita).
+    @ObservationIgnored private var finishedGameIDs: Set<String> = []
+    @ObservationIgnored private var lastOpenRecordedAt: Date?
+    @ObservationIgnored private var terminationObserver: NSObjectProtocol?
     @ObservationIgnored private var presenceTask: Task<Void, Never>?
+    /// RADAR_PING periodico verso i vicini diretti, solo con il radar a schermo e l'app in primo piano.
+    @ObservationIgnored private var radarTask: Task<Void, Never>?
     @ObservationIgnored private var pathMonitor: NWPathMonitor?
 
     private let identityStore: IdentityStore
@@ -100,6 +126,7 @@ final class AppEnvironment {
         self.notifier = notifier
         self.tripStore = tripStore
         self.tripMemory = tripStore.load()
+        self.passport = TravelPassportStore().load()
         presence.onPersonSeen = { [weak self] person in
             self?.tripMemory.recordMet(person.nodeID)
         }
@@ -127,7 +154,8 @@ final class AppEnvironment {
         #if DEBUG
         return true
         #else
-        return entitlementState.isPro()
+        // Il Pass del premio inviti vale solo per uso personale (non autorizza a regalare il Pass ai gruppi).
+        return entitlementState.isPro() || referral.isPassActive()
         #endif
     }
 
@@ -149,6 +177,7 @@ final class AppEnvironment {
             #endif
             identityRecord = try await db.identities.fetch()
             phase = .ready
+            recordOpen()
             if identityRecord != nil {
                 #if DEBUG
                 // Prima della mesh: alcuni servizi (StoreKit, Live Activity) possono tardare ad avviarsi.
@@ -268,6 +297,7 @@ final class AppEnvironment {
                                      identity: identityKeys, nickname: nickname)
         self.proPass = proPass
         await proPass.start()
+        refreshMySeat()
 
         if let store = try? mediaStoreFactory() {
             mediaStore = store
@@ -297,6 +327,13 @@ final class AppEnvironment {
 
         let games = GameService(router: router, database: database, identity: identityKeys, nickname: nickname)
         self.games = games
+        let gameEvents = await games.events()
+        backgroundTasks.append(Task { [weak self] in
+            for await event in gameEvents {
+                guard let self else { break }
+                if case .updated(let gameID, _) = event { await self.gameUpdated(gameID) }
+            }
+        })
         await games.start()
 
         let calls = CallService(router: router, database: database, identity: identityKeys, nickname: nickname)
@@ -348,6 +385,16 @@ final class AppEnvironment {
 
         await liveActivity.cleanUpStale()
         refreshLiveActivity()
+        observeTermination()
+    }
+
+    /// Chiusura dell'app (terminazione): la Live Activity "A bordo" non deve restare sulla Lock Screen.
+    private func observeTermination() {
+        guard terminationObserver == nil else { return }
+        terminationObserver = NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification,
+                                                                     object: nil, queue: .main) { _ in
+            LiveActivityController.endAllBeforeTermination()
+        }
     }
 
     /// Aggiorna la Live Activity con vicini, non letti e Cabina del volo (coalescenza di 1 s).
@@ -356,6 +403,11 @@ final class AppEnvironment {
         liveActivityRefresh = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled, let self, let database = self.database, self.router != nil else { return }
+            // Solo durante un volo (Cabina del volo attiva o modalita' aereo probabile) e se l'utente non l'ha spenta.
+            guard AppSettings.isLiveActivityEnabled, self.isLikelyInFlight else {
+                await self.liveActivity.end()
+                return
+            }
             let unread = (try? await database.conversations.totalUnread()) ?? 0
             let flight = (try? await database.conversations.activeFlightLounges())?.first?.title
             await self.liveActivity.update(nickname: self.nickname, neighborCount: self.neighbors.count,
@@ -390,8 +442,14 @@ final class AppEnvironment {
     // MARK: - Persone vicine
 
     private var currentPresenceSettings: PresenceSettings {
-        PresenceSettings(isVisible: AppSettings.isNearbyVisible, openToGames: AppSettings.isOpenToGames,
-                         flightCode: activeFlightLounge?.flightCode)
+        let flight = activeFlightLounge?.flightCode
+        return PresenceSettings(isVisible: AppSettings.isNearbyVisible, openToGames: AppSettings.isOpenToGames,
+                                flightCode: flight, seat: AppSettings.isSeatShared ? AppSettings.seat(forFlight: flight) : nil)
+    }
+
+    /// "Attivita' in tempo reale" accesa o spenta nelle Impostazioni.
+    func liveActivitySettingChanged() {
+        refreshLiveActivity()
     }
 
     /// Impostazioni "Visibile alle persone vicine" / "Accetto sfide" cambiate: il PRESENCE si adegua subito.
@@ -412,6 +470,8 @@ final class AppEnvironment {
                 await self.refreshFlightState()
                 await router.setPresenceSettings(self.currentPresenceSettings)
                 await router.sendPresence()
+                // Bacheca: i nostri annunci aperti, anche con la visibilita' spenta (annuncio = scelta esplicita).
+                await router.resendBoardPosts()
                 try? await Task.sleep(for: .seconds(NearbyProtocol.presenceInterval))
             }
         }
@@ -425,7 +485,7 @@ final class AppEnvironment {
     }
 
     @discardableResult
-    func greet(_ person: NearbyPerson, game: GameKind? = nil) async throws -> NearbyActionResult {
+    func greet(_ person: NearbyPerson, game: GameKind? = nil, greeting: String = "") async throws -> NearbyActionResult {
         guard let router, let database else { throw RouterError.notRunning }
         if let peer = try await database.peers.fetch(nodeID: person.nodeID), peer.isTrusted, !peer.isBlocked {
             let conversation = try await database.conversations.ensureDirectConversation(with: peer, showAtTop: true)
@@ -435,9 +495,98 @@ final class AppEnvironment {
             requestedConversation = conversation
             return .openedChat
         }
-        let requestID = try await router.sendContactRequest(to: person.asPeerRecord, gameKind: game)
+        let requestID = try await router.sendContactRequest(to: person.asPeerRecord, greeting: greeting, gameKind: game)
         contactRequests.sent(requestID, to: person.nodeID)
         return .requestSent
+    }
+
+    // MARK: - Bacheca della cabina e posto
+
+    /// Pubblica un annuncio (parte subito e viene ripetuto ogni 60 s finche' resta aperto).
+    @discardableResult
+    func postToBoard(kind: BoardKind, text: String) async throws -> BoardPostEntry {
+        guard let router else { throw RouterError.notRunning }
+        return try await router.postToBoard(kind: kind, text: text, seat: mySeat)
+    }
+
+    func closeBoardPost(_ entry: BoardPostEntry) async {
+        await router?.closeBoardPost(entry.postID)
+    }
+
+    /// "Saluta" l'autore di un annuncio con il saluto precompilato "Per il tuo annuncio: <testo>".
+    @discardableResult
+    func reply(to entry: BoardPostEntry) async throws -> NearbyActionResult {
+        let prefix = String(localized: "Per il tuo annuncio: ")
+        return try await greet(entry.asNearbyPerson, greeting: BoardPostEntry.replyGreeting(prefix: prefix, text: entry.text))
+    }
+
+    /// "Proponi scambio posto": "Saluta" con "Ti va di scambiare il posto? Io sono al 14C."
+    @discardableResult
+    func proposeSeatSwap(to person: NearbyPerson) async throws -> NearbyActionResult {
+        try await greet(person, greeting: Self.seatSwapGreeting(mySeat: mySeat))
+    }
+
+    static func seatSwapGreeting(mySeat: String?) -> String {
+        if let mySeat { return String(localized: "Ti va di scambiare il posto? Io sono al \(mySeat).") }
+        return String(localized: "Ti va di scambiare il posto?")
+    }
+
+    /// Salva (o cancella) il nostro posto sul volo attivo e lo riannuncia se condiviso.
+    func setMySeat(_ seat: String?) {
+        guard let flight = activeFlightLounge?.flightCode else { return }
+        AppSettings.setSeat(seat, forFlight: flight)
+        refreshMySeat()
+        nearbySettingsChanged()
+    }
+
+    private func refreshMySeat() {
+        let seat = AppSettings.seat(forFlight: activeFlightLounge?.flightCode)
+        if seat != mySeat { mySeat = seat }
+    }
+
+    // MARK: - Diagnosi, recensione, premio inviti
+
+    /// "Riavvia la radio" (diagnosi "Perche' non vedo nessuno?").
+    func restartRadio() async {
+        await router?.restartRadio()
+        if let router { radioState = await router.radioState }
+    }
+
+    /// Ogni avvio o ritorno in primo piano conta come apertura (richiesta di recensione).
+    private func recordOpen() {
+        let now = Date()
+        if let last = lastOpenRecordedAt, now.timeIntervalSince(last) < 5 { return }
+        lastOpenRecordedAt = now
+        ReviewPrompt.recordOpen(now: now)
+    }
+
+    /// Momento felice (cartolina di fine volo mostrata, partita vinta): recensione se le condizioni lo consentono.
+    func reviewMoment(_ moment: ReviewPrompt.Moment) {
+        guard !isReviewRequestPending, ReviewPrompt.consumeIfAllowed() else { return }
+        isReviewRequestPending = true
+    }
+
+    /// Partita aggiornata: una vittoria (non contro il passeggero virtuale) e' un momento felice.
+    private func gameUpdated(_ gameID: String) async {
+        guard !finishedGameIDs.contains(gameID), let database, let msgID = Data(hexString: gameID),
+              let message = try? await database.messages.fetch(msgID: msgID),
+              let data = message.gameState, let state = try? GameSessionState.decode(data),
+              state.status == .finished else { return }
+        finishedGameIDs.insert(gameID)
+        guard state.outcome == .iWon, !DemoPeerIdentity.isDemoPeer(state.opponentNodeID) else { return }
+        reviewMoment(.gameWon)
+    }
+
+    /// PAIR_HELLO da un contatto mai visto: conta per il premio inviti (24 h di Pass al 3°, una volta).
+    private func registerReferral(peerNodeID: Data, isNewPeer: Bool) {
+        let outcome = ReferralProgram.register(peerNodeID.hexString, isNewPeer: isNewPeer, state: referral)
+        guard outcome.state != referral else { return }
+        referral = outcome.state
+        ReferralProgram.save(outcome.state)
+        if outcome.unlocked {
+            isReferralJustUnlocked = true
+            Haptics.success()
+        }
     }
 
     /// Accetta (apre la nuova chat) o rifiuta una richiesta ricevuta.
@@ -485,7 +634,9 @@ final class AppEnvironment {
         let lounge = try? await database.conversations.activeFlightLounges().first
         if lounge?.id != activeFlightLounge?.id || lounge?.expiresAtMs != activeFlightLounge?.expiresAtMs {
             activeFlightLounge = lounge
+            refreshMySeat()
             await router?.setPresenceSettings(currentPresenceSettings)
+            refreshLiveActivity()
         }
         await advanceTripMemory()
     }
@@ -500,6 +651,10 @@ final class AppEnvironment {
         let computed = (try? await ended.withComputedCounters(database: database, myNodeID: identityKeys.nodeID, myName: nickname)) ?? ended
         tripMemory.updateFinished(computed)
         tripStore.save(tripMemory)
+        // Passaporto: contatori cumulativi e badge raggiunti con questo volo.
+        let badges = passportStore.record(computed)
+        passport = passportStore.load()
+        if !badges.isEmpty { newPassportBadges = badges }
         if let localNotifier = notifier as? LocalNotificationCenter {
             await localNotifier.notifyTripCard(computed)
         }
@@ -531,6 +686,7 @@ final class AppEnvironment {
                 guard missing != self.isCellularMissing else { return }
                 self.isCellularMissing = missing
                 await self.advanceTripMemory()
+                self.refreshLiveActivity()
             }
         }
         monitor.start(queue: DispatchQueue(label: "aerochat.connectivity"))
@@ -539,6 +695,9 @@ final class AppEnvironment {
     /// Ritorno in primo piano: riprova subito i messaggi in attesa di conferma di consegna.
     func sceneDidBecomeActive() async {
         isSceneActive = true
+        recordOpen()
+        // Di nuovo in primo piano dopo l'atterraggio: la Live Activity "A bordo" si chiude.
+        if !isLikelyInFlight { await liveActivity.end() }
         await updateProximityRanging()
         startPresenceLoop()
         await router?.flushRelayQueue()
@@ -547,12 +706,47 @@ final class AppEnvironment {
     /// Il radar e' comparso/scomparso: il polling RSSI (batteria) segue la sua visibilita'.
     func setRadarVisible(_ visible: Bool) {
         isRadarVisible = visible
+        if visible { uwb.resetDenial() }
         // Lo stato viene riletto quando il Task parte: apri/chiudi rapidi convergono sull'ultimo valore.
         Task { await updateProximityRanging() }
     }
 
     private func updateProximityRanging() async {
-        await router?.setProximityRanging(isRadarVisible && isSceneActive)
+        let active = isRadarVisible && isSceneActive
+        await router?.setProximityRanging(active)
+        if active {
+            startRadarLoop()
+        } else {
+            await stopRadarLoop()
+        }
+    }
+
+    /// Ogni `radarPingInterval`: a ogni vicino diretto il nostro RSSI e il token UWB per lui.
+    private func startRadarLoop() {
+        guard radarTask == nil, router != nil else { return }
+        radarTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, let router = self.router else { break }
+                let nodeIDs = Set(self.neighbors.map(\.nodeID))
+                self.uwb.prune(keeping: nodeIDs)
+                for nodeID in nodeIDs {
+                    await router.sendRadarPing(to: nodeID, discoveryToken: self.uwb.localToken(for: nodeID), isActive: true)
+                }
+                try? await Task.sleep(for: .seconds(NearbyProtocol.radarPingInterval))
+            }
+        }
+    }
+
+    /// Radar chiuso: i vicini con cui misuravamo in UWB lo sanno subito e fermano la loro sessione.
+    private func stopRadarLoop() async {
+        guard let task = radarTask else { return }
+        task.cancel()
+        radarTask = nil
+        let ranging = neighbors.map(\.nodeID).filter { uwb.isRanging(with: $0) }
+        uwb.stopAll()
+        for nodeID in ranging {
+            await router?.sendRadarPing(to: nodeID, discoveryToken: nil, isActive: false)
+        }
     }
 
     /// Passaggio in background: il badge dell'icona riparte dal totale reale dei non letti.
@@ -595,9 +789,13 @@ final class AppEnvironment {
         typing.removeAll()
         presenceTask?.cancel()
         presenceTask = nil
+        radarTask?.cancel()
+        radarTask = nil
+        uwb.stopAll()
         pathMonitor?.cancel()
         pathMonitor = nil
         presence.removeAll()
+        boardPosts = []
         contactRequests.removeAll()
     }
 
@@ -661,7 +859,16 @@ final class AppEnvironment {
         guard let router else { throw RouterError.notRunning }
         let lounge = try await router.joinFlightLounge(pass)
         _ = try? await proPass?.broadcastGrantIfEntitled(for: lounge)
+        // Il posto della carta d'imbarco (se valido) diventa "il mio posto", salvo uno gia' scelto a mano.
+        if let seat = SeatCode.normalized(pass.seat), AppSettings.seat(forFlight: pass.canonicalKey) == nil {
+            AppSettings.setSeat(seat, forFlight: pass.canonicalKey)
+        }
+        // Partenza futura: promemoria alle 07:00 del giorno del volo per invitare chi viaggia con noi.
+        if let localNotifier = notifier as? LocalNotificationCenter {
+            await localNotifier.scheduleFlightReminder(pass)
+        }
         await refreshFlightState()
+        refreshMySeat()
         // I vicini scoprono subito che siamo sullo stesso volo.
         await router.sendPresence()
         return lounge
@@ -790,6 +997,7 @@ final class AppEnvironment {
             if state != radioState {
                 radioState = state
                 await advanceTripMemory()
+                refreshLiveActivity()
             }
         case .neighborsChanged(let list):
             if list != neighbors {
@@ -809,9 +1017,12 @@ final class AppEnvironment {
             if count != relayQueueCount { relayQueueCount = count }
         case .typingChanged(let conversationID, let senderNodeID, let nickname, let isTyping):
             typing.update(conversationID: conversationID, senderNodeID: senderNodeID, nickname: nickname, isTyping: isTyping)
-        case .pairedByHello:
+        case .pairedByHello(_, let peerNodeID, let isNewPeer):
             // La nuova chat compare da sola in cima alla lista (osservazione del DB): niente notifica.
             Haptics.success()
+            registerReferral(peerNodeID: peerNodeID, isNewPeer: isNewPeer)
+        case .boardChanged(let posts):
+            if posts != boardPosts { boardPosts = posts }
         case .presenceUpdated(let person):
             presence.update(person)
         case .contactRequestReceived(let request):
@@ -820,6 +1031,19 @@ final class AppEnvironment {
         case .contactRequestAnswered(_, let peerNodeID, let nickname, let outcome, _):
             contactRequests.answered(peerNodeID: peerNodeID, nickname: nickname, outcome: outcome)
             if case .accepted = outcome { Haptics.success() }
+        case .radarPingReceived(let nodeID, let discoveryToken, let isActive):
+            // Il vicino ha chiuso il radar: la sua sessione UWB e' finita, la nostra va fermata.
+            guard isActive else {
+                uwb.stop(nodeID)
+                return
+            }
+            guard radarTask != nil, let discoveryToken else { return }
+            let isNew = !uwb.isRanging(with: nodeID)
+            uwb.receive(peerToken: discoveryToken, from: nodeID)
+            // Primo token da questo vicino: gli rispondiamo subito col nostro, senza aspettare il prossimo giro.
+            if isNew, uwb.isRanging(with: nodeID), let router {
+                await router.sendRadarPing(to: nodeID, discoveryToken: uwb.localToken(for: nodeID), isActive: true)
+            }
         case .groupMembersChanged(let conversationID):
             // Nuovi membri nel gruppo: se siamo Pro, il pass li raggiunge subito.
             guard isPro, let database, let proPass,

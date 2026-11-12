@@ -1,5 +1,8 @@
 package com.stefanobrandi.aerochat.ui.pairing
 
+import com.stefanobrandi.aerochat.ui.paywall.ReferralProgressCard
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -159,7 +162,7 @@ fun QRPairingSheet(
         }
 
         Column(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(top = 8.dp, bottom = 24.dp),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(top = 8.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
@@ -246,6 +249,8 @@ private fun ShowSection(payload: PairingPayload?, group: ConversationRecord?) {
         )
         // Invito via Nearby Share / Messaggi: link allo store + link di pairing, il compagno e' gia' collegato al primo avvio.
         if (payload != null) InviteShareButton(payload, group)
+        // Premio inviti: "2 su 3 amici invitati" (solo il QR personale conta).
+        if (group == null) ReferralProgressCard(Modifier.padding(horizontal = 16.dp))
     }
 }
 
@@ -291,7 +296,7 @@ fun StoreQRSheet(onDismiss: () -> Unit) {
         leading = { dismiss -> SheetBarButton(stringResource(R.string.shell_close), dismiss) },
     ) {
         Column(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(top = 24.dp, bottom = 32.dp),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(top = 24.dp, bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
@@ -308,6 +313,27 @@ fun StoreQRSheet(onDismiss: () -> Unit) {
                 modifier = Modifier.padding(horizontal = 32.dp),
             )
             Text(QRCodeGenerator.storeLandingURL, style = AeroTheme.monospaced(), color = AeroTheme.accentCyan)
+            AlreadyAboardSection()
         }
+    }
+}
+
+/**
+ * "Gia' in volo?" (RELEASE_1_4_SPEC.md §B14): su Android l'app si passa senza internet con Quick Share dal
+ * Play Store; su iPhone non e' possibile, va installata prima dell'imbarco.
+ */
+@Composable
+private fun AlreadyAboardSection() {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .background(AeroTheme.surface, RoundedCornerShape(16.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(stringResource(R.string.growth14_aboard_title), style = AeroTheme.title(17f, FontWeight.SemiBold), color = AeroTheme.textPrimary)
+        Text(stringResource(R.string.growth14_aboard_android), style = AeroTheme.footnote, color = AeroTheme.textPrimary)
+        Text(stringResource(R.string.growth14_aboard_iphone), style = AeroTheme.footnote, color = AeroTheme.textSecondary)
     }
 }

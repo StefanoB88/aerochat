@@ -23,6 +23,7 @@ mlkitBarcode = "17.3.0"
 mlkitSmartReply = "17.0.4"
 zxing = "3.5.3"
 billing = "7.1.1"
+playReview = "2.0.2"
 robolectric = "4.14.1"
 androidxTestCore = "1.6.1"
 
@@ -73,6 +74,7 @@ mlkit-smart-reply = { group = "com.google.mlkit", name = "smart-reply", version.
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 
 play-billing-ktx = { group = "com.android.billingclient", name = "billing-ktx", version.ref = "billing" }
+play-review-ktx = { group = "com.google.android.play", name = "review-ktx", version.ref = "playReview" }
 
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }

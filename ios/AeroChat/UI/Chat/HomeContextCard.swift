@@ -31,6 +31,8 @@ struct PeopleSubtitle: ViewModifier {
 struct HomeContextCard: View {
 
     let isInFlight: Bool
+    /// Modalita' viaggio scelta (vale solo a terra).
+    @Binding var travelMode: TravelMode
     let flightNumber: String?
     let hasFlightCabin: Bool
     let nearbyCount: Int
@@ -40,12 +42,16 @@ struct HomeContextCard: View {
     let onInvite: () -> Void
     let onNewGroup: () -> Void
     let onNearby: () -> Void
+    let onRadar: () -> Void
+    let onShareLocation: () -> Void
+    let onTranslationHelp: () -> Void
+    let onDiagnosis: () -> Void
     let onDismiss: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
-                Image(systemName: isInFlight ? "airplane" : "person.2.wave.2.fill")
+                Image(systemName: isInFlight ? "airplane" : (travelMode == .flight ? "person.2.wave.2.fill" : travelMode.systemImage))
                     .font(.title)
                     .foregroundStyle(AeroTheme.accentCyan)
                 VStack(alignment: .leading, spacing: 4) {
@@ -70,6 +76,15 @@ struct HomeContextCard: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Nascondi")
             }
+            if !isInFlight {
+                Picker("Modalità viaggio", selection: $travelMode) {
+                    ForEach(TravelMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: travelMode) { _, _ in Haptics.tap() }
+            }
             if isInFlight {
                 if hasFlightCabin {
                     action("Entra nella Cabina del volo", systemImage: "airplane.departure", prominent: true, perform: onOpenFlightCabin)
@@ -79,8 +94,23 @@ struct HomeContextCard: View {
                     action("Gioca con chi è a bordo", systemImage: "suit.spade.fill", prominent: false, perform: onPlayOnBoard)
                 }
             } else {
-                action("Invita amici", systemImage: "qrcode", prominent: true, perform: onInvite)
-                action("Crea un gruppo di viaggio", systemImage: "person.3.fill", prominent: false, perform: onNewGroup)
+                switch travelMode {
+                case .flight:
+                    action("Invita amici", systemImage: "qrcode", prominent: true, perform: onInvite)
+                    action("Crea un gruppo di viaggio", systemImage: "person.3.fill", prominent: false, perform: onNewGroup)
+                case .ship:
+                    action("Crea il gruppo della crociera", systemImage: "person.3.fill", prominent: true, perform: onNewGroup)
+                    action("Persone vicine", systemImage: "person.wave.2.fill", prominent: false, perform: onNearby)
+                case .festival:
+                    action("Crea il gruppo degli amici", systemImage: "person.3.fill", prominent: true, perform: onNewGroup)
+                    action("Radar: ritrova gli amici", systemImage: "dot.radiowaves.left.and.right", prominent: false, perform: onRadar)
+                case .mountain:
+                    action("Crea il gruppo dell'escursione", systemImage: "person.3.fill", prominent: true, perform: onNewGroup)
+                    action("Condividi la tua posizione", systemImage: "location.fill", prominent: false, perform: onShareLocation)
+                case .abroad:
+                    action("Persone vicine", systemImage: "person.wave.2.fill", prominent: true, perform: onNearby)
+                    action("Traduzione offline", systemImage: "character.bubble", prominent: false, perform: onTranslationHelp)
+                }
             }
             if nearbyCount > 0, !(isInFlight && hasFlightCabin) {
                 Button {
@@ -95,6 +125,22 @@ struct HomeContextCard: View {
                         Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                     }
                     .foregroundStyle(AeroTheme.accentEmerald)
+                }
+                .buttonStyle(.plain)
+            } else if nearbyCount == 0 {
+                // "Nessuno vicino per ora": la diagnosi spiega cosa controllare.
+                Button {
+                    Haptics.tap()
+                    onDiagnosis()
+                } label: {
+                    HStack {
+                        Image(systemName: "questionmark.circle")
+                        Text("Perché non vedo nessuno?")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(AeroTheme.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -112,7 +158,13 @@ struct HomeContextCard: View {
             if let flightNumber { return String(localized: "Sei sul volo \(flightNumber)") }
             return String(localized: "Sei in volo?")
         }
-        return String(localized: "Porta i tuoi amici a bordo")
+        switch travelMode {
+        case .flight: return String(localized: "Porta i tuoi amici a bordo")
+        case .ship: return String(localized: "In crociera senza rete")
+        case .festival: return String(localized: "Al festival senza campo")
+        case .mountain: return String(localized: "In montagna senza copertura")
+        case .abroad: return String(localized: "All'estero senza roaming")
+        }
     }
 
     private var subtitle: String {
@@ -124,7 +176,13 @@ struct HomeContextCard: View {
             }
             return String(localized: "Inquadra la carta d'imbarco per entrare nella chat del tuo volo.")
         }
-        return String(localized: "Aggiungili ora con il QR: in volo vi troverete da soli via Bluetooth.")
+        switch travelMode {
+        case .flight: return String(localized: "Aggiungili ora con il QR: in volo vi troverete da soli via Bluetooth.")
+        case .ship: return String(localized: "Chatta con chi è a bordo anche in mare aperto, senza roaming né Wi-Fi a pagamento.")
+        case .festival: return String(localized: "Quando la rete crolla tra la folla, i messaggi passano da telefono a telefono.")
+        case .mountain: return String(localized: "Resta in contatto con il gruppo dell'escursione anche dove il telefono non prende.")
+        case .abroad: return String(localized: "Scrivi a chi è vicino senza dati mobili e traduci i messaggi senza internet.")
+        }
     }
 
     private func action(_ title: LocalizedStringKey, systemImage: String, prominent: Bool, perform: @escaping () -> Void) -> some View {

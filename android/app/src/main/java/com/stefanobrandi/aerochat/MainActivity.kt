@@ -79,6 +79,10 @@ class MainActivity : ComponentActivity() {
             AppNavigator.openNearby()
             intent.removeExtra(LocalNotificationCenter.extraNearby)
         }
+        if (intent.getBooleanExtra(LocalNotificationCenter.extraInvite, false)) {
+            AppNavigator.openInvite()
+            intent.removeExtra(LocalNotificationCenter.extraInvite)
+        }
         intent.getStringExtra(LocalNotificationCenter.extraTripKey)?.let { key ->
             environment.openTripCard(key)
             intent.removeExtra(LocalNotificationCenter.extraTripKey)

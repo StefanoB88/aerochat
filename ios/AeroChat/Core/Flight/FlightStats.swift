@@ -58,6 +58,7 @@ struct FlightStats: Equatable, Sendable {
         gamesPlayed = trip.gamesPlayed
         flightTitles = [trip.title]
         leaderboard = trip.leaderboard
+        longestHop = trip.longestHop ?? 0
         headline = String(localized: "Volo \(trip.flightNumber) · \(trip.date.formatted(.dateTime.day().month(.abbreviated)))")
     }
 

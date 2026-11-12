@@ -118,6 +118,26 @@ struct LocalNotificationCenter: MeshNotifier {
         try? await UNUserNotificationCenter.current().add(request)
     }
 
+    /// Promemoria del giorno del volo (07:00, solo per partenze future): "Oggi voli con AZ204: invita ora chi
+    /// viaggia con te...". Il tocco apre "Invita amici". Un solo promemoria per volo (stesso identificatore).
+    @discardableResult
+    func scheduleFlightReminder(_ pass: BoardingPass, now: Date = Date()) async -> Bool {
+        guard let fire = FlightReminder.fireDate(departureDay: pass.departureDay, now: now) else { return false }
+        let flight = FlightReminder.label(canonicalKey: pass.canonicalKey)
+        let content = UNMutableNotificationContent()
+        content.title = String(localized: "Oggi voli con \(flight) ✈️")
+        content.body = String(localized: "Oggi voli con \(flight): invita ora chi viaggia con te, in aereo non potrà scaricare AeroChat.")
+        content.sound = .default
+        content.threadIdentifier = "flight-reminder"
+        content.userInfo = [DeepLink.userInfoKey: DeepLink.inviteValue]
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        let request = UNNotificationRequest(identifier: "flight-reminder-\(pass.canonicalKey)", content: content, trigger: trigger)
+        return (try? await UNUserNotificationCenter.current().add(request)) != nil
+    }
+
     static func preview(for message: MessageRecord) -> String {
         switch message.contentType {
         case .text: return message.text ?? ""
@@ -163,14 +183,19 @@ final class NotificationPresentationDelegate: NSObject, UNUserNotificationCenter
 enum DeepLink: Equatable, Sendable {
     case nearby
     case tripCard(flightCode: String)
+    /// "Invita amici" (promemoria del giorno del volo).
+    case invite
 
     static let userInfoKey = "deep_link"
     static let nearbyValue = "nearby"
+    static let inviteValue = "invite"
     static let tripCardPrefix = "trip:"
 
     init?(userInfoValue value: String) {
         if value == Self.nearbyValue {
             self = .nearby
+        } else if value == Self.inviteValue {
+            self = .invite
         } else if value.hasPrefix(Self.tripCardPrefix) {
             self = .tripCard(flightCode: String(value.dropFirst(Self.tripCardPrefix.count)))
         } else {

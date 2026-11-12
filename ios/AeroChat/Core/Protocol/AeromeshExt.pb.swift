@@ -574,6 +574,8 @@ nonisolated struct Aeromesh_V1_Presence: Sendable {
 
   var sentAtMs: Int64 = 0
 
+  var seat: String = String()
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -629,6 +631,86 @@ nonisolated struct Aeromesh_V1_ContactRequest: Sendable {
   var greeting: String = String()
 
   var gameKind: Int32 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct Aeromesh_V1_RadarPing: Sendable {
+  var targetNodeID: Data = Data()
+
+  var rssiDbm: Int32 = 0
+
+  var niDiscoveryToken: Data = Data()
+
+  var isActive: Bool = false
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated enum Aeromesh_V1_BoardKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+  typealias RawValue = Int
+  case unspecified // = 0
+  case lookingFor // = 1
+  case offering // = 2
+  case found // = 3
+  case seatSwap // = 4
+  case UNRECOGNIZED(Int)
+
+  init() {
+    self = .unspecified
+  }
+
+  init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .lookingFor
+    case 2: self = .offering
+    case 3: self = .found
+    case 4: self = .seatSwap
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .lookingFor: return 1
+    case .offering: return 2
+    case .found: return 3
+    case .seatSwap: return 4
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  static let allCases: [Aeromesh_V1_BoardKind] = [
+    .unspecified,
+    .lookingFor,
+    .offering,
+    .found,
+    .seatSwap,
+  ]
+
+}
+
+nonisolated struct Aeromesh_V1_BoardPost: Sendable {
+  var postID: Data = Data()
+
+  var kind: Aeromesh_V1_BoardKind = .unspecified
+
+  var text: String = String()
+
+  var flightCode: String = String()
+
+  var seat: String = String()
+
+  var createdAtMs: Int64 = 0
+
+  var isClosed: Bool = false
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1299,6 +1381,7 @@ nonisolated extension Aeromesh_V1_Presence: SwiftProtobuf.Message, SwiftProtobuf
     2: .standard(proto: "flight_code"),
     3: .standard(proto: "open_to_games"),
     4: .standard(proto: "sent_at_ms"),
+    5: .same(proto: "seat"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1308,6 +1391,7 @@ nonisolated extension Aeromesh_V1_Presence: SwiftProtobuf.Message, SwiftProtobuf
       case 2: try { try decoder.decodeSingularStringField(value: &self.flightCode) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.openToGames) }()
       case 4: try { try decoder.decodeSingularInt64Field(value: &self.sentAtMs) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.seat) }()
       default: break
       }
     }
@@ -1326,6 +1410,9 @@ nonisolated extension Aeromesh_V1_Presence: SwiftProtobuf.Message, SwiftProtobuf
     if self.sentAtMs != 0 {
       try visitor.visitSingularInt64Field(value: self.sentAtMs, fieldNumber: 4)
     }
+    if !self.seat.isEmpty {
+      try visitor.visitSingularStringField(value: self.seat, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1334,6 +1421,7 @@ nonisolated extension Aeromesh_V1_Presence: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.flightCode != rhs.flightCode {return false}
     if lhs.openToGames != rhs.openToGames {return false}
     if lhs.sentAtMs != rhs.sentAtMs {return false}
+    if lhs.seat != rhs.seat {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1390,6 +1478,128 @@ nonisolated extension Aeromesh_V1_ContactRequest: SwiftProtobuf.Message, SwiftPr
     if lhs.requestID != rhs.requestID {return false}
     if lhs.greeting != rhs.greeting {return false}
     if lhs.gameKind != rhs.gameKind {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_RadarPing: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".RadarPing"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "target_node_id"),
+    2: .standard(proto: "rssi_dbm"),
+    3: .standard(proto: "ni_discovery_token"),
+    4: .standard(proto: "is_active"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.targetNodeID) }()
+      case 2: try { try decoder.decodeSingularSInt32Field(value: &self.rssiDbm) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.niDiscoveryToken) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.isActive) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.targetNodeID.isEmpty {
+      try visitor.visitSingularBytesField(value: self.targetNodeID, fieldNumber: 1)
+    }
+    if self.rssiDbm != 0 {
+      try visitor.visitSingularSInt32Field(value: self.rssiDbm, fieldNumber: 2)
+    }
+    if !self.niDiscoveryToken.isEmpty {
+      try visitor.visitSingularBytesField(value: self.niDiscoveryToken, fieldNumber: 3)
+    }
+    if self.isActive != false {
+      try visitor.visitSingularBoolField(value: self.isActive, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_RadarPing, rhs: Aeromesh_V1_RadarPing) -> Bool {
+    if lhs.targetNodeID != rhs.targetNodeID {return false}
+    if lhs.rssiDbm != rhs.rssiDbm {return false}
+    if lhs.niDiscoveryToken != rhs.niDiscoveryToken {return false}
+    if lhs.isActive != rhs.isActive {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Aeromesh_V1_BoardKind: SwiftProtobuf._ProtoNameProviding {
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "BOARD_KIND_UNSPECIFIED"),
+    1: .same(proto: "BOARD_KIND_LOOKING_FOR"),
+    2: .same(proto: "BOARD_KIND_OFFERING"),
+    3: .same(proto: "BOARD_KIND_FOUND"),
+    4: .same(proto: "BOARD_KIND_SEAT_SWAP"),
+  ]
+}
+
+nonisolated extension Aeromesh_V1_BoardPost: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".BoardPost"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .standard(proto: "post_id"),
+    2: .same(proto: "kind"),
+    3: .same(proto: "text"),
+    4: .standard(proto: "flight_code"),
+    5: .same(proto: "seat"),
+    6: .standard(proto: "created_at_ms"),
+    7: .standard(proto: "is_closed"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.postID) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.text) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.flightCode) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.seat) }()
+      case 6: try { try decoder.decodeSingularInt64Field(value: &self.createdAtMs) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.isClosed) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.postID.isEmpty {
+      try visitor.visitSingularBytesField(value: self.postID, fieldNumber: 1)
+    }
+    if self.kind != .unspecified {
+      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 2)
+    }
+    if !self.text.isEmpty {
+      try visitor.visitSingularStringField(value: self.text, fieldNumber: 3)
+    }
+    if !self.flightCode.isEmpty {
+      try visitor.visitSingularStringField(value: self.flightCode, fieldNumber: 4)
+    }
+    if !self.seat.isEmpty {
+      try visitor.visitSingularStringField(value: self.seat, fieldNumber: 5)
+    }
+    if self.createdAtMs != 0 {
+      try visitor.visitSingularInt64Field(value: self.createdAtMs, fieldNumber: 6)
+    }
+    if self.isClosed != false {
+      try visitor.visitSingularBoolField(value: self.isClosed, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Aeromesh_V1_BoardPost, rhs: Aeromesh_V1_BoardPost) -> Bool {
+    if lhs.postID != rhs.postID {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.text != rhs.text {return false}
+    if lhs.flightCode != rhs.flightCode {return false}
+    if lhs.seat != rhs.seat {return false}
+    if lhs.createdAtMs != rhs.createdAtMs {return false}
+    if lhs.isClosed != rhs.isClosed {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

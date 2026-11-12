@@ -12,12 +12,24 @@ struct EmergencySheet: View {
     @State private var isSending = false
     @State private var errorMessage: String?
     @State private var locator = OneShotLocator()
+    @State private var showCrewConfirmation = false
+
+    /// Regole in volo (Cabina del volo attiva o modalita' aereo probabile).
+    private var inFlight: Bool { environment.isLikelyInFlight }
 
     private let statuses: [EmergencyStatus] = [.ok, .needHelp, .allClear]
 
     var body: some View {
         NavigationStack {
             Form {
+                if inFlight {
+                    Section {
+                        Label("In volo l'equipaggio è il primo riferimento.", systemImage: "person.badge.shield.checkmark.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
+                    .listRowBackground(Color.orange.opacity(0.12))
+                }
                 Section {
                     ForEach(statuses, id: \.rawValue) { candidate in
                         Button {
@@ -42,12 +54,22 @@ struct EmergencySheet: View {
                 }
                 .listRowBackground(AeroTheme.surface)
 
-                Section("Messaggio (facoltativo)") {
+                Section {
                     TextField("Dove sei, cosa serve…", text: $text, axis: .vertical)
                         .lineLimit(2...4)
                         .onChange(of: text) { _, value in
                             if value.count > EmergencyService.maxTextLength { text = String(value.prefix(EmergencyService.maxTextLength)) }
                         }
+                } header: {
+                    if needsHelpText {
+                        Text("Messaggio")
+                    } else {
+                        Text("Messaggio (facoltativo)")
+                    }
+                } footer: {
+                    if needsHelpText, !EmergencySafety.isHelpTextSufficient(text) {
+                        Text("Descrivi cosa succede (almeno \(EmergencySafety.minimumHelpTextLength) caratteri).")
+                    }
                 }
                 .listRowBackground(AeroTheme.surface)
 
@@ -64,6 +86,9 @@ struct EmergencySheet: View {
                         } else if locator.isDenied {
                             Text("Posizione non autorizzata: attivala in Impostazioni › Privacy.")
                                 .font(.footnote).foregroundStyle(.red)
+                            Button("Apri Impostazioni") { PermissionPrompt.openSettings(for: .location) }
+                                .font(.footnote.weight(.semibold))
+                                .tint(AeroTheme.accentCyan)
                         } else {
                             ProgressView("Ricerca della posizione…").tint(AeroTheme.accentCyan)
                         }
@@ -87,15 +112,41 @@ struct EmergencySheet: View {
                     if isSending {
                         ProgressView().tint(AeroTheme.accentCyan)
                     } else {
-                        Button("Invia") { Task { await send() } }
+                        Button("Invia") { attemptSend() }
                             .toolbarLabel()
-                            .disabled(includeLocation && locator.coordinate == nil && !locator.isDenied)
+                            .disabled((includeLocation && locator.coordinate == nil && !locator.isDenied)
+                                      || (needsHelpText && !EmergencySafety.isHelpTextSufficient(text)))
                     }
                 }
             }
             .onChange(of: includeLocation) { _, enabled in
                 if enabled { locator.request() }
             }
+            .alert("Avvisare tutta la cabina?", isPresented: $showCrewConfirmation) {
+                Button("Invia l'avviso", role: .destructive) { Task { await send() } }
+                Button("Annulla", role: .cancel) {}
+            } message: {
+                Text("Avvisa prima l'equipaggio: usa il pulsante di chiamata sopra il tuo posto. Inviare l'avviso a tutta la cabina?")
+            }
+        }
+    }
+
+    /// "Ho bisogno di aiuto" in volo: testo di almeno 10 caratteri.
+    private var needsHelpText: Bool { EmergencySafety.requiresConfirmation(status, inFlight: inFlight) }
+
+    /// In volo: al massimo un avviso ogni 10 minuti (qualunque stato) e conferma esplicita per "Ho bisogno di aiuto".
+    private func attemptSend() {
+        if inFlight, !EmergencySafety.canSend(lastSent: EmergencySafety.lastSentAt) {
+            Haptics.error()
+            let minutes = EmergencySafety.minutesUntilNext(lastSent: EmergencySafety.lastSentAt)
+            errorMessage = String(localized: "In volo puoi inviare un avviso ogni 10 minuti: riprova tra \(minutes) min.")
+            return
+        }
+        if needsHelpText {
+            Haptics.warning()
+            showCrewConfirmation = true
+        } else {
+            Task { await send() }
         }
     }
 
@@ -106,6 +157,7 @@ struct EmergencySheet: View {
         do {
             let coordinate = includeLocation ? locator.coordinate : nil
             try await emergency.broadcast(status: status, text: text, latitude: coordinate?.latitude, longitude: coordinate?.longitude)
+            if inFlight { EmergencySafety.recordSent() }
             Haptics.success()
             dismiss()
         } catch {
@@ -121,7 +173,14 @@ struct EmergencySheet: View {
 final class OneShotLocator: NSObject, CLLocationManagerDelegate {
 
     private(set) var coordinate: CLLocationCoordinate2D?
+    /// Ultima lettura completa (con l'accuratezza), per la posizione condivisa in chat.
+    private(set) var location: CLLocation?
     private(set) var isDenied = false
+    /// Lettura fallita (GPS non disponibile, al chiuso): si puo' riprovare.
+    private(set) var didFail = false
+    /// Chiamato a ogni lettura riuscita (posizione in chat: una lettura e invio).
+    @ObservationIgnored var onLocation: ((CLLocation) -> Void)?
+    @ObservationIgnored var onFailure: (() -> Void)?
     private let manager = CLLocationManager()
 
     override init() {
@@ -133,8 +192,14 @@ final class OneShotLocator: NSObject, CLLocationManagerDelegate {
     func request() {
         switch manager.authorizationStatus {
         case .notDetermined: manager.requestWhenInUseAuthorization()
-        case .denied, .restricted: isDenied = true
-        default: manager.requestLocation()
+        case .denied, .restricted:
+            isDenied = true
+            // Negata in passato: a ogni tentativo spieghiamo come riattivarla.
+            PermissionPrompt.showDenied(.location)
+        default:
+            isDenied = false
+            didFail = false
+            manager.requestLocation()
         }
     }
 
@@ -143,7 +208,9 @@ final class OneShotLocator: NSObject, CLLocationManagerDelegate {
         Task { @MainActor in
             switch status {
             case .authorizedAlways, .authorizedWhenInUse: self.manager.requestLocation()
-            case .denied, .restricted: self.isDenied = true
+            case .denied, .restricted:
+                self.isDenied = true
+                self.onFailure?()
             default: break
             }
         }
@@ -151,11 +218,19 @@ final class OneShotLocator: NSObject, CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let last = locations.last else { return }
-        let coordinate = last.coordinate
-        Task { @MainActor in self.coordinate = coordinate }
+        Task { @MainActor in
+            self.coordinate = last.coordinate
+            self.location = last
+            self.onLocation?(last)
+        }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            self.didFail = true
+            self.onFailure?()
+        }
+    }
 }
 
 /// Banner rosso sopra le tab quando arriva un avviso.

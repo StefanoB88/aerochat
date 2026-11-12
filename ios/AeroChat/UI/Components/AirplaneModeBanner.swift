@@ -44,6 +44,15 @@ struct AirplaneModeBanner: View {
                     .font(.footnote)
                     .foregroundStyle(AeroTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if state == .unauthorized {
+                    Button("Apri Impostazioni") {
+                        Haptics.tap()
+                        PermissionPrompt.openSettings(for: .bluetooth)
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .tint(AeroTheme.accentCyan)
+                    .padding(.top, 2)
+                }
             }
             Spacer(minLength: 0)
         }

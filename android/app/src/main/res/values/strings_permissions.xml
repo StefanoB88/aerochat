@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Permessi negati: avviso con "Apri Impostazioni" (PermissionSettingsDialogHost). -->
+    <string name="permission_open_settings">Apri Impostazioni</string>
+    <string name="permission_not_now">Non ora</string>
+    <string name="permission_bluetooth_title">Serve il Bluetooth</string>
+    <string name="permission_bluetooth_message">AeroChat parla con i telefoni vicini solo via Bluetooth: senza \"Dispositivi nelle vicinanze\" chat, giochi e radar non funzionano. Consentilo ad AeroChat nelle Impostazioni.</string>
+    <string name="permission_camera_title">Serve la fotocamera</string>
+    <string name="permission_camera_message">La fotocamera serve per scattare foto e inquadrare QR e carte d\'imbarco. Consentila ad AeroChat nelle Impostazioni.</string>
+    <string name="permission_microphone_title">Serve il microfono</string>
+    <string name="permission_microphone_message">Il microfono serve per le note vocali e le chiamate. Consentilo ad AeroChat nelle Impostazioni.</string>
+    <string name="permission_location_title">Serve la posizione</string>
+    <string name="permission_location_message">La posizione serve solo per allegarla all\'avviso di emergenza. Consentila ad AeroChat nelle Impostazioni.</string>
+    <string name="permission_notifications_title">Notifiche disattivate</string>
+    <string name="permission_notifications_message">Senza notifiche non saprai quando arriva un messaggio con l\'app chiusa. Attivale per AeroChat nelle Impostazioni.</string>
+</resources>

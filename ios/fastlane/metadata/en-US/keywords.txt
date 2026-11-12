@@ -1,1 +1,1 @@
-airplane mode,mesh,no internet,flight,travel,festival,encrypted,nearby,messenger,plane,cruise,train
+internet,airplane,mode,flight,plane,walkie,talkie,cruise,festival,mesh,travel,signal,nearby,games

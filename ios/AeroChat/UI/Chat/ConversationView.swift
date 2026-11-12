@@ -1,5 +1,9 @@
 import SwiftUI
 import PhotosUI
+import CoreLocation
+#if canImport(Translation)
+import Translation
+#endif
 
 @MainActor
 @Observable
@@ -20,6 +24,11 @@ final class ConversationViewModel {
     var pendingDirectChat: ConversationRecord?
     var openedDirectChat: ConversationRecord?
     var showCamera = false
+    /// Messaggio ricevuto da tradurre (foglio di sistema "Traduci", offline con le lingue scaricate).
+    var translateTarget: MessageRecord?
+    /// Lettura GPS in corso per "Posizione".
+    private(set) var isLocating = false
+    @ObservationIgnored private let locator = OneShotLocator()
     /// Foto aperta nel visore a schermo intero.
     var viewedImage: ViewedImage?
     let player = VoiceNotePlayer()
@@ -93,6 +102,14 @@ final class ConversationViewModel {
     }
     var store: MediaStore? { environment.mediaStore }
     var showsAttachments: Bool { conversation.type != .cabinLounge }
+    /// "Posizione" nel menu allegati: chat 1-a-1 e gruppi, non in Cabina Pubblica ne' nella Cabina del volo.
+    var allowsLocation: Bool { conversation.type == .direct || (conversation.type == .group && !conversation.isFlightLounge) }
+
+    /// Azione "Posizione" del menu allegati (nil dove non e' prevista).
+    var locationAction: (() -> Void)? {
+        guard allowsLocation else { return nil }
+        return { [weak self] in self?.shareLocation() }
+    }
     /// Avanzamento dei trasferimenti media in corso, per `msg_id` (osservato da `AppEnvironment`).
     var mediaProgress: [Data: Double] { environment.mediaProgress }
 
@@ -215,6 +232,43 @@ final class ConversationViewModel {
         }
     }
 
+    // MARK: Posizione
+
+    /// Una lettura GPS e invio come normale testo "📍 lat, lon (±m)" (permesso con il flusso standard).
+    func shareLocation() {
+        guard allowsLocation, !isLocating else { return }
+        isLocating = true
+        infoMessage = String(localized: "Rilevo la posizione…")
+        locator.onLocation = { [weak self] location in
+            guard let self, self.isLocating else { return }
+            self.isLocating = false
+            self.infoMessage = nil
+            let accuracy = location.horizontalAccuracy >= 0 ? location.horizontalAccuracy : nil
+            self.sendLocationText(LocationShare.format(latitude: location.coordinate.latitude,
+                                                       longitude: location.coordinate.longitude, accuracyMeters: accuracy))
+        }
+        locator.onFailure = { [weak self] in
+            guard let self, self.isLocating else { return }
+            self.isLocating = false
+            // Permesso negato: l'avviso con "Apri Impostazioni" lo mostra gia' il locator.
+            self.infoMessage = self.locator.isDenied ? nil : String(localized: "Posizione non disponibile: attiva la localizzazione e riprova all'aperto.")
+        }
+        locator.request()
+        if locator.isDenied { isLocating = false; infoMessage = nil }
+    }
+
+    private func sendLocationText(_ text: String) {
+        guard let router = environment.router else { return }
+        Task {
+            do {
+                try await router.sendText(text, in: conversation)
+                Haptics.impact(.light)
+            } catch {
+                errorMessage = String(localized: "Invio non riuscito: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: Modifica e cancellazione per tutti
 
     /// Voci del menu solo sui nostri messaggi entro 15 minuti e in una conversazione non scaduta.
@@ -286,11 +340,11 @@ final class ConversationViewModel {
     /// Apre la fotocamera (stesso controllo della libreria: foto solo con collegamento diretto).
     func takePhoto() {
         guard allows(.photo) else { return }
-        if CameraPicker.isAccessDenied {
-            infoMessage = String(localized: "Consenti l'accesso alla fotocamera ad AeroChat in Impostazioni › Privacy per scattare foto.")
-            return
+        Task {
+            // Negata in passato: avviso con "Apri Impostazioni" a ogni tentativo.
+            guard await PermissionPrompt.ensureCamera() else { return }
+            showCamera = true
         }
-        showCamera = true
     }
 
     /// Scatto completato dalla fotocamera (`nil` = annullato).
@@ -337,10 +391,7 @@ final class ConversationViewModel {
         }
         guard allows(.voiceNote) else { return }
         Task {
-            guard await recorder.requestPermission() else {
-                infoMessage = String(localized: "Consenti il microfono in Impostazioni per registrare note vocali.")
-                return
-            }
+            guard await PermissionPrompt.ensureMicrophone() else { return }
             do {
                 try recorder.start()
                 Haptics.impact(.rigid)
@@ -361,13 +412,15 @@ final class ConversationViewModel {
     /// restituisce il testo da mostrare (il visore lo presenta sopra di se').
     func saveImageToLibrary(_ message: MessageRecord) async -> (text: String, isError: Bool)? {
         guard let path = message.mediaLocalPath, let store else { return nil }
+        guard await PermissionPrompt.ensurePhotosAddOnly() else { return nil }
         do {
             let data = try store.read(relativePath: path)
             try await PhotoLibrarySaver.save(imageData: data)
             Haptics.success()
             return (String(localized: "Foto salvata nel rullino."), false)
         } catch PhotoLibrarySaver.Failure.permissionDenied {
-            return (String(localized: "Consenti l'accesso alle Foto in Impostazioni per salvare le immagini."), false)
+            PermissionPrompt.showDenied(.photos)
+            return nil
         } catch {
             return (String(localized: "Foto non salvata: \(error.localizedDescription)"), true)
         }
@@ -419,8 +472,28 @@ final class ConversationViewModel {
         }
     }
 
+    /// Prima partita gratis (§B2): senza Pass, una partita al giorno e una per ogni volo per chi la avvia.
+    private var isFreeGameAvailable: Bool {
+        FreeGameAllowance.isAvailableNow(activeFlightCode: environment.activeFlightLounge?.flightCode)
+    }
+
+    /// `true` se serve consumare la partita gratis (niente Pass, ma partita gratis disponibile); il gate
+    /// mostra il paywall come prima quando anche quella e' gia' usata.
+    private func gameAccess() -> (allowed: Bool, usesFreeGame: Bool) {
+        if isDemo { return (true, false) }
+        let decision = FeatureGate.decision(for: .game, userIsPro: environment.isPro, conversation: conversation, reachability: reachability)
+        if decision == .requiresPass, isFreeGameAvailable { return (true, true) }
+        return (allows(.game), false)
+    }
+
+    private func consumeFreeGame() {
+        FreeGameAllowance.consumeNow(activeFlightCode: environment.activeFlightLounge?.flightCode)
+        infoMessage = String(localized: "Partita gratis 🎁 Ne hai una al giorno e una per ogni volo; dopo serve il Pass.")
+    }
+
     func startGame(_ kind: GameKind) {
-        guard allows(.game), let games = environment.games else { return }
+        let access = gameAccess()
+        guard access.allowed, let games = environment.games else { return }
         if kind == .scopone {
             showScoponePicker = true
             return
@@ -428,6 +501,8 @@ final class ConversationViewModel {
         Task {
             do {
                 try await games.invite(kind: kind, in: conversation)
+                // Si consuma quando l'invito parte.
+                if access.usesFreeGame { consumeFreeGame() }
                 Haptics.impact()
             } catch GameService.Failure.directConversationOnly {
                 infoMessage = String(localized: "I mini-giochi si giocano nelle chat 1-a-1.")
@@ -439,10 +514,12 @@ final class ConversationViewModel {
 
     /// Scopone: invito ai 3 membri scelti (in ordine di posto 1..3).
     func inviteScopone(players: [Data]) {
-        guard let games = environment.games else { return }
+        let access = gameAccess()
+        guard access.allowed, let games = environment.games else { return }
         Task {
             do {
                 try await games.invite(kind: .scopone, in: conversation, players: players)
+                if access.usesFreeGame { consumeFreeGame() }
                 Haptics.impact()
             } catch GameService.Failure.invalidPlayers {
                 infoMessage = String(localized: "Scegli esattamente 3 membri del gruppo.")
@@ -643,6 +720,7 @@ private struct ConversationContent: View {
                             onStartGame: viewModel.startGame,
                             availableGames: viewModel.availableGames,
                             onTakePhoto: viewModel.takePhoto,
+                            onShareLocation: viewModel.locationAction,
                             isEditing: viewModel.editingMessage != nil,
                             onCancelEdit: viewModel.cancelEditing)
             }
@@ -751,6 +829,7 @@ private struct ConversationContent: View {
             ScoponePlayerPicker(members: viewModel.groupMembers) { viewModel.inviteScopone(players: $0) }
         }
         .sheet(isPresented: $viewModel.showPaywall) { PaywallView() }
+        .modifier(TranslateMessageModifier(target: $viewModel.translateTarget))
         .sheet(item: $viewModel.reportTarget) { message in
             ReportSheet(message: message) { _, _ in
                 viewModel.infoMessage = String(localized: "Grazie: segnalazione registrata.")
@@ -832,6 +911,15 @@ private struct MessageListView: View {
                                         viewModel.deleteTarget = message
                                     } label: {
                                         Label("Elimina per tutti", systemImage: "trash")
+                                    }
+                                }
+                                if TranslateMessageModifier.isAvailable, !message.isOutgoing, !message.isDeleted,
+                                   message.contentType == .text, !(message.text ?? "").isEmpty {
+                                    Button {
+                                        Haptics.tap()
+                                        viewModel.translateTarget = message
+                                    } label: {
+                                        Label("Traduci", systemImage: "translate")
                                     }
                                 }
                                 if !message.isOutgoing, !message.isDeleted, message.contentType != .game {
@@ -971,5 +1059,30 @@ private struct DemoInviteHint: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
         .sheet(isPresented: $showPairing) { QRPairingSheet() }
+    }
+}
+
+/// "Traduci" su un messaggio ricevuto: foglio di sistema del framework Translation (iOS 17.4+), che funziona
+/// senza internet con le lingue scaricate.
+struct TranslateMessageModifier: ViewModifier {
+
+    @Binding var target: MessageRecord?
+
+    static var isAvailable: Bool {
+        if #available(iOS 17.4, *) { return true }
+        return false
+    }
+
+    func body(content: Content) -> some View {
+        #if canImport(Translation)
+        if #available(iOS 17.4, *) {
+            content.translationPresentation(isPresented: Binding(get: { target != nil }, set: { if !$0 { target = nil } }),
+                                            text: target?.text ?? "")
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
     }
 }

@@ -28,6 +28,8 @@ class NearbyPerson(
     val lastSeenAtMs: Long,
     /** Gia' nei contatti (peer fidato nel database). */
     val isContact: Boolean,
+    /** Posto dichiarato (`Presence.seat`, gia' validato), solo se annunciato insieme a un volo. */
+    val seat: String? = null,
 ) {
     val id: String get() = nodeID.toHex()
 
@@ -38,8 +40,11 @@ class NearbyPerson(
     fun isOnFlight(code: String?): Boolean = code != null && flightCode != null && code == flightCode
 
     fun copy(rssi: Int? = this.rssi, isContact: Boolean = this.isContact): NearbyPerson = NearbyPerson(
-        nodeID, x25519Pub, ed25519Pub, nickname, avatarColorHex, flightCode, openToGames, rssi, lastSeenAtMs, isContact,
+        nodeID, x25519Pub, ed25519Pub, nickname, avatarColorHex, flightCode, openToGames, rssi, lastSeenAtMs, isContact, seat,
     )
+
+    /** Posto da mostrare: vale solo nella Cabina dello stesso volo. */
+    fun seatOnFlight(code: String?): String? = if (isOnFlight(code)) seat else null
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -48,7 +53,7 @@ class NearbyPerson(
             ed25519Pub.contentEquals(other.ed25519Pub) && nickname == other.nickname &&
             avatarColorHex == other.avatarColorHex && flightCode == other.flightCode &&
             openToGames == other.openToGames && rssi == other.rssi && lastSeenAtMs == other.lastSeenAtMs &&
-            isContact == other.isContact
+            isContact == other.isContact && seat == other.seat
     }
 
     override fun hashCode(): Int {

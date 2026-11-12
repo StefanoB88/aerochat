@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scarica AeroChat</title>
+  <meta name="description" content="Scarica AeroChat, la chat senza internet: ti portiamo allo store giusto per il tuo telefono.">
+  <meta name="theme-color" content="#070B14">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <link rel="canonical" href="https://aeromesh.app/get">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/style.css">
+  <!--
+    https://aeromesh.app/get  — pagina usata dai QR code (app, cartolina di volo, materiale dei creator).
+    - iOS / iPadOS  -> App Store; Android -> Google Play; altri dispositivi -> due pulsanti.
+    - ?code=XXX oppure ?ref=XXX: il codice viene mostrato (copiabile) e passato agli store come campagna:
+        App Store:   &ct=<codice>  (+ &pt=<provider token> se configurato)  -> App Analytics › Campagne
+        Google Play: &referrer=utm_source=aeromesh_get&utm_medium=<code|ref>&utm_campaign=<codice>
+                     -> Play Console › Statistiche › Acquisizione utenti (traffico con tag UTM)
+    - Con un codice il reindirizzamento parte dopo qualche secondo, cosi' la persona fa in tempo a leggerlo/copiarlo.
+    Nessun cookie, nessun tracker: tutto avviene nel browser.
+  -->
+</head>
+<body>
+  <main id="main" class="get">
+    <div class="wrap">
+      <div class="card">
+        <img src="/icon.svg" alt="" width="88" height="88" style="border-radius:20px;margin-bottom:1rem">
+        <h1 id="title" style="font-size:1.9rem">Scarica AeroChat</h1>
+        <p id="subtitle">La chat che funziona senza internet: in aereo, in nave, ai festival.</p>
+
+        <div id="code-block" hidden>
+          <p id="code-label" style="margin:1rem 0 0">Il tuo codice</p>
+          <div class="code-box" id="code" aria-live="polite"></div>
+          <p><button type="button" class="btn" id="copy">Copia il codice</button></p>
+          <p class="note" id="code-hint">Dopo l'installazione apri Impostazioni › Flight Group Pass e tocca “Hai un codice?”.</p>
+        </div>
+
+        <p id="status" class="note" aria-live="polite"></p>
+        <p id="stay-wrap" hidden><button type="button" id="stay" class="badge" style="min-width:0;justify-content:center;margin:0 auto">Resta su questa pagina</button></p>
+
+        <div class="badges" style="margin-top:1.2rem">
+          <a class="badge" id="ios" href="https://apps.apple.com/app/idXXXXXXXXX" rel="noopener">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1 5h2v6.6l2.3-2.3 1.4 1.4L12 17.4l-4.7-4.7 1.4-1.4L11 13.6V7Z"/></svg>
+            <span><small id="ios-small">Scarica su</small><strong>App Store</strong></span>
+          </a>
+          <a class="badge" id="android" href="https://play.google.com/store/apps/details?id=com.stefanobrandi.aerochat" rel="noopener">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3.5v17a1 1 0 0 0 1.5.86l14.7-8.5a1 1 0 0 0 0-1.72L5.5 2.64A1 1 0 0 0 4 3.5Z"/></svg>
+            <span><small id="android-small">Disponibile su</small><strong>Google Play</strong></span>
+          </a>
+        </div>
+        <p class="note" id="tip">Installala prima di partire: a bordo basterà il Bluetooth.</p>
+        <p class="note"><a href="/" id="home">Scopri AeroChat</a></p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+  (function () {
+    "use strict";
+
+    // ---- Configurazione (da compilare quando l'app e' pubblicata) ----
+    var APP_STORE_ID = "XXXXXXXXX";          // id numerico App Store (App Store Connect › Informazioni app › Apple ID)
+    var APPLE_PROVIDER_TOKEN = "";           // "pt" da App Store Connect › App Analytics › Campagne (facoltativo)
+    var PLAY_PACKAGE = "com.stefanobrandi.aerochat";
+    var REDIRECT_DELAY_WITH_CODE_MS = 4000;  // tempo per leggere/copiare il codice
+    var REDIRECT_DELAY_MS = 300;
+
+    var params = new URLSearchParams(window.location.search);
+    var kind = params.get("code") ? "code" : (params.get("ref") ? "ref" : "");
+    var raw = kind ? params.get(kind) : "";
+    // Solo caratteri sicuri, massimo 40: il codice finisce in URL e a schermo.
+    var code = (raw || "").trim().replace(/[^A-Za-z0-9_\-]/g, "").slice(0, 40);
+
+    var it = (navigator.language || "it").toLowerCase().indexOf("it") === 0;
+    var T = it ? {
+      redirectIOS: "Ti portiamo all'App Store…",
+      redirectAndroid: "Ti portiamo su Google Play…",
+      redirectIn: function (s, store) { return "Apertura di " + store + " tra " + s + " s…"; },
+      other: "Apri questa pagina dal telefono, oppure scegli lo store:",
+      copied: "Codice copiato",
+      stayed: "Nessun reindirizzamento: scegli lo store qui sotto."
+    } : {
+      redirectIOS: "Taking you to the App Store…",
+      redirectAndroid: "Taking you to Google Play…",
+      redirectIn: function (s, store) { return "Opening " + store + " in " + s + " s…"; },
+      other: "Open this page on your phone, or pick your store:",
+      copied: "Code copied",
+      stayed: "Redirect cancelled: pick your store below."
+    };
+
+    if (!it) {
+      document.documentElement.lang = "en";
+      document.title = "Get AeroChat";
+      setText("title", "Get AeroChat");
+      setText("subtitle", "The chat that works without internet: on planes, ships and at festivals.");
+      setText("code-label", "Your code");
+      setText("copy", "Copy code");
+      setText("code-hint", "After installing, open Settings › Flight Group Pass and tap “Have a code?”.");
+      setText("stay", "Stay on this page");
+      setText("ios-small", "Download on the");
+      setText("android-small", "Get it on");
+      setText("tip", "Install it before you leave: on board, Bluetooth is all you need.");
+      setText("home", "Discover AeroChat");
+      document.getElementById("home").setAttribute("href", "/en/");
+    }
+
+    function setText(id, text) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+
+    // ---- Link agli store, con la campagna se c'e' un codice ----
+    var iosURL = "https://apps.apple.com/app/id" + APP_STORE_ID;
+    var iosQuery = [];
+    if (code) {
+      if (APPLE_PROVIDER_TOKEN) iosQuery.push("pt=" + encodeURIComponent(APPLE_PROVIDER_TOKEN));
+      iosQuery.push("ct=" + encodeURIComponent(code));
+      iosQuery.push("mt=8");
+    }
+    if (iosQuery.length) iosURL += "?" + iosQuery.join("&");
+
+    var playURL = "https://play.google.com/store/apps/details?id=" + encodeURIComponent(PLAY_PACKAGE);
+    if (code) {
+      var referrer = "utm_source=aeromesh_get&utm_medium=" + kind + "&utm_campaign=" + code;
+      playURL += "&referrer=" + encodeURIComponent(referrer);
+    }
+
+    document.getElementById("ios").href = iosURL;
+    document.getElementById("android").href = playURL;
+
+    if (code) {
+      document.getElementById("code").textContent = code;
+      document.getElementById("code-block").hidden = false;
+      document.getElementById("copy").addEventListener("click", function () {
+        var done = function () { setText("status", T.copied); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code).then(done, function () {});
+        }
+      });
+    }
+
+    // ---- Rilevamento piattaforma ----
+    var ua = navigator.userAgent || "";
+    var isAndroid = /Android/i.test(ua);
+    var isIOS = /iPhone|iPad|iPod/i.test(ua) ||
+      (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1); // iPadOS si presenta come Mac
+
+    if (!isIOS && !isAndroid) {
+      setText("status", T.other);
+      return;
+    }
+
+    var target = isIOS ? iosURL : playURL;
+    var storeName = isIOS ? "App Store" : "Google Play";
+    // Mostra solo il pulsante giusto in primo piano (l'altro resta disponibile).
+    document.getElementById(isIOS ? "android" : "ios").style.opacity = ".6";
+
+    if (!code) {
+      setText("status", isIOS ? T.redirectIOS : T.redirectAndroid);
+      window.setTimeout(function () { window.location.replace(target); }, REDIRECT_DELAY_MS);
+      return;
+    }
+
+    var remaining = Math.ceil(REDIRECT_DELAY_WITH_CODE_MS / 1000);
+    var cancelled = false;
+    document.getElementById("stay-wrap").hidden = false;
+    document.getElementById("stay").addEventListener("click", function () {
+      cancelled = true;
+      document.getElementById("stay-wrap").hidden = true;
+      setText("status", T.stayed);
+    });
+    setText("status", T.redirectIn(remaining, storeName));
+    var timer = window.setInterval(function () {
+      if (cancelled) { window.clearInterval(timer); return; }
+      remaining -= 1;
+      if (remaining <= 0) {
+        window.clearInterval(timer);
+        window.location.replace(target);
+      } else {
+        setText("status", T.redirectIn(remaining, storeName));
+      }
+    }, 1000);
+  })();
+  </script>
+</body>
+</html>

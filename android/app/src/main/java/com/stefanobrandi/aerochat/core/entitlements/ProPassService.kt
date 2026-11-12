@@ -15,6 +15,14 @@ import com.stefanobrandi.aerochat.data.AppDatabase
 import com.stefanobrandi.aerochat.data.records.ConversationRecord
 import com.stefanobrandi.aerochat.data.records.ConversationType
 import com.stefanobrandi.aerochat.data.records.ProTier
+import com.stefanobrandi.aerochat.data.records.DeliveryStatus
+import com.stefanobrandi.aerochat.data.records.MessageContentType
+import com.stefanobrandi.aerochat.data.records.MessageRecord
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 import com.stefanobrandi.aerochat.proto.PacketType
 import com.stefanobrandi.aerochat.proto.ProPassGrant
 import com.google.protobuf.ByteString
@@ -44,6 +52,11 @@ class ProPassService(
     private val entitlements: EntitlementManager,
     private val identity: IdentityKeys,
     nickname: String,
+    /**
+     * Testo del messaggio di sistema quando un compagno estende lo sblocco del gruppo (nickname, scadenza in
+     * epoch ms). Default: italiano con l'ora locale breve; `AppEnvironment` passa quello localizzato.
+     */
+    private val unlockedText: (String, Long) -> String = ::defaultUnlockedText,
 ) {
 
     sealed interface Event {
@@ -163,6 +176,19 @@ class ProPassService(
             database.conversations.setProUnlocked(until = grant.validUntilMs, conversationID = packet.conversation.id)
         } catch (_: Exception) {
         }
+        // Pass del gruppo visibile: "🎁 Marco ha sbloccato il Pass per tutto il gruppo fino alle 18:30".
+        try {
+            database.messages.insert(
+                MessageRecord(
+                    msgID = CryptoEngine.randomMessageID(), conversationID = packet.conversation.id,
+                    senderNodeID = packet.sender.nodeID, senderNickname = packet.sender.nickname,
+                    contentType = MessageContentType.system,
+                    text = unlockedText(packet.sender.nickname, grant.validUntilMs),
+                    isOutgoing = false, deliveryStatus = DeliveryStatus.read, createdAtMs = now,
+                ),
+            )
+        } catch (_: Exception) {
+        }
         emit(Event.Unlocked(conversationID = packet.conversation.id, validUntilMs = grant.validUntilMs, issuerNodeID = packet.sender.nodeID))
     }
 
@@ -171,6 +197,14 @@ class ProPassService(
     }
 
     companion object {
+        /** Ora locale breve ("18:30") della scadenza del pass. */
+        fun shortTime(epochMs: Long, locale: Locale = Locale.getDefault()): String =
+            DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale)
+                .format(Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()))
+
+        fun defaultUnlockedText(nickname: String, validUntilMs: Long): String =
+            "🎁 $nickname ha sbloccato il Pass per tutto il gruppo fino alle ${shortTime(validUntilMs, Locale.ITALIAN)}"
+
         /** Tolleranza sulla durata massima del grant (orologi non sincronizzati), in ms. */
         const val clockSkew: Long = 15 * 60_000L
 

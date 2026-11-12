@@ -25,6 +25,16 @@ import com.stefanobrandi.aerochat.core.flight.TripMemoryStore
 import com.stefanobrandi.aerochat.core.games.GameOutcome
 import com.stefanobrandi.aerochat.core.games.GameStatus
 import com.stefanobrandi.aerochat.core.mesh.IncomingContactRequest
+import com.stefanobrandi.aerochat.core.mesh.BoardPostEntry
+import com.stefanobrandi.aerochat.core.mesh.SeatCode
+import com.stefanobrandi.aerochat.core.flight.FlightReminder
+import com.stefanobrandi.aerochat.core.growth.FreeGameAllowance
+import com.stefanobrandi.aerochat.core.growth.PassportBadge
+import com.stefanobrandi.aerochat.core.growth.PassportStats
+import com.stefanobrandi.aerochat.core.growth.ReferralProgram
+import com.stefanobrandi.aerochat.core.growth.ReviewPrompt
+import com.stefanobrandi.aerochat.core.growth.TravelPassportStore
+import com.stefanobrandi.aerochat.proto.BoardKind
 import com.stefanobrandi.aerochat.core.mesh.NearbyPerson
 import com.stefanobrandi.aerochat.core.moderation.AppSettings
 import com.stefanobrandi.aerochat.core.quiz.QuizQuestionBank
@@ -204,17 +214,59 @@ class AppEnvironment(
         _nearbyBanner.value = null
     }
 
+    // MARK: Bacheca della cabina (RELEASE_1_4_SPEC.md §A2)
+
+    /** Annunci della bacheca (nostri e dei vicini), solo in memoria. */
+    private val _boardPosts = MutableStateFlow<List<BoardPostEntry>>(emptyList())
+    val boardPosts: StateFlow<List<BoardPostEntry>> = _boardPosts.asStateFlow()
+
+    // MARK: Recensione e passaporto (RELEASE_1_4_SPEC.md §B5, §B9)
+
+    /** Richiesta di recensione da mostrare (istante della richiesta): la UI lancia Play In-App Review e la azzera. */
+    private val _reviewRequest = MutableStateFlow<Long?>(null)
+    val reviewRequest: StateFlow<Long?> = _reviewRequest.asStateFlow()
+
+    fun consumeReviewRequest() {
+        _reviewRequest.value = null
+    }
+
+    private val passportStore: TravelPassportStore by lazy { TravelPassportStore(this.context) }
+    private val _passport = MutableStateFlow(PassportStats())
+    /** Statistiche cumulative e badge del passaporto di viaggio. */
+    val passport: StateFlow<PassportStats> = _passport.asStateFlow()
+
+    /** Badge appena sbloccati (alla fine di un volo), mostrati come avviso; la UI li azzera. */
+    private val _newBadges = MutableStateFlow<List<PassportBadge>>(emptyList())
+    val newBadges: StateFlow<List<PassportBadge>> = _newBadges.asStateFlow()
+
+    fun dismissNewBadges() {
+        _newBadges.value = emptyList()
+    }
+
+    /** "Pass sbloccato con gli inviti" appena ottenuto: avviso una volta, la UI lo azzera. */
+    private val _referralUnlocked = MutableStateFlow(false)
+    val referralUnlocked: StateFlow<Boolean> = _referralUnlocked.asStateFlow()
+
+    fun dismissReferralUnlocked() {
+        _referralUnlocked.value = false
+    }
+
     /** Modalita' aereo del telefono (scheda "Sei in volo" e fine del viaggio). */
     private val _airplaneMode = MutableStateFlow(false)
     val airplaneMode: StateFlow<Boolean> = _airplaneMode.asStateFlow()
     private var airplaneReceiver: BroadcastReceiver? = null
 
-    /** Scheda contestuale in cima alla lista chat chiusa dall'utente (solo per questa sessione). */
+    /** Scheda "in volo" in cima alla lista chat chiusa dall'utente (solo per questa sessione). */
     private val _homeCardDismissed = MutableStateFlow(false)
     val homeCardDismissed: StateFlow<Boolean> = _homeCardDismissed.asStateFlow()
 
-    fun dismissHomeCard() {
-        _homeCardDismissed.value = true
+    /** In volo la scheda si chiude per la sessione; quella a terra ("Porta i tuoi amici a bordo") per sempre. */
+    fun dismissHomeCard(inFlight: Boolean) {
+        if (inFlight) {
+            _homeCardDismissed.value = true
+        } else {
+            AppSettings.isInviteCardDismissed = true
+        }
     }
 
     // MARK: Ricordo del viaggio
@@ -321,7 +373,10 @@ class AppEnvironment(
      * altri membri resta legato all'acquisto reale (`ProPassService` usa `entitlementState`).
      */
     val isPro: Boolean
-        get() = if (BuildConfig.DEBUG) true else _entitlementState.value.isPro()
+        get() = if (BuildConfig.DEBUG) true else _entitlementState.value.isPro() || isReferralPassActive()
+
+    /** Pass locale di 24 h sbloccato con 3 amici invitati (solo uso personale: non si regala ai gruppi). */
+    fun isReferralPassActive(now: Long = System.currentTimeMillis()): Boolean = AppSettings.state.value.referralPassUntilMs > now
 
     val isMeshRunning: Boolean get() = _router.value != null
 
@@ -341,6 +396,7 @@ class AppEnvironment(
             _identityKeys.value = keys
             _identityRecord.value = record
             observeTotalUnread(db)
+            _passport.value = withContext(Dispatchers.IO) { passportStore.stats() }
             _phase.value = Phase.Ready
             if (record != null) {
                 startMesh()
@@ -568,6 +624,9 @@ class AppEnvironment(
         val proPass = ProPassService(
             router = router, database = database, entitlements = entitlements,
             identity = identityKeys, nickname = nickname,
+            unlockedText = { name, until ->
+                context.getString(R.string.growth14_group_pass_unlocked, name, ProPassService.shortTime(until))
+            },
         )
         _proPass.value = proPass
         proPass.start()
@@ -709,6 +768,113 @@ class AppEnvironment(
         _router.value?.setPresenceOptions(visible = visible, openToGames = AppSettings.isOpenToGames)
     }
 
+    /** "Mostra il mio posto ai vicini" (`Presence.seat`, default spento): il prossimo annuncio lo dice. */
+    suspend fun setSeatShared(shared: Boolean) {
+        AppSettings.isSeatShared = shared
+        _router.value?.announcePresence()
+    }
+
+    /** Volo della Cabina attiva (chiave canonica), `null` a terra. */
+    suspend fun activeFlightCode(): String? =
+        runCatching { _database.value?.conversations?.activeFlightLounges()?.firstOrNull()?.flightCode }.getOrNull()
+
+    /** "Il mio posto" per il volo attivo: ritorna `false` se non valido o senza volo. `null`/vuoto cancella. */
+    suspend fun setMySeat(raw: String?): Boolean {
+        val flight = activeFlightCode() ?: return false
+        if (raw.isNullOrBlank()) {
+            AppSettings.setSeat(null, flightCode = flight)
+        } else {
+            val seat = SeatCode.normalized(raw) ?: return false
+            AppSettings.setSeat(seat, flightCode = flight)
+        }
+        if (AppSettings.isSeatShared) _router.value?.announcePresence()
+        return true
+    }
+
+    /** "Proponi scambio posto": "Saluta" con il saluto precompilato (o la chat, se e' gia' un contatto). */
+    suspend fun proposeSeatSwap(person: NearbyPerson, greeting: String): ConversationRecord? {
+        val router = _router.value ?: throw RouterError.NotRunning
+        contactConversation(person)?.let { conversation ->
+            router.sendText(greeting, conversation = conversation)
+            return conversation
+        }
+        router.sendContactRequest(to = person, greeting = greeting, gameKind = 0)
+        return null
+    }
+
+    /** Nuovo annuncio in bacheca (max 3 aperti, scade dopo 6 h). */
+    suspend fun postToBoard(kind: BoardKind, text: String): BoardPostEntry {
+        val router = _router.value ?: throw RouterError.NotRunning
+        val seat = activeFlightCode()?.let { AppSettings.seat(it) }
+        return router.postToBoard(kind, text, seat = seat)
+    }
+
+    suspend fun closeBoardPost(post: BoardPostEntry) {
+        _router.value?.closeBoardPost(post.id)
+    }
+
+    /** Risposta a un annuncio = "Saluta" all'autore con "Per il tuo annuncio: ..." (o la chat, se e' gia' un contatto). */
+    suspend fun replyToBoardPost(post: BoardPostEntry): ConversationRecord? {
+        val router = _router.value ?: throw RouterError.NotRunning
+        val greeting = BoardPostEntry.replyGreeting(context.getString(R.string.growth14_board_reply_prefix, ""), post.text)
+        val person = post.asNearbyPerson
+        contactConversation(person)?.let { return it }
+        router.sendContactRequest(to = person, greeting = greeting, gameKind = 0)
+        return null
+    }
+
+    /** "Riavvia la radio" (diagnosi "Perche' non vedo nessuno?"): stop e start della mesh. */
+    suspend fun restartRadio() {
+        if (_router.value == null) return
+        stopMesh()
+        startMesh()
+    }
+
+    // MARK: Prima partita gratis (RELEASE_1_4_SPEC.md §B2)
+
+    /** Chiave della partita gratis adesso (`flight:<code>` in volo, altrimenti `day:<yyyy-MM-dd>`). */
+    suspend fun freeGameKey(now: Long = System.currentTimeMillis()): String = FreeGameAllowance.key(activeFlightCode(), now)
+
+    suspend fun isFreeGameAvailable(): Boolean =
+        FreeGameAllowance.isAvailable(freeGameKey(), AppSettings.state.value.freeGamesUsed)
+
+    /** L'invito della partita gratis e' partito: consumata. */
+    fun consumeFreeGame(key: String) {
+        AppSettings.setFreeGamesUsed(FreeGameAllowance.consume(key, AppSettings.state.value.freeGamesUsed))
+    }
+
+    // MARK: Premio inviti (RELEASE_1_4_SPEC.md §B4)
+
+    private fun registerReferral(event: RouterEvent.PeerPaired) {
+        if (event.nodeHex.isEmpty()) return
+        val settings = AppSettings.state.value
+        val current = ReferralProgram.State(settings.referralInvited, settings.referralRewardGranted, settings.referralPassUntilMs)
+        val outcome = ReferralProgram.register(event.nodeHex, event.isNewPeer, current, now = System.currentTimeMillis())
+        if (outcome.state == current) return
+        AppSettings.updateReferral(outcome.state.invited, outcome.state.rewardGranted, outcome.state.passUntilMs)
+        if (outcome.unlocked) {
+            _referralUnlocked.value = true
+            Haptics.success()
+        }
+    }
+
+    // MARK: Richiesta di recensione (RELEASE_1_4_SPEC.md §B5)
+
+    /** Ogni apertura dell'app (ritorno in primo piano) conta per la richiesta di recensione. */
+    private fun recordAppOpen(now: Long = System.currentTimeMillis()) {
+        if (AppSettings.firstOpenAtMs <= 0L) AppSettings.firstOpenAtMs = now
+        AppSettings.openCount = AppSettings.openCount + 1
+    }
+
+    /** Momento felice (cartolina mostrata, partita vinta): chiede la recensione se le condizioni lo consentono. */
+    fun requestReviewIfAppropriate(moment: ReviewPrompt.Moment, now: Long = System.currentTimeMillis()) {
+        if (com.stefanobrandi.aerochat.screenshots.StoreScreenshots.isActive) return
+        if (!ReviewPrompt.shouldRequest(now, AppSettings.firstOpenAtMs, AppSettings.openCount, AppSettings.lastReviewRequestAtMs)) return
+        AppSettings.lastReviewRequestAtMs = now
+        android.util.Log.i("AeroMesh.Review", "richiesta di recensione: $moment")
+        _reviewRequest.value = now
+    }
+
     /** "Accetto sfide a carte" (`Presence.open_to_games`). */
     suspend fun setOpenToGames(open: Boolean) {
         AppSettings.isOpenToGames = open
@@ -778,6 +944,22 @@ class AppEnvironment(
             router.nearby.requests.collect { _contactRequests.value = it }
         }
         backgroundTasks += scope.launch {
+            router.board.posts.collect { _boardPosts.value = it }
+        }
+        // Partita vinta: momento felice per la richiesta di recensione (una volta per partita).
+        backgroundTasks += scope.launch {
+            val celebrated = HashSet<String>()
+            _games.flatMapLatest { it?.events() ?: flowOf() }.collect { event ->
+                if (event !is GameService.Event.Updated || celebrated.contains(event.gameID)) return@collect
+                val state = runCatching { _games.value?.session(event.gameID) }.getOrNull() ?: return@collect
+                if (state.status != GameStatus.finished) return@collect
+                celebrated += event.gameID
+                if (state.outcome == GameOutcome.iWon && !DemoPeerService.isDemoPeer(state.opponentNodeID)) {
+                    requestReviewIfAppropriate(ReviewPrompt.Moment.gameWon)
+                }
+            }
+        }
+        backgroundTasks += scope.launch {
             _games.flatMapLatest { it?.events() ?: flowOf() }.collect { event ->
                 if (_activeTrip.value == null || event !is GameService.Event.Updated) return@collect
                 val state = runCatching { _games.value?.session(event.gameID) }.getOrNull() ?: return@collect
@@ -830,6 +1012,10 @@ class AppEnvironment(
         _activeTrip.value = tripMemory.activeTrip
         for (trip in ended) {
             (notifier as? LocalNotificationCenter)?.notifyTripMemory(trip.key, trip.flightCode)
+            // Passaporto di viaggio: i numeri del volo si sommano a quelli di sempre.
+            val badges = withContext(Dispatchers.IO) { passportStore.record(trip, now = System.currentTimeMillis()) }
+            _passport.value = passportStore.stats()
+            if (badges.isNotEmpty()) _newBadges.value = badges
         }
     }
 
@@ -866,6 +1052,7 @@ class AppEnvironment(
             appInForeground.collect { foreground ->
                 setForeground(foreground)
                 val returned = foreground && wasForeground == false
+                if (foreground && wasForeground != true) recordAppOpen()
                 wasForeground = foreground
                 if (returned) {
                     // Ritorno in primo piano: i permessi possono essere stati concessi dalle Impostazioni.
@@ -944,6 +1131,7 @@ class AppEnvironment(
         _neighbors.value = emptyList()
         _nearbyPeople.value = emptyList()
         _contactRequests.value = emptyList()
+        _boardPosts.value = emptyList()
         airplaneReceiver?.let { receiver -> runCatching { context.unregisterReceiver(receiver) } }
         airplaneReceiver = null
         MeshForegroundService.stop(context)
@@ -978,6 +1166,10 @@ class AppEnvironment(
     suspend fun joinFlightLounge(pass: BoardingPass): ConversationRecord {
         val router = _router.value ?: throw RouterError.NotRunning
         val lounge = router.joinFlightLounge(pass)
+        // Il posto letto dalla carta d'imbarco resta con il volo (modificabile a mano in "Persone vicine").
+        SeatCode.normalized(pass.seat)?.let { AppSettings.setSeat(it, flightCode = pass.canonicalKey) }
+        // Partenza futura: promemoria alle 07:00 del giorno del volo per invitare chi viaggia con noi.
+        runCatching { FlightReminder.schedule(context, pass) }
         runCatching { _proPass.value?.broadcastGrantIfEntitled(lounge) }
         return lounge
     }
@@ -1100,7 +1292,8 @@ class AppEnvironment(
             is RouterEvent.ContactDeclined -> _nearbyBanner.value = NearbyBanner.Declined(event.nickname)
             is RouterEvent.RelayQueueChanged -> _relayQueueCount.value = event.count
             // Qualcuno ha scansionato il nostro QR: la chat compare da sola nella lista (DB osservato).
-            is RouterEvent.PeerPaired -> Unit
+            // Premio inviti: chi arriva con il nostro QR/link per la prima volta conta.
+            is RouterEvent.PeerPaired -> registerReferral(event)
             // Cancellato per tutti dal mittente: via il file della foto / nota vocale.
             is RouterEvent.MessageRevised -> {
                 removeMedia(event.deletedMediaPath)
@@ -1120,10 +1313,10 @@ class AppEnvironment(
     /** Messaggio ricevuto durante il volo: contatore e, in Cabina, la persona incontrata. */
     private suspend fun recordTripMessage(event: RouterEvent.MessageReceived) {
         if (_activeTrip.value == null) return
-        tripMemory.recordMessage(outgoing = false)
         val database = _database.value
+        val message = database?.let { db -> runCatching { db.messages.fetch(msgID = event.msgID) }.getOrNull() }
+        tripMemory.recordMessage(outgoing = false, hops = message?.hopCountReceived)
         if (database != null) {
-            val message = runCatching { database.messages.fetch(msgID = event.msgID) }.getOrNull()
             val conversation = runCatching { database.conversations.fetch(id = event.conversationID) }.getOrNull()
             if (message != null && conversation != null &&
                 (conversation.type == ConversationType.cabinLounge || conversation.isFlightLounge)

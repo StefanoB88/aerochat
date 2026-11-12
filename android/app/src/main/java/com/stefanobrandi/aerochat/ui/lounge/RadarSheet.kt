@@ -1,5 +1,9 @@
 package com.stefanobrandi.aerochat.ui.lounge
 
+import androidx.compose.runtime.LaunchedEffect
+import com.stefanobrandi.aerochat.screenshots.StoreScreenshots
+import com.stefanobrandi.aerochat.core.transport.BLEPermissions
+import com.stefanobrandi.aerochat.ui.components.rememberMeshPermissionsRequester
 import android.content.Context
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -35,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -81,6 +86,12 @@ import kotlin.math.sin
 @Composable
 fun RadarSheet(onDismiss: () -> Unit) {
     val environment = LocalAppEnvironment.current
+    // Senza Bluetooth non si vede nessuno: lo chiediamo di nuovo (o spieghiamo come riattivarlo).
+    val requestMeshPermissions = rememberMeshPermissionsRequester()
+    val permissionContext = LocalContext.current
+    LaunchedEffect(Unit) {
+        if (!StoreScreenshots.isActive && !BLEPermissions.hasAllPermissions(permissionContext)) requestMeshPermissions()
+    }
     // Polling RSSI dei link solo mentre il radar e' a schermo (come iOS). Scope dell'Application: lo
     // spegnimento deve arrivare anche se la composizione viene distrutta.
     val applicationScope = (LocalContext.current.applicationContext as? AeroChatApplication)?.applicationScope
@@ -99,6 +110,7 @@ fun RadarSheet(onDismiss: () -> Unit) {
         }
     }
     val sorted = remember(neighbors) { neighbors.sortedByDescending { it.rssi ?: -200 } }
+    var showDiagnosis by remember { androidx.compose.runtime.mutableStateOf(false) }
 
     AeroSheet(
         onDismiss = onDismiss,
@@ -123,6 +135,14 @@ fun RadarSheet(onDismiss: () -> Unit) {
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 32.dp),
                 )
+                // Radar vuoto: "Perche' non vedo nessuno?".
+                androidx.compose.material3.TextButton(onClick = { showDiagnosis = true }) {
+                    Text(
+                        stringResource(R.string.growth14_diag_title),
+                        color = AeroTheme.accentCyan,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    )
+                }
             } else {
                 LazyColumn(
                     Modifier.weight(1f).fillMaxWidth(),
@@ -136,6 +156,7 @@ fun RadarSheet(onDismiss: () -> Unit) {
             }
         }
     }
+    if (showDiagnosis) com.stefanobrandi.aerochat.ui.nearby.NobodyNearbySheet(onDismiss = { showDiagnosis = false })
 }
 
 @Composable

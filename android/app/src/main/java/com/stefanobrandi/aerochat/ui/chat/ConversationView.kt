@@ -91,6 +91,7 @@ import com.stefanobrandi.aerochat.app.AppEnvironment
 import com.stefanobrandi.aerochat.app.LocalAppEnvironment
 import com.stefanobrandi.aerochat.core.entitlements.FeatureDecision
 import com.stefanobrandi.aerochat.core.entitlements.FeatureGate
+import com.stefanobrandi.aerochat.core.growth.LocationShare
 import com.stefanobrandi.aerochat.core.entitlements.ProFeature
 import com.stefanobrandi.aerochat.core.games.GameService
 import com.stefanobrandi.aerochat.core.games.GameSessionState
@@ -719,17 +720,35 @@ class ConversationViewModel(
             else -> emptyList()
         }
 
+    /** Partita gratis in uso per l'invito in preparazione (Scopone: dopo la scelta dei giocatori). */
+    private var pendingFreeGameKey: String? = null
+
     fun startGame(kind: GameKind) {
-        if (!allows(ProFeature.game)) return
-        val games = environment.games.value ?: return
-        if (kind == GameKind.SCOPONE) {
-            showScoponePicker.value = true
-            return
-        }
         val conversation = _conversation.value
         scope.launch {
+            // Passeggero virtuale: i giochi restano sempre liberi. Senza Pass: una partita gratis al giorno
+            // e una per volo (si consuma quando l'invito parte), poi il paywall come sempre.
+            var freeKey: String? = null
+            if (!DemoPeerService.isDemoConversation(conversation)) {
+                val decision = FeatureGate.decision(
+                    feature = ProFeature.game, userIsPro = environment.isPro,
+                    conversation = conversation, reachability = _reachability.value,
+                )
+                if (decision == FeatureDecision.requiresPass && environment.isFreeGameAvailable()) {
+                    freeKey = environment.freeGameKey()
+                } else if (!allows(ProFeature.game)) {
+                    return@launch
+                }
+            }
+            val games = environment.games.value ?: return@launch
+            if (kind == GameKind.SCOPONE) {
+                pendingFreeGameKey = freeKey
+                showScoponePicker.value = true
+                return@launch
+            }
             try {
                 games.invite(kind = kind, conversation = conversation)
+                freeKey?.let { useFreeGame(it) }
                 Haptics.impact()
             } catch (e: CancellationException) {
                 throw e
@@ -748,6 +767,8 @@ class ConversationViewModel(
         scope.launch {
             try {
                 games.invite(kind = GameKind.SCOPONE, conversation = conversation, players = players)
+                pendingFreeGameKey?.let { useFreeGame(it) }
+                pendingFreeGameKey = null
                 Haptics.impact()
             } catch (e: CancellationException) {
                 throw e
@@ -755,6 +776,49 @@ class ConversationViewModel(
                 infoMessage.value = context.getString(R.string.games_pick_exactly_three)
             } catch (e: Exception) {
                 errorMessage.value = context.getString(R.string.chat_challenge_not_sent, e.describe())
+            }
+        }
+    }
+
+    private fun useFreeGame(key: String) {
+        environment.consumeFreeGame(key)
+        infoMessage.value = context.getString(R.string.growth14_free_game_used)
+    }
+
+    // MARK: Posizione
+
+    /** Chat 1-a-1 e gruppi (mai la Cabina Pubblica ne' quella del volo): "Posizione" nel menu allegati. */
+    val canShareLocation: Boolean
+        get() {
+            val conversation = _conversation.value
+            return conversation.type == ConversationType.direct ||
+                (conversation.type == ConversationType.group && !conversation.isFlightLounge)
+        }
+
+    /** Una lettura GPS inviata come normale testo: "📍 45.46420, 9.19000 (±12 m)". */
+    fun shareLocation() {
+        val router = environment.router.value ?: return
+        val conversation = _conversation.value
+        if (!canShareLocation) return
+        infoMessage.value = context.getString(R.string.growth14_location_locating)
+        scope.launch {
+            try {
+                val location = com.stefanobrandi.aerochat.ui.lounge.OneShotLocator.current(context)
+                if (location == null) {
+                    Haptics.warning()
+                    infoMessage.value = context.getString(R.string.growth14_location_unavailable)
+                    return@launch
+                }
+                val text = LocationShare.format(
+                    location.latitude, location.longitude, if (location.hasAccuracy()) location.accuracy else null,
+                )
+                router.sendText(text, conversation = conversation)
+                infoMessage.value = null
+                Haptics.impact(Haptics.ImpactStyle.light)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorMessage.value = context.getString(R.string.chat_send_failed, e.describe())
             }
         }
     }
@@ -873,6 +937,13 @@ fun ConversationView(conversation: ConversationRecord) {
 @Composable
 private fun ConversationContent(viewModel: ConversationViewModel) {
     val context = LocalContext.current
+    // Posizione in chat: negata in passato -> di nuovo il dialogo di sistema o "Apri Impostazioni".
+    val locationPermission = com.stefanobrandi.aerochat.ui.components.rememberPermissionRequest(
+        com.stefanobrandi.aerochat.ui.components.DeniedPermission.location,
+        android.Manifest.permission.ACCESS_FINE_LOCATION,
+        android.Manifest.permission.ACCESS_COARSE_LOCATION,
+        anyOf = true,
+    )
     val navController = LocalNavController.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val conversation by viewModel.conversation.collectAsStateWithLifecycle()
@@ -1043,8 +1114,10 @@ private fun ConversationContent(viewModel: ConversationViewModel) {
                     games = viewModel.availableGames(conversation, groupMembers),
                     onPhotoPicked = viewModel::sendPhoto,
                     canTakePhoto = { viewModel.allows(ProFeature.photo) },
-                    onCameraDenied = {
-                        viewModel.infoMessage.value = context.getString(R.string.chat_camera_denied)
+                    onShareLocation = if (viewModel.canShareLocation) {
+                        { locationPermission.run { viewModel.shareLocation() } }
+                    } else {
+                        null
                     },
                 )
             }

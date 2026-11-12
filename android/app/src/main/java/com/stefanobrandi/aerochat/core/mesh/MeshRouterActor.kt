@@ -55,6 +55,8 @@ import com.stefanobrandi.aerochat.proto.ContactAction
 import com.stefanobrandi.aerochat.proto.ContactRequest
 import com.stefanobrandi.aerochat.proto.GameKind
 import com.stefanobrandi.aerochat.proto.Presence
+import com.stefanobrandi.aerochat.proto.BoardKind
+import com.stefanobrandi.aerochat.proto.BoardPost
 import com.stefanobrandi.aerochat.core.review.DemoPeerService
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
@@ -231,6 +233,11 @@ class MeshRouterActor(
     private var nearbyTask: Job? = null
     /** Istante (ms monotoni) dell'ultimo `PRESENCE` a tutti i vicini. */
     private var lastPresenceBroadcastAt = 0L
+
+    /** Bacheca della cabina (`BOARD_POST`): annunci ricevuti e nostri aperti, solo in memoria. */
+    val board: BoardTracker = BoardTracker()
+    /** Istante (ms monotoni) dell'ultima ripetizione dei nostri annunci. */
+    private var lastBoardBroadcastAt = 0L
     /**
      * Sfide accettate da noi (ACCEPT di una REQUEST con `game_kind`): node hex -> (GameKind, istante). L'invito
      * di gioco che chi ha chiesto manda subito dopo viene accettato da solo (l'ACCEPT vale come consenso).
@@ -306,8 +313,12 @@ class MeshRouterActor(
                 delay(configuration.nearbyTickInterval)
                 if (!isActive) break
                 nearby.purge(nowUnixMilliseconds)
+                board.purge(nowUnixMilliseconds)
                 if (monotonicNowMs() - lastPresenceBroadcastAt >= configuration.presenceInterval) {
                     attempt { broadcastPresence() }
+                }
+                if (monotonicNowMs() - lastBoardBroadcastAt >= configuration.presenceInterval) {
+                    attempt { broadcastBoardPosts() }
                 }
             }
         }
@@ -371,6 +382,7 @@ class MeshRouterActor(
         ackRetryTask = null
         nearbyTask = null
         nearby.clear()
+        board.clear()
         acceptedChallenges.clear()
         pendingRelays.values.forEach { it.cancel() }
         pendingRelays.clear()
@@ -511,6 +523,7 @@ class MeshRouterActor(
 
     suspend fun refreshBlockedPeers(): Unit = withContext(actorContext) {
         blocked = attempt { database.peers.blockedNodeIDs() } ?: emptySet()
+        blocked.forEach { board.removeAuthor(it) }
     }
 
     // MARK: - Pairing e gruppi
@@ -892,6 +905,8 @@ class MeshRouterActor(
         attempt { database.peers.fetch(nodeID = nodeID) }?.let { sendProfile(it) }
         // Persone vicine: ci presentiamo a ogni nuovo link (se visibili e in primo piano).
         attempt { sendPresence(toNode = nodeID) }
+        // Bacheca: chi arriva dopo vede subito i nostri annunci aperti.
+        attempt { sendBoardPosts(toNode = nodeID) }
     }
 
     /**
@@ -1020,7 +1035,9 @@ class MeshRouterActor(
         // La cache in memoria puo' aver dimenticato l'id (riavvio, eviction): il DB e' la verita'.
         // "Sta scrivendo": niente DB (pacchetti frequenti ed effimeri, quelli vecchi vengono scartati comunque).
         // Anche `PRESENCE` (ogni 60 s da ogni vicino): mai nel DB.
+        // E la bacheca (`BOARD_POST`, ripetuta ogni 60 s con un nuovo msg_id): dedup per `post_id` in memoria.
         if (envelope.packetType != PacketType.TYPING && envelope.packetType != PacketType.PRESENCE &&
+            envelope.packetType != PacketType.BOARD_POST &&
             attempt { database.seenPackets.markSeenIfNew(msgID = msgID) } == false
         ) {
             updateStats { it.copy(duplicates = it.duplicates + 1) }
@@ -1037,6 +1054,21 @@ class MeshRouterActor(
                 throw e
             } catch (e: Exception) {
                 updateStats { it.copy(undecryptable = it.undecryptable + 1) }
+            }
+            return@withContext
+        }
+
+        // Bacheca della cabina: anche senza Cabina Pubblica, mai nel DB; flooding normale della Lounge (ttl 3).
+        if (envelope.packetType == PacketType.BOARD_POST) {
+            try {
+                handleBoardPost(envelope)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                updateStats { it.copy(undecryptable = it.undecryptable + 1) }
+            }
+            if (envelope.recipientId.toByteArray().contentEquals(MeshProtocol.loungeRecipientID)) {
+                relayIfAllowed(envelope, from, Target.Other)
             }
             return@withContext
         }
@@ -1373,7 +1405,11 @@ class MeshRouterActor(
         val conversation = database.conversations.ensureDirectConversation(with = peer, touchedAtMs = now)
         markSeenThrottled(peer.nodeID, hopCount = hops, rssi = links[via]?.rssi)
         refreshTrustedPeers()
-        emit(RouterEvent.PeerPaired(conversationID = conversation.id, nickname = peer.nickname))
+        emit(
+            RouterEvent.PeerPaired(
+                conversationID = conversation.id, nickname = peer.nickname, nodeHex = peer.nodeID.toHex(), isNewPeer = known == null,
+            ),
+        )
         profileSentTo.remove(peer.nodeID.toHex())
         sendProfile(peer)
         sendAck(envelope, peer)
@@ -1423,11 +1459,14 @@ class MeshRouterActor(
     private suspend fun makePresenceEnvelope(): MeshEnvelope? {
         val color = profile?.avatarColorHex?.takeIf { isValidColorHex(it) }?.uppercase() ?: ""
         val flight = attempt { database.conversations.activeFlightLounges() }?.firstOrNull()?.flightCode ?: ""
+        // Posto solo se condiviso (default spento) e noto per il volo attivo.
+        val seat = if (flight.isNotEmpty() && AppSettings.isSeatShared) SeatCode.normalized(AppSettings.seat(flight)) else null
         val presence = Presence.newBuilder()
             .setAvatarColorHex(color)
             .setFlightCode(flight)
             .setOpenToGames(presenceOpenToGames)
             .setSentAtMs(nowUnixMilliseconds)
+            .setSeat(seat ?: "")
             .build()
         val payload = InnerPayloadFactory.extra(MeshWire.serialize(presence), identity = identity, nickname = nickname)
         return attempt {
@@ -1479,6 +1518,135 @@ class MeshRouterActor(
                 rssi = links[via]?.rssi,
                 lastSeenAtMs = now,
                 isContact = isContact,
+                // Il posto vale solo insieme a un volo (il ricevente lo mostra solo se e' il suo).
+                seat = if (flight != null) SeatCode.normalized(presence.seat) else null,
+            ),
+            now = now,
+        )
+    }
+
+    // MARK: - Bacheca della cabina (BOARD_POST)
+
+    /**
+     * Nuovo annuncio in bacheca: testo 1...140 caratteri senza link, volo attivo e posto (se valido). Al massimo
+     * 3 aperti ([RouterError.BoardLimitReached]); parte subito e poi ogni 60 s finche' non lo chiudiamo o scade (6 h).
+     */
+    suspend fun postToBoard(kind: BoardKind, text: String, seat: String? = null): BoardPostEntry = withContext(actorContext) {
+        if (!isRunning) throw RouterError.NotRunning
+        if (kind == BoardKind.BOARD_KIND_UNSPECIFIED || kind == BoardKind.UNRECOGNIZED) throw RouterError.InvalidBoardPost
+        val valid = BoardPostEntry.validText(text) ?: throw RouterError.InvalidBoardPost
+        val now = nowUnixMilliseconds
+        if (!board.canPost(now)) throw RouterError.BoardLimitReached
+        val flight = attempt { database.conversations.activeFlightLounges() }?.firstOrNull()?.flightCode
+        val entry = BoardPostEntry(
+            postID = ByteArray(MeshProtocol.boardPostIDLength).also { secureRandom.nextBytes(it) },
+            authorNodeID = myNodeID, x25519Pub = identity.x25519PublicKeyRaw, ed25519Pub = identity.ed25519PublicKeyRaw,
+            nickname = nickname, avatarColorHex = profile?.avatarColorHex?.takeIf { isValidColorHex(it) }?.uppercase(),
+            kind = kind, text = valid, flightCode = flight, seat = SeatCode.normalized(seat), createdAtMs = now,
+            lastSeenAtMs = now, isMine = true,
+        )
+        if (!board.addMine(entry, now)) throw RouterError.BoardLimitReached
+        attempt { broadcastBoardPost(entry, closed = false) }
+        entry
+    }
+
+    /** Chiude un nostro annuncio: un ultimo invio con `is_closed = true`, i riceventi lo tolgono. */
+    suspend fun closeBoardPost(postHex: String): Boolean = withContext(actorContext) {
+        val entry = board.closeMine(postHex) ?: return@withContext false
+        if (isRunning) attempt { broadcastBoardPost(entry, closed = true) }
+        true
+    }
+
+    /** Ripete a tutti i vicini i nostri annunci aperti (solo in primo piano). */
+    private suspend fun broadcastBoardPosts() {
+        lastBoardBroadcastAt = monotonicNowMs()
+        if (!isRunning || !presenceForeground || links.isEmpty()) return
+        for (entry in board.openMine(nowUnixMilliseconds)) attempt { broadcastBoardPost(entry, closed = false) }
+    }
+
+    private suspend fun sendBoardPosts(toNode: ByteArray) {
+        if (!isRunning || !presenceForeground) return
+        for (entry in board.openMine(nowUnixMilliseconds)) {
+            val envelope = makeBoardEnvelope(entry, closed = false) ?: continue
+            seen.insertIfNew(envelope.msgId.toByteArray())
+            transport.send(MeshWire.serialize(envelope), toNode = toNode)
+        }
+    }
+
+    /** Ogni ripetizione ha un nuovo `msg_id` (il flooding non la scarta come duplicato). */
+    private suspend fun broadcastBoardPost(entry: BoardPostEntry, closed: Boolean): Boolean {
+        if (links.isEmpty()) return false
+        val envelope = makeBoardEnvelope(entry, closed) ?: return false
+        seen.insertIfNew(envelope.msgId.toByteArray())
+        return transport.broadcast(MeshWire.serialize(envelope), excluding = emptySet()) > 0
+    }
+
+    private fun makeBoardEnvelope(entry: BoardPostEntry, closed: Boolean): MeshEnvelope? {
+        val post = BoardPost.newBuilder()
+            .setPostId(entry.postID.toByteString())
+            .setKind(entry.kind)
+            .setText(entry.text)
+            .setFlightCode(entry.flightCode ?: "")
+            .setSeat(entry.seat ?: "")
+            .setCreatedAtMs(entry.createdAtMs)
+            .setIsClosed(closed)
+            .build()
+        val payload = InnerPayloadFactory.extra(MeshWire.serialize(post), identity = identity, nickname = nickname)
+        return attempt {
+            EnvelopeBuilder(identity).build(
+                packetType = PacketType.BOARD_POST, recipientID = MeshProtocol.loungeRecipientID, payload = payload,
+                key = CryptoEngine.publicCabinKey, ttl = MeshProtocol.boardPostTTL,
+            )
+        }
+    }
+
+    /**
+     * `BOARD_POST` ricevuto: chiave della Lounge, mittente dichiarato coerente con il `node_id`, bloccati
+     * ignorati; testo 1...140 senza link (mascherato se il filtro e' attivo), annunci di un altro volo ignorati.
+     */
+    private suspend fun handleBoardPost(envelope: MeshEnvelope) {
+        if (!envelope.recipientId.toByteArray().contentEquals(MeshProtocol.loungeRecipientID)) return
+        val senderID = envelope.senderNodeId.toByteArray()
+        val senderHex = senderID.toHex()
+        if (senderID.contentEquals(myNodeID) || blocked.contains(senderHex)) return
+        val now = nowUnixMilliseconds
+        // Una ripetizione vecchia (coda di un ponte, replay) non tiene viva la voce.
+        if (now - envelope.createdAtMs > MeshProtocol.boardPostStaleAfter) return
+        val (payload, _) = openShared(envelope, CryptoEngine.publicCabinKey)
+        if (payload.senderEd25519Pub.size() != MeshProtocol.publicKeyLength) throw RouterError.SenderMismatch
+        val stored = database.peers.fetch(nodeID = senderID)
+        if (stored?.isBlocked == true) return
+        val post = MeshWire.parseBoardPost(payload.extraData.toByteArray())
+        val postID = post.postId.toByteArray()
+        if (postID.size != MeshProtocol.boardPostIDLength) return
+        if (post.isClosed) {
+            board.close(postID.toHex(), senderHex)
+            return
+        }
+        if (post.kind == BoardKind.BOARD_KIND_UNSPECIFIED || post.kind == BoardKind.UNRECOGNIZED) return
+        if (now - post.createdAtMs > MeshProtocol.boardPostLifetime) return
+        if (post.createdAtMs - now > configuration.futureSkewTolerance) return
+        var text = BoardPostEntry.validText(post.text) ?: return
+        if (AppSettings.isLanguageFilterEnabled) text = ContentFilter.masked(text)
+        val flight = PairingPayload.trimWhitespacesAndNewlines(post.flightCode).takeIf { it.isNotEmpty() && it.length <= 64 }
+        val myFlight = attempt { database.conversations.activeFlightLounges() }?.firstOrNull()?.flightCode
+        // Annunci di un altro volo (entrambi noti): non riguardano questa cabina.
+        if (flight != null && !myFlight.isNullOrEmpty() && flight != myFlight) return
+        val declared = PairingPayload.prefixCharacters(
+            PairingPayload.trimWhitespacesAndNewlines(payload.senderNickname), MeshProtocol.maxNicknameLength,
+        ).ifEmpty { stored?.nickname ?: defaultPassengerNickname }
+        val nicknameShown = when {
+            stored?.isTrusted == true -> stored.nickname
+            AppSettings.isLanguageFilterEnabled -> ContentFilter.masked(declared)
+            else -> declared
+        }
+        board.receive(
+            BoardPostEntry(
+                postID = postID, authorNodeID = senderID, x25519Pub = payload.senderX25519Pub.toByteArray(),
+                ed25519Pub = payload.senderEd25519Pub.toByteArray(), nickname = nicknameShown,
+                avatarColorHex = nearby.person(senderHex, now)?.avatarColorHex ?: stored?.avatarColorHex,
+                kind = post.kind, text = text, flightCode = flight, seat = SeatCode.normalized(post.seat),
+                createdAtMs = post.createdAtMs, lastSeenAtMs = now, isMine = false,
             ),
             now = now,
         )
@@ -1601,8 +1769,12 @@ class MeshRouterActor(
         val cached = nearby.person(senderHex, now)
         // La risposta puo' arrivare quando il suo PRESENCE e' gia' scaduto: valgono le chiavi della nostra richiesta.
         val pending = nearby.outgoingPeer(senderHex, now)
-        val x25519 = known?.x25519Pub ?: cached?.x25519Pub ?: pending?.x25519Pub ?: throw RouterError.UnknownPeer(senderID)
-        val ed25519 = known?.ed25519Pub ?: cached?.ed25519Pub ?: pending?.ed25519Pub ?: throw RouterError.UnknownPeer(senderID)
+        // Chi risponde a un nostro annuncio puo' non essere visibile: valgono anche le chiavi della bacheca.
+        val author = board.author(senderHex, now)
+        val x25519 = known?.x25519Pub ?: cached?.x25519Pub ?: pending?.x25519Pub ?: author?.x25519Pub
+            ?: throw RouterError.UnknownPeer(senderID)
+        val ed25519 = known?.ed25519Pub ?: cached?.ed25519Pub ?: pending?.ed25519Pub ?: author?.ed25519Pub
+            ?: throw RouterError.UnknownPeer(senderID)
         val payload = EnvelopeVerifier.open(
             envelope, identity.directChatKey(peerX25519PublicKeyRaw = x25519), expectedSenderEd25519PublicKeyRaw = ed25519,
         )

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Permessi negati: avviso con "Apri Impostazioni" (PermissionSettingsDialogHost). -->
+    <string name="permission_open_settings">Open Instellingen</string>
+    <string name="permission_not_now">Niet nu</string>
+    <string name="permission_bluetooth_title">Bluetooth nodig</string>
+    <string name="permission_bluetooth_message">AeroChat praat alleen via Bluetooth met telefoons in de buurt: zonder ‘Apparaten in de buurt’ werken chats, spellen en de radar niet. Sta het toe voor AeroChat in Instellingen.</string>
+    <string name="permission_camera_title">Camera nodig</string>
+    <string name="permission_camera_message">De camera wordt gebruikt om foto\'s te maken en QR-codes en instapkaarten te scannen. Sta hem toe voor AeroChat in Instellingen.</string>
+    <string name="permission_microphone_title">Microfoon nodig</string>
+    <string name="permission_microphone_message">De microfoon wordt gebruikt voor spraakberichten en gesprekken. Sta hem toe voor AeroChat in Instellingen.</string>
+    <string name="permission_location_title">Locatie nodig</string>
+    <string name="permission_location_message">De locatie wordt alleen aan een noodmelding toegevoegd. Sta hem toe voor AeroChat in Instellingen.</string>
+    <string name="permission_notifications_title">Meldingen uit</string>
+    <string name="permission_notifications_message">Zonder meldingen weet je niet wanneer er een bericht binnenkomt als de app gesloten is. Zet ze aan voor AeroChat in Instellingen.</string>
+</resources>

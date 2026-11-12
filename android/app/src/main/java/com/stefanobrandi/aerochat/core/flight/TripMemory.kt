@@ -23,6 +23,8 @@ data class FlightTrip(
     val messagesReceived: Int = 0,
     val gamesPlayed: Int = 0,
     val gamesWon: Int = 0,
+    /** Salti massimi di un messaggio ricevuto durante il volo (record di telefoni in catena). */
+    val longestHop: Int = 0,
     /** Partite gia' contate (gameID), per non contarle due volte. */
     val countedGames: Set<String> = emptySet(),
     /** Notifica "cartolina pronta" gia' pubblicata (una sola volta per volo). */
@@ -50,6 +52,7 @@ data class FlightTrip(
         .put("messagesReceived", messagesReceived)
         .put("gamesPlayed", gamesPlayed)
         .put("gamesWon", gamesWon)
+        .put("longestHop", longestHop)
         .put("countedGames", JSONArray(countedGames.toList()))
         .put("notified", notified)
 
@@ -64,6 +67,7 @@ data class FlightTrip(
             messagesReceived = json.optInt("messagesReceived"),
             gamesPlayed = json.optInt("gamesPlayed"),
             gamesWon = json.optInt("gamesWon"),
+            longestHop = json.optInt("longestHop"),
             countedGames = json.optJSONArray("countedGames")?.strings()?.toSet() ?: emptySet(),
             notified = json.optBoolean("notified"),
         )
@@ -172,11 +176,11 @@ class TripMemory(private val store: TripMemoryStore) {
     }
 
     @Synchronized
-    fun recordMessage(outgoing: Boolean) {
+    fun recordMessage(outgoing: Boolean, hops: Int? = null) {
         val trip = activeTrip ?: return
         store.save(
             if (outgoing) trip.copy(messagesSent = trip.messagesSent + 1)
-            else trip.copy(messagesReceived = trip.messagesReceived + 1),
+            else trip.copy(messagesReceived = trip.messagesReceived + 1, longestHop = maxOf(trip.longestHop, hops ?: 0)),
         )
     }
 

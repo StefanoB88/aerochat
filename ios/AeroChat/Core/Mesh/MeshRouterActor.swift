@@ -83,6 +83,8 @@ actor MeshRouterActor {
     /// PRESENCE: cosa annunciamo (spento finche' l'app non applica l'impostazione) e chi e' vicino.
     private var presenceSettings = PresenceSettings()
     private var presenceCache = PresenceCache()
+    /// Bacheca della cabina (BOARD_POST): annunci ricevuti e nostri aperti, solo in memoria.
+    private var board = BoardCache()
     /// CONTACT_REQUEST inviati in attesa di ACCEPT / DECLINE, per `request_id`.
     private var outgoingContactRequests: [Data: OutgoingContactRequest] = [:]
     /// CONTACT_REQUEST ricevuti in attesa di Accetta / Rifiuta, per `request_id`.
@@ -91,6 +93,11 @@ actor MeshRouterActor {
     private var lastContactRequestAt: [Data: Date] = [:]
     /// "Sfida" accettata da noi: il primo invito di quel gioco da quel peer parte gia' accettato.
     private var acceptedChallenges: [Data: (kind: Int32, expiresAt: Date)] = [:]
+    /// Filtro dell'RSSI per link: le letture grezze del Bluetooth oscillano troppo per stimare una distanza.
+    private var rssiFilters: [LinkID: RSSIFilter] = [:]
+    /// RSSI misurato dal vicino sul suo lato del link (RADAR_PING): serve quando noi siamo il peripheral
+    /// e CoreBluetooth non ci da' l'RSSI del central collegato.
+    private var remoteRSSI: [Data: (rssi: Int, receivedAt: Date)] = [:]
     private(set) var stats = RouterStats()
     private(set) var radioState: RadioState = .unknown
 
@@ -170,6 +177,17 @@ actor MeshRouterActor {
         links.removeAll()
     }
 
+    /// "Riavvia la radio" (diagnosi "Perche' non vedo nessuno?"): spegne e riaccende il trasporto BLE. I link
+    /// chiusi arrivano come eventi normali, quelli nuovi si riaprono da soli.
+    func restartRadio() async {
+        guard isRunning else { return }
+        await transport.stop()
+        try? await Task.sleep(for: .milliseconds(300))
+        guard isRunning else { return }
+        await transport.start()
+        radioState = await transport.radioState()
+    }
+
     /// Radar di prossimita' visibile (e app in primo piano): accende/spegne il polling RSSI della radio.
     func setProximityRanging(_ enabled: Bool) async {
         await transport.setProximityRanging(enabled)
@@ -235,7 +253,7 @@ actor MeshRouterActor {
         links.values.contains { $0.nodeID == nodeID }
     }
 
-    func neighbors() -> [Neighbor] {
+    func neighbors(now: Date = Date()) -> [Neighbor] {
         var byNode: [Data: Neighbor] = [:]
         for link in links.values {
             guard let nodeID = link.nodeID else { continue }
@@ -245,6 +263,12 @@ actor MeshRouterActor {
                 byNode[nodeID] = existing
             } else {
                 byNode[nodeID] = Neighbor(nodeID: nodeID, rssi: link.rssi, linkCount: 1)
+            }
+        }
+        // Nessun RSSI locale (solo link in ruolo peripheral): quello misurato dal vicino, se recente.
+        for (nodeID, neighbor) in byNode where neighbor.rssi == nil {
+            if let remote = remoteRSSI[nodeID], now.timeIntervalSince(remote.receivedAt) < NearbyProtocol.remoteRSSILifetime {
+                byNode[nodeID]?.rssi = remote.rssi
             }
         }
         return byNode.values.sorted { $0.nodeID.lexicographicallyPrecedes($1.nodeID) }
@@ -310,6 +334,7 @@ actor MeshRouterActor {
 
     func refreshBlockedPeers() async {
         blocked = (try? await database.peers.blockedNodeIDs()) ?? []
+        if board.removeAuthors(blocked) { emitBoard() }
     }
 
     // MARK: - Pairing e gruppi
@@ -669,11 +694,13 @@ actor MeshRouterActor {
         case .advertisingChanged:
             break
         case .peerDiscovered(let deviceID, let rssi):
-            // RSSI dalla scansione o dal polling periodico (radar): la UI si aggiorna solo se cambia davvero.
+            // RSSI dalla scansione o dal polling periodico (radar), filtrato per link: la UI si aggiorna
+            // solo se la stima cambia davvero.
             var changed = false
             for (id, var link) in links where id.deviceID == deviceID {
-                if abs((link.rssi ?? Int.min) - rssi) >= 2 { changed = true }
-                link.rssi = rssi
+                let filtered = rssiFilters[id, default: RSSIFilter()].add(rssi)
+                if link.rssi != filtered { changed = true }
+                link.rssi = filtered
                 links[id] = link
             }
             if changed { emit(.neighborsChanged(neighbors())) }
@@ -691,9 +718,11 @@ actor MeshRouterActor {
             emit(.neighborsChanged(neighbors()))
         case .linkClosed(let id, _):
             let closed = links.removeValue(forKey: id)
+            rssiFilters.removeValue(forKey: id)
             // Alla prossima riconnessione il profilo viene ripetuto (il precedente puo' essere andato perso).
             if let nodeID = closed?.nodeID, !links.values.contains(where: { $0.nodeID == nodeID }) {
                 profileSentTo.remove(nodeID)
+                remoteRSSI.removeValue(forKey: nodeID)
             }
             emit(.neighborsChanged(neighbors()))
         case .frameReceived(let data, let from, _):
@@ -713,6 +742,7 @@ actor MeshRouterActor {
         guard !links.values.contains(where: { $0.nodeID == nodeID && $0.id != link.id }) else { return }
         // "Persone vicine": ci annunciamo subito al nuovo vicino (se la visibilita' e' attiva).
         await sendPresence(toNode: nodeID)
+        await sendBoardPosts(toNode: nodeID)
         await flushRelayQueue(toward: nodeID)
         if let peer = try? await database.peers.fetch(nodeID: nodeID) {
             await sendProfile(to: peer)
@@ -807,6 +837,21 @@ actor MeshRouterActor {
             cancelPendingRelay(for: envelope.msgID)
             // Il mittente ritrasmette finche' non riceve l'ACK: se il nostro e' andato perso, lo rimandiamo.
             await reacknowledgeDuplicate(envelope)
+            return
+        }
+        // RADAR_PING: ogni ~2 s per vicino finche' il radar e' aperto, solo in memoria (niente DB).
+        if envelope.packetType == .radarPing {
+            await handleRadarPing(envelope, via: link)
+            return
+        }
+        // Bacheca della cabina: ripetuta ogni 60 s con un nuovo msg_id, dedup per `post_id` in memoria (mai nel
+        // DB); flooding normale della Lounge (ttl 3), anche senza Cabina Pubblica, mai in coda.
+        if envelope.packetType == .boardPost {
+            stats.received += 1
+            await handleBoardPost(envelope)
+            if envelope.recipientID == MeshProtocol.loungeRecipientID {
+                await relayIfAllowed(envelope, from: link, target: .other)
+            }
             return
         }
         // La cache in memoria puo' aver dimenticato l'id (riavvio, eviction): il DB e' la verita'.
@@ -1110,7 +1155,8 @@ actor MeshRouterActor {
               payload.declaredSenderNodeID == envelope.senderNodeID,
               envelope.senderNodeID != identity.nodeID,
               !blocked.contains(envelope.senderNodeID) else { throw RouterError.senderMismatch }
-        if let known = try await database.peers.fetch(nodeID: envelope.senderNodeID) {
+        let known = try await database.peers.fetch(nodeID: envelope.senderNodeID)
+        if let known {
             guard !known.isBlocked else { return }
             guard known.ed25519Pub == payload.senderEd25519Pub else { throw RouterError.senderMismatch }
         }
@@ -1124,7 +1170,7 @@ actor MeshRouterActor {
         let conversation = try await database.conversations.ensureDirectConversation(with: peer, showAtTop: true)
         await markSeenThrottled(nodeID: peer.nodeID, hopCount: hops, rssi: links[link]?.rssi)
         await refreshTrustedPeers()
-        emit(.pairedByHello(conversationID: conversation.id, peerNodeID: peer.nodeID))
+        emit(.pairedByHello(conversationID: conversation.id, peerNodeID: peer.nodeID, isNewPeer: known == nil))
         profileSentTo.remove(peer.nodeID)
         await sendProfile(to: peer)
         try await sendAck(for: envelope, to: peer)
@@ -1533,6 +1579,10 @@ actor MeshRouterActor {
         presence.flightCode = presenceSettings.flightCode ?? ""
         presence.openToGames = presenceSettings.openToGames
         presence.sentAtMs = now.unixMilliseconds
+        // Posto solo se condiviso (default spento) e insieme al volo attivo.
+        if presenceSettings.flightCode != nil, let seat = SeatCode.normalized(presenceSettings.seat) {
+            presence.seat = seat
+        }
         guard let data = try? MeshWire.serialize(presence),
               let envelope = try? EnvelopeBuilder(identity: identity).build(
                 packetType: .presence, recipientID: MeshProtocol.loungeRecipientID,
@@ -1569,13 +1619,207 @@ actor MeshRouterActor {
         let person = NearbyPerson(nodeID: senderID, x25519Pub: payload.senderX25519Pub, ed25519Pub: payload.senderEd25519Pub,
                                   nickname: nickname, avatarColorHex: color,
                                   flightCode: flight.isEmpty || flight.count > NearbyProtocol.maxFlightCodeLength ? nil : flight,
-                                  openToGames: presence.openToGames, rssi: links[link]?.rssi, lastSeen: Date())
+                                  openToGames: presence.openToGames, rssi: links[link]?.rssi, lastSeen: Date(),
+                                  // Il posto vale solo insieme a un volo (il ricevente lo mostra solo se e' il suo).
+                                  seat: flight.isEmpty ? nil : SeatCode.normalized(presence.seat))
         presenceCache.upsert(person)
         if known != nil {
             await markSeenThrottled(nodeID: senderID, hopCount: 1, rssi: links[link]?.rssi)
         }
         stats.delivered += 1
         emit(.presenceUpdated(presenceCache.person(senderID) ?? person))
+    }
+
+    // MARK: - Bacheca della cabina (BOARD_POST)
+
+    /// Annunci da mostrare (nostri e ricevuti ancora validi), i piu' recenti prima.
+    func boardPosts(now: Date = Date()) -> [BoardPostEntry] {
+        board.posts(now: now)
+    }
+
+    /// Nuovo annuncio in bacheca: testo 1...140 caratteri senza link, volo attivo e posto (se valido). Al massimo
+    /// 3 aperti; parte subito e poi ogni 60 s (`resendBoardPosts`) finche' non lo chiudiamo o scade (6 h).
+    @discardableResult
+    func postToBoard(kind: BoardKind, text: String, seat: String? = nil, now: Date = Date()) async throws -> BoardPostEntry {
+        guard isRunning else { throw RouterError.notRunning }
+        switch kind {
+        case .lookingFor, .offering, .found, .seatSwap: break
+        case .unspecified, .UNRECOGNIZED: throw RouterError.invalidBoardPost
+        }
+        guard let valid = BoardPostEntry.validText(text) else { throw RouterError.invalidBoardPost }
+        guard board.canPost(now: now) else { throw RouterError.boardLimitReached }
+        let color = profile?.avatarColorHex.uppercased()
+        let entry = BoardPostEntry(postID: CryptoEngine.randomMessageID(), authorNodeID: identity.nodeID,
+                                   x25519Pub: identity.x25519PublicKeyRaw, ed25519Pub: identity.ed25519PublicKeyRaw,
+                                   nickname: nickname, avatarColorHex: color.flatMap { Self.isValidColorHex($0) ? $0 : nil },
+                                   kind: kind, text: valid, flightCode: presenceSettings.flightCode,
+                                   seat: SeatCode.normalized(seat), createdAt: now, lastSeen: now, isMine: true)
+        guard board.addMine(entry, now: now) else { throw RouterError.boardLimitReached }
+        emitBoard(now: now)
+        _ = await broadcastBoardPost(entry, closed: false)
+        return entry
+    }
+
+    /// Chiude un nostro annuncio: un ultimo invio con `is_closed = true`, i riceventi lo tolgono.
+    @discardableResult
+    func closeBoardPost(_ postID: Data) async -> Bool {
+        guard let entry = board.closeMine(postID) else { return false }
+        emitBoard()
+        if isRunning { _ = await broadcastBoardPost(entry, closed: true) }
+        return true
+    }
+
+    /// Ripete a tutti i vicini i nostri annunci aperti (giro del PRESENCE, solo in primo piano) e toglie dalla
+    /// bacheca gli annunci non piu' ripetuti. Anche con la visibilita' spenta: l'annuncio e' una scelta esplicita.
+    func resendBoardPosts(now: Date = Date()) async {
+        if board.purgeExpired(now: now) { emitBoard(now: now) }
+        guard isRunning, !links.isEmpty else { return }
+        for entry in board.openMine(now: now) {
+            _ = await broadcastBoardPost(entry, closed: false, now: now)
+        }
+    }
+
+    /// Annunci aperti al vicino appena collegato, cosi' chi arriva dopo li vede subito.
+    private func sendBoardPosts(toNode nodeID: Data, now: Date = Date()) async {
+        guard isRunning else { return }
+        for entry in board.openMine(now: now) {
+            guard let bytes = boardEnvelopeBytes(entry, closed: false, now: now) else { continue }
+            _ = try? await transport.send(bytes, toNode: nodeID)
+        }
+    }
+
+    /// Ogni ripetizione ha un nuovo `msg_id` (il flooding non la scarta come duplicato).
+    private func broadcastBoardPost(_ entry: BoardPostEntry, closed: Bool, now: Date = Date()) async -> Bool {
+        guard !links.isEmpty, let bytes = boardEnvelopeBytes(entry, closed: closed, now: now) else { return false }
+        return await transport.broadcast(bytes, excluding: []) > 0
+    }
+
+    private func boardEnvelopeBytes(_ entry: BoardPostEntry, closed: Bool, now: Date) -> Data? {
+        var post = BoardPost()
+        post.postID = entry.postID
+        post.kind = entry.kind
+        post.text = entry.text
+        post.flightCode = entry.flightCode ?? ""
+        post.seat = entry.seat ?? ""
+        post.createdAtMs = entry.createdAt.unixMilliseconds
+        post.isClosed = closed
+        guard let data = try? MeshWire.serialize(post),
+              let envelope = try? EnvelopeBuilder(identity: identity).build(
+                packetType: .boardPost, recipientID: MeshProtocol.loungeRecipientID,
+                payload: InnerPayload.extra(data, identity: identity, nickname: nickname),
+                key: CryptoEngine.publicCabinKey, ttl: NearbyProtocol.boardPostTTL),
+              let bytes = try? MeshWire.serialize(envelope) else { return nil }
+        _ = seen.insertIfNew(envelope.msgID)
+        return bytes
+    }
+
+    /// BOARD_POST ricevuto: chiave della Lounge, mittente dichiarato coerente con il `node_id`, bloccati
+    /// ignorati; testo 1...140 senza link (mascherato se il filtro e' attivo), annunci di un altro volo ignorati.
+    private func handleBoardPost(_ envelope: MeshEnvelope) async {
+        let senderID = envelope.senderNodeID
+        guard envelope.recipientID == MeshProtocol.loungeRecipientID,
+              senderID != identity.nodeID, !blocked.contains(senderID) else { return }
+        let now = Date()
+        // Una ripetizione vecchia (coda di un ponte, replay) non tiene viva la voce.
+        guard now.unixMilliseconds - envelope.createdAtMs <= Int64(NearbyProtocol.boardPostStaleAfter * 1_000) else { return }
+        guard let opened = try? await openShared(envelope, key: CryptoEngine.publicCabinKey),
+              opened.0.senderX25519Pub.count == MeshProtocol.publicKeyLength,
+              opened.0.senderEd25519Pub.count == MeshProtocol.publicKeyLength,
+              let post = try? MeshWire.parseBoardPost(opened.0.extraData) else {
+            stats.undecryptable += 1
+            return
+        }
+        let (payload, sender) = opened
+        let known = try? await database.peers.fetch(nodeID: senderID)
+        if known?.isBlocked == true { return }
+        guard post.postID.count == NearbyProtocol.boardPostIDLength else { return }
+        if post.isClosed {
+            if board.close(post.postID, author: senderID) { emitBoard(now: now) }
+            return
+        }
+        switch post.kind {
+        case .lookingFor, .offering, .found, .seatSwap: break
+        case .unspecified, .UNRECOGNIZED: return
+        }
+        let createdAt = Date(unixMilliseconds: post.createdAtMs)
+        guard now.timeIntervalSince(createdAt) <= NearbyProtocol.boardPostLifetime,
+              createdAt.timeIntervalSince(now) <= configuration.futureSkewTolerance,
+              var text = BoardPostEntry.validText(post.text) else { return }
+        if AppSettings.isLanguageFilterEnabled { text = ContentFilter.masked(text) }
+        let trimmedFlight = post.flightCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let flight = trimmedFlight.isEmpty || trimmedFlight.count > NearbyProtocol.maxFlightCodeLength ? nil : trimmedFlight
+        // Annunci di un altro volo (entrambi noti): non riguardano questa cabina.
+        if let flight, let mine = presenceSettings.flightCode, !mine.isEmpty, flight != mine { return }
+        let declared = String(payload.senderNickname.trimmingCharacters(in: .whitespacesAndNewlines).prefix(MeshProtocol.maxNicknameLength))
+        var nickname: String
+        if let known, known.isTrusted {
+            nickname = known.nickname
+        } else {
+            nickname = declared.isEmpty ? (known?.nickname ?? sender.nickname) : declared
+            if AppSettings.isLanguageFilterEnabled { nickname = ContentFilter.masked(nickname) }
+        }
+        let entry = BoardPostEntry(postID: post.postID, authorNodeID: senderID, x25519Pub: payload.senderX25519Pub,
+                                   ed25519Pub: payload.senderEd25519Pub, nickname: nickname,
+                                   avatarColorHex: presenceCache.person(senderID, now: now)?.avatarColorHex ?? known?.avatarColorHex,
+                                   kind: post.kind, text: text, flightCode: flight, seat: SeatCode.normalized(post.seat),
+                                   createdAt: createdAt, lastSeen: now, isMine: false)
+        if board.receive(entry, now: now) {
+            stats.delivered += 1
+            emitBoard(now: now)
+        }
+    }
+
+    private func emitBoard(now: Date = Date()) {
+        emit(.boardChanged(board.posts(now: now)))
+    }
+
+    // MARK: - Radar di prossimita' (RADAR_PING)
+
+    /// RADAR_PING a un solo vicino diretto: chiave della Lounge, ttl 1. Porta l'RSSI che misuriamo sul
+    /// suo link (lui, se e' il peripheral, non lo conosce) e il nostro token UWB per lui, se ne abbiamo uno.
+    @discardableResult
+    func sendRadarPing(to nodeID: Data, discoveryToken: Data?, isActive: Bool, now: Date = Date()) async -> Bool {
+        guard isRunning, isDirectNeighbor(nodeID) else { return false }
+        var ping = RadarPing()
+        ping.targetNodeID = nodeID
+        let local = links.values.filter { $0.nodeID == nodeID }.compactMap(\.rssi).max()
+        ping.rssiDbm = Int32(local ?? 0)
+        ping.niDiscoveryToken = discoveryToken ?? Data()
+        ping.isActive = isActive
+        guard let data = try? MeshWire.serialize(ping),
+              let envelope = try? EnvelopeBuilder(identity: identity).build(
+                packetType: .radarPing, recipientID: MeshProtocol.loungeRecipientID,
+                payload: InnerPayload.extra(data, identity: identity, nickname: nickname),
+                key: CryptoEngine.publicCabinKey, ttl: NearbyProtocol.radarPingTTL),
+              let bytes = try? MeshWire.serialize(envelope) else { return false }
+        _ = seen.insertIfNew(envelope.msgID)
+        return (try? await transport.send(bytes, toNode: nodeID)) ?? false
+    }
+
+    /// RADAR_PING ricevuto: solo dal vicino diretto che lo firma, solo se destinato a noi. L'RSSI che il
+    /// vicino misura sostituisce il nostro quando non ne abbiamo uno; il token UWB va all'app.
+    private func handleRadarPing(_ envelope: MeshEnvelope, via link: LinkID) async {
+        let senderID = envelope.senderNodeID
+        guard envelope.recipientID == MeshProtocol.loungeRecipientID, envelope.hopCount == 0,
+              senderID != identity.nodeID, !blocked.contains(senderID),
+              links[link]?.nodeID == senderID else { return }
+        guard let opened = try? await openShared(envelope, key: CryptoEngine.publicCabinKey),
+              let ping = try? MeshWire.parseRadarPing(opened.0.extraData) else {
+            stats.undecryptable += 1
+            return
+        }
+        guard ping.targetNodeID == identity.nodeID else { return }
+        if (-127 ..< 0).contains(ping.rssiDbm) {
+            let rssi = Int(ping.rssiDbm)
+            let previous = remoteRSSI[senderID]?.rssi
+            remoteRSSI[senderID] = (rssi, Date())
+            let hasLocal = links.values.contains { $0.nodeID == senderID && $0.rssi != nil }
+            if !hasLocal, previous != rssi { emit(.neighborsChanged(neighbors())) }
+        }
+        let token = ping.niDiscoveryToken.isEmpty || ping.niDiscoveryToken.count > NearbyProtocol.maxRadarTokenBytes
+            ? nil : ping.niDiscoveryToken
+        stats.delivered += 1
+        emit(.radarPingReceived(nodeID: senderID, discoveryToken: token, isActive: ping.isActive))
     }
 
     /// "Saluta" (`gameKind` nil) o "Sfida": REQUEST diretta, cifrata con la chiave 1-a-1 calcolata dalla
@@ -1671,6 +1915,8 @@ actor MeshRouterActor {
         if known?.isBlocked == true { return }
         let cached = presenceCache.person(senderID, now: now)
         let pending = outgoingContactRequests.values.first { $0.peer.nodeID == senderID }
+        // Chi risponde a un nostro annuncio puo' non essere visibile: valgono anche le chiavi della bacheca.
+        let author = board.author(senderID, now: now)
         let senderKeys: (x25519: Data, ed25519: Data)
         if let known {
             senderKeys = (known.x25519Pub, known.ed25519Pub)
@@ -1678,6 +1924,8 @@ actor MeshRouterActor {
             senderKeys = (cached.x25519Pub, cached.ed25519Pub)
         } else if let pending {
             senderKeys = (pending.peer.x25519Pub, pending.peer.ed25519Pub)
+        } else if let author {
+            senderKeys = (author.x25519Pub, author.ed25519Pub)
         } else {
             throw RouterError.unknownPeer(senderID)
         }
@@ -1689,9 +1937,9 @@ actor MeshRouterActor {
         let request = try MeshWire.parseContactRequest(payload.extraData)
         guard request.requestID.count == NearbyProtocol.requestIDLength else { return }
         let declared = String(payload.senderNickname.trimmingCharacters(in: .whitespacesAndNewlines).prefix(MeshProtocol.maxNicknameLength))
-        var nickname = declared.isEmpty ? (known?.nickname ?? cached?.nickname ?? pending?.peer.nickname ?? String(localized: "Passeggero")) : declared
+        var nickname = declared.isEmpty ? (known?.nickname ?? cached?.nickname ?? pending?.peer.nickname ?? author?.nickname ?? String(localized: "Passeggero")) : declared
         if AppSettings.isLanguageFilterEnabled { nickname = ContentFilter.masked(nickname) }
-        let color = known?.avatarColorHex ?? cached?.avatarColorHex
+        let color = known?.avatarColorHex ?? cached?.avatarColorHex ?? author?.avatarColorHex
 
         switch request.action {
         case .request:
@@ -1734,6 +1982,7 @@ actor MeshRouterActor {
 
     private func purgeNearbyState(now: Date = Date()) {
         presenceCache.purgeExpired(now: now)
+        if board.purgeExpired(now: now) { emitBoard(now: now) }
         let lifetime = NearbyProtocol.requestLifetime
         incomingContactRequests = incomingContactRequests.filter { !$0.value.isExpired(now: now) }
         outgoingContactRequests = outgoingContactRequests.filter { now.timeIntervalSince($0.value.sentAt) < lifetime }

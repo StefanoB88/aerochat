@@ -1,8 +1,10 @@
 import Foundation
 import ActivityKit
 
-/// Avvia, aggiorna e chiude la Live Activity "A bordo": parte quando la mesh ha almeno un vicino,
-/// si aggiorna con vicini / non letti / Cabina del volo, si chiude quando la mesh si ferma.
+/// Avvia, aggiorna e chiude la Live Activity "A bordo": parte solo durante un volo (lo decide `AppEnvironment`:
+/// Cabina del volo attiva o modalita' aereo probabile, impostazione "Attivita' in tempo reale" accesa) quando la
+/// mesh ha almeno un vicino; si aggiorna con vicini / non letti / Cabina del volo; si chiude quando la mesh si
+/// ferma, dopo 10 minuti senza vicini e senza non letti, alla terminazione dell'app e al ritorno a terra.
 @MainActor
 final class LiveActivityController {
 
@@ -69,6 +71,19 @@ final class LiveActivityController {
         await current.end()
         self.current = nil
         lastState = nil
+    }
+
+    /// Terminazione dell'app: iOS concede pochi istanti, quindi si chiudono tutte le attivita' aspettando al
+    /// massimo 2 secondi (fuori dal main actor, che e' bloccato in attesa).
+    nonisolated static func endAllBeforeTermination() {
+        let semaphore = DispatchSemaphore(value: 0)
+        Task.detached {
+            for stale in Activity<MeshActivityAttributes>.activities.map(ActivityBox.init) {
+                await stale.end()
+            }
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 2)
     }
 
     /// All'avvio chiude eventuali attivita' rimaste da una sessione precedente.

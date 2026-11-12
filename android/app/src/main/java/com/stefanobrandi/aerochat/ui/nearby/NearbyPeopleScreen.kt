@@ -1,5 +1,8 @@
 package com.stefanobrandi.aerochat.ui.nearby
 
+import com.stefanobrandi.aerochat.screenshots.StoreScreenshots
+import com.stefanobrandi.aerochat.core.transport.BLEPermissions
+import com.stefanobrandi.aerochat.ui.components.rememberMeshPermissionsRequester
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -81,8 +84,15 @@ import com.stefanobrandi.aerochat.ui.components.AeroMenuItem
 import com.stefanobrandi.aerochat.ui.components.AvatarView
 import com.stefanobrandi.aerochat.ui.components.Haptics
 import com.stefanobrandi.aerochat.ui.pairing.StoreQRSheet
+import com.stefanobrandi.aerochat.core.mesh.BoardPostEntry
+import com.stefanobrandi.aerochat.core.mesh.RouterError
+import com.stefanobrandi.aerochat.proto.BoardKind
+import com.stefanobrandi.aerochat.ui.flight.FlightSegmentedPicker
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+
+/** Segmenti di "Persone vicine": lista, mappa dei posti, bacheca della cabina. */
+private enum class NearbySegment { people, map, board }
 
 /** Giochi a 2 giocatori proponibili con "Sfida" (le carte prima). */
 internal val challengeGames: List<GameKind> =
@@ -119,6 +129,12 @@ internal fun requestTitle(request: IncomingContactRequest): String {
 @Composable
 fun NearbyPeopleScreen(gamesOnly: Boolean) {
     val environment = LocalAppEnvironment.current
+    // Senza Bluetooth non si vede nessuno: lo chiediamo di nuovo (o spieghiamo come riattivarlo).
+    val requestMeshPermissions = rememberMeshPermissionsRequester()
+    val permissionContext = LocalContext.current
+    LaunchedEffect(Unit) {
+        if (!StoreScreenshots.isActive && !BLEPermissions.hasAllPermissions(permissionContext)) requestMeshPermissions()
+    }
     val navController = LocalNavController.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -132,6 +148,12 @@ fun NearbyPeopleScreen(gamesOnly: Boolean) {
     /** Persone a cui abbiamo appena scritto (in attesa di risposta), per `node_id` hex. */
     var pending by remember { mutableStateOf(emptySet<String>()) }
     var showInvite by remember { mutableStateOf(false) }
+    var showDiagnosis by remember { mutableStateOf(false) }
+    var segment by rememberSaveable { mutableStateOf(NearbySegment.people) }
+    val boardPosts by environment.boardPosts.collectAsStateWithLifecycle()
+    var showSeatEdit by remember { mutableStateOf(false) }
+    /** Annuncio da scrivere (tipo e testo iniziali), `null` = foglio chiuso. */
+    var composing by remember { mutableStateOf<Pair<BoardKind, String>?>(null) }
 
     // Volo della Cabina attiva: chi e' sullo stesso volo compare per primo.
     val myFlight by produceState<String?>(null, database) {
@@ -147,6 +169,10 @@ fun NearbyPeopleScreen(gamesOnly: Boolean) {
             popUpTo(AeroRoutes.tabs)
         }
     }
+
+    val mySeat = settings.seat(myFlight)
+    val swapGreeting = seatSwapGreeting(mySeat)
+    val quickSwapText = mySeat?.let { stringResource(R.string.growth14_board_quick_swap, it) }
 
     val shown = people
         .filter { !onlyGames || it.openToGames }
@@ -191,6 +217,63 @@ fun NearbyPeopleScreen(gamesOnly: Boolean) {
                     pending = pending + person.id
                     Haptics.success()
                     info = context.getString(R.string.nearby_challenge_sent, person.nickname)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failure(e)
+            }
+        }
+    }
+
+    fun proposeSwap(person: NearbyPerson) {
+        scope.launch {
+            try {
+                val chat = environment.proposeSeatSwap(person, swapGreeting)
+                if (chat != null) {
+                    openChat(chat.id)
+                } else {
+                    pending = pending + person.id
+                    Haptics.success()
+                    info = context.getString(R.string.nearby_hello_sent, person.nickname)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failure(e)
+            }
+        }
+    }
+
+    fun post(kind: BoardKind, text: String) {
+        scope.launch {
+            try {
+                environment.postToBoard(kind, text)
+                Haptics.success()
+                info = context.getString(R.string.growth14_board_posted)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: RouterError.BoardLimitReached) {
+                Haptics.error()
+                info = context.getString(R.string.growth14_board_limit)
+            } catch (_: RouterError.InvalidBoardPost) {
+                Haptics.error()
+                info = context.getString(R.string.growth14_board_invalid)
+            } catch (e: Exception) {
+                failure(e)
+            }
+        }
+    }
+
+    fun reply(post: BoardPostEntry) {
+        scope.launch {
+            try {
+                val chat = environment.replyToBoardPost(post)
+                if (chat != null) {
+                    openChat(chat.id)
+                } else {
+                    Haptics.success()
+                    info = context.getString(R.string.nearby_hello_sent, post.nickname)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -253,6 +336,66 @@ fun NearbyPeopleScreen(gamesOnly: Boolean) {
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                if (!onlyGames) {
+                    item(key = "segments") {
+                        FlightSegmentedPicker(
+                            options = NearbySegment.entries,
+                            selected = segment,
+                            label = {
+                                stringResource(
+                                    when (it) {
+                                        NearbySegment.people -> R.string.growth14_segment_people
+                                        NearbySegment.map -> R.string.growth14_segment_map
+                                        NearbySegment.board -> R.string.growth14_segment_board
+                                    },
+                                )
+                            },
+                            onSelect = { segment = it },
+                        )
+                    }
+                }
+                if (!onlyGames && segment == NearbySegment.map) {
+                    item(key = "seat") {
+                        SeatCard(
+                            flightCode = myFlight,
+                            seat = mySeat,
+                            shared = settings.isSeatShared,
+                            onEditSeat = { showSeatEdit = true },
+                            onSharedChange = { scope.launch { environment.setSeatShared(it) } },
+                        )
+                    }
+                    item(key = "map") {
+                        SeatMap(
+                            flightCode = myFlight,
+                            mySeat = mySeat,
+                            people = people,
+                            onHello = ::hello,
+                            onSwap = ::proposeSwap,
+                        )
+                    }
+                }
+                if (!onlyGames && segment == NearbySegment.board) {
+                    item(key = "board-header") {
+                        BoardHeader(
+                            onCompose = { composing = BoardKind.BOARD_KIND_LOOKING_FOR to "" },
+                            onQuickSeatSwap = {
+                                // Con il posto noto l'annuncio parte subito, altrimenti si scrive.
+                                if (quickSwapText != null) post(BoardKind.BOARD_KIND_SEAT_SWAP, quickSwapText)
+                                else composing = BoardKind.BOARD_KIND_SEAT_SWAP to ""
+                            },
+                        )
+                    }
+                    if (boardPosts.isEmpty()) item(key = "board-empty") { BoardEmpty() }
+                    items(boardPosts, key = { "post-" + it.id }) { entry ->
+                        BoardPostRow(
+                            post = entry,
+                            onSameFlight = myFlight != null && entry.flightCode == myFlight,
+                            onReply = { reply(entry) },
+                            onClose = { scope.launch { environment.closeBoardPost(entry) } },
+                        )
+                    }
+                }
+                if (onlyGames || segment == NearbySegment.people) {
                 item(key = "visibility") {
                     VisibilityCard(
                         visible = settings.isNearbyVisible,
@@ -277,6 +420,7 @@ fun NearbyPeopleScreen(gamesOnly: Boolean) {
                     item(key = "empty") {
                         EmptyNearby(
                             onInvite = { showInvite = true },
+                            onDiagnose = { showDiagnosis = true },
                             onTryDemo = {
                                 scope.launch {
                                     environment.startDemo()?.let { openChat(it.id) }
@@ -289,16 +433,37 @@ fun NearbyPeopleScreen(gamesOnly: Boolean) {
                     PersonRow(
                         person = person,
                         onSameFlight = person.isOnFlight(myFlight),
+                        seat = person.seatOnFlight(myFlight),
                         isPending = pending.contains(person.id),
                         onHello = { hello(person) },
                         onChallenge = { kind -> challenge(person, kind) },
                     )
+                }
                 }
             }
             InfoBanner(message = info, onExpire = { info = null }, modifier = Modifier.align(Alignment.TopCenter))
         }
     }
     if (showInvite) StoreQRSheet(onDismiss = { showInvite = false })
+    if (showDiagnosis) NobodyNearbySheet(onDismiss = { showDiagnosis = false })
+    if (showSeatEdit) {
+        SeatEditSheet(current = mySeat, onDismiss = { showSeatEdit = false }) { value ->
+            // Il volo attivo e' noto (la riga e' toccabile solo con la Cabina del volo).
+            val flight = myFlight ?: return@SeatEditSheet false
+            val seat = value?.let { com.stefanobrandi.aerochat.core.mesh.SeatCode.normalized(it) ?: return@SeatEditSheet false }
+            AppSettings.setSeat(seat, flightCode = flight)
+            if (settings.isSeatShared) scope.launch { environment.router.value?.announcePresence() }
+            true
+        }
+    }
+    composing?.let { (kind, text) ->
+        BoardComposeSheet(
+            initialKind = kind,
+            initialText = text,
+            onDismiss = { composing = null },
+            onPost = { postKind, postText -> post(postKind, postText) },
+        )
+    }
 }
 
 @Composable
@@ -401,6 +566,7 @@ private fun RequestCard(request: IncomingContactRequest, onAccept: () -> Unit, o
 private fun PersonRow(
     person: NearbyPerson,
     onSameFlight: Boolean,
+    seat: String?,
     isPending: Boolean,
     onHello: () -> Unit,
     onChallenge: (GameKind) -> Unit,
@@ -425,6 +591,7 @@ private fun PersonRow(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (onSameFlight) Tag(stringResource(R.string.nearby_same_flight), AeroTheme.accentCyan, Icons.Filled.Flight)
+                    if (seat != null) Tag(stringResource(R.string.flight_seat, seat), AeroTheme.accentEmerald, null)
                     if (person.isContact) Tag(stringResource(R.string.nearby_already_contact), AeroTheme.accentEmerald, null)
                     Text(signalLabel(person.rssi), style = AeroTheme.caption, color = AeroTheme.textSecondary)
                 }
@@ -513,7 +680,7 @@ private fun signalLabel(rssi: Int?): String = stringResource(
 )
 
 @Composable
-private fun EmptyNearby(onInvite: () -> Unit, onTryDemo: () -> Unit) {
+private fun EmptyNearby(onInvite: () -> Unit, onDiagnose: () -> Unit, onTryDemo: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -544,6 +711,9 @@ private fun EmptyNearby(onInvite: () -> Unit, onTryDemo: () -> Unit) {
             Icon(Icons.Outlined.GetApp, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(6.dp))
             Text(stringResource(R.string.nearby_invite_friends), fontWeight = FontWeight.Bold)
+        }
+        TextButton(onClick = { Haptics.tap(); onDiagnose() }) {
+            Text(stringResource(R.string.growth14_diag_title), color = AeroTheme.accentCyan, fontWeight = FontWeight.SemiBold)
         }
         TextButton(onClick = onTryDemo) {
             Icon(Icons.Outlined.SmartToy, contentDescription = null, tint = AeroTheme.accentEmerald, modifier = Modifier.size(18.dp))

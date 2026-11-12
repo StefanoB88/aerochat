@@ -73,6 +73,9 @@ struct FlightTrip: Codable, Equatable, Sendable, Identifiable {
     var gamesPlayed = 0
     var peopleMet = 0
     var leaderboard: [FlightLeaderboard.Entry] = []
+    /// Salti massimi di un messaggio ricevuto durante il volo (record di telefoni in catena). Opzionale:
+    /// i ricordi salvati prima della 1.4 non lo hanno.
+    var longestHop: Int?
 
     var id: String { flightCode }
 
@@ -192,6 +195,7 @@ extension FlightTrip {
         var games: [GameSessionState] = []
         trip.messagesSent = 0
         trip.messagesReceived = 0
+        var longestHop = 0
         for message in messages {
             if message.contentType == .game {
                 if let data = message.gameState, let state = try? GameSessionState.decode(data) { games.append(state) }
@@ -202,11 +206,13 @@ extension FlightTrip {
             } else {
                 trip.messagesReceived += 1
                 met.insert(message.senderNodeID.hexString)
+                longestHop = max(longestHop, message.hopCountReceived ?? 0)
             }
         }
         met.remove(myNodeID.hexString)
         met.remove(Data(DemoPeerIdentity.nodeID).hexString)
         trip.peopleMet = met.count
+        trip.longestHop = longestHop
         trip.leaderboard = FlightLeaderboard.compute(games: games, myNodeID: myNodeID, myName: myName)
         let mine = trip.leaderboard.first(where: \.isMe)
         trip.gamesWon = mine?.wins ?? 0

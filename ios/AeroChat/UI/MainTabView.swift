@@ -1,10 +1,13 @@
 import SwiftUI
+import StoreKit
 
 /// Modello chat ibrido: Tab 1 permanente (Chat & Gruppi), Tab 2 temporanea (Cabina Pubblica 12 h).
 struct MainTabView: View {
 
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.requestReview) private var requestReview
+    @State private var showPassport = false
 
     enum Tab: Hashable {
         case chats
@@ -76,6 +79,37 @@ struct MainTabView: View {
         .sheet(item: $environment.requestedTripCard) { trip in
             FlightCardSheet(trip: trip)
         }
+        // Promemoria del giorno del volo: "Invita amici".
+        .sheet(isPresented: $environment.requestedInvite) { QRPairingSheet() }
+        .sheet(isPresented: $showPassport) { PassportSheet() }
+        // Momento felice (cartolina, partita vinta) con le condizioni soddisfatte: recensione di sistema.
+        .onChange(of: environment.isReviewRequestPending) { _, pending in
+            guard pending else { return }
+            environment.isReviewRequestPending = false
+            Task {
+                // Dopo l'apertura della cartolina / la fine della partita, non sopra l'animazione.
+                try? await Task.sleep(for: .seconds(2))
+                requestReview()
+            }
+        }
+        // Premio inviti appena sbloccato: 24 h di Pass solo per noi.
+        .alert("24 ore di Pass gratis 🎁", isPresented: $environment.isReferralJustUnlocked) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("3 amici si sono aggiunti con il tuo invito: il Pass è attivo per 24 ore su questo telefono. Non si può regalare ai gruppi.")
+        }
+        // Nuovi badge del passaporto alla fine di un volo.
+        .alert("Nuovo badge nel passaporto!",
+               isPresented: Binding(get: { !environment.newPassportBadges.isEmpty && !environment.isReferralJustUnlocked },
+                                    set: { if !$0 { environment.newPassportBadges = [] } })) {
+            Button("Apri il passaporto") {
+                environment.newPassportBadges = []
+                showPassport = true
+            }
+            Button("OK", role: .cancel) { environment.newPassportBadges = [] }
+        } message: {
+            Text(environment.newPassportBadges.map { "🏅 \($0.title)" }.joined(separator: "\n"))
+        }
         #if DEBUG
         .modifier(StoreScreenshotPresenter(selectedTab: $selectedTab))
         #endif
@@ -116,6 +150,8 @@ struct MainTabView: View {
         switch link {
         case .nearby:
             environment.requestedNearby = .all
+        case .invite:
+            environment.requestedInvite = true
         case .tripCard(let flightCode):
             Task {
                 if let trip = await environment.trip(flightCode: flightCode) {

@@ -21,6 +21,32 @@ enum NearbyProtocol {
     static let maxGreetingLength = 140
     /// Lunghezza massima accettata del `flight_code` canonico.
     static let maxFlightCodeLength = 64
+    /// RADAR_PING: solo vicini diretti, ogni `radarPingInterval` finche' il radar e' a schermo.
+    static let radarPingTTL: UInt32 = 1
+    static let radarPingInterval: TimeInterval = 2
+    /// L'RSSI comunicato dal vicino vale finche' arrivano i suoi RADAR_PING.
+    static let remoteRSSILifetime: TimeInterval = 8
+    static let maxRadarTokenBytes = 1_024
+
+    // MARK: Bacheca della cabina e posto (release 1.4, RELEASE_1_4_SPEC.md §A)
+
+    /// BOARD_POST: flooding della Lounge fino a 3 salti.
+    static let boardPostTTL: UInt32 = 3
+    /// L'autore ripete i propri annunci aperti ogni 60 s (stesso giro del PRESENCE, solo in primo piano).
+    static let boardRepeatInterval: TimeInterval = 60
+    /// Annunci aperti al massimo per autore.
+    static let maxOwnBoardPosts = 3
+    /// Un annuncio scade da solo 6 ore dopo `created_at_ms`.
+    static let boardPostLifetime: TimeInterval = 6 * 3_600
+    /// Il ricevente toglie un annuncio non ripetuto da 10 minuti.
+    static let boardPostStaleAfter: TimeInterval = 10 * 60
+    /// Annunci tenuti al massimo nella cache del ricevente.
+    static let boardCacheCapacity = 50
+    /// Annunci distinti per mittente nella cache del ricevente.
+    static let maxBoardPostsPerSender = 10
+    /// Testo di un annuncio: 1...140 caratteri dopo il trim.
+    static let maxBoardTextLength = 140
+    static let boardPostIDLength = 16
 
     /// Giochi che si possono proporre con "Sfida" (solo quelli a 2 giocatori).
     static let challengeKinds: [GameKind] = [.scopa, .briscola, .ticTacToe, .battleship]
@@ -45,6 +71,31 @@ enum NearbyProtocol {
     }
 }
 
+/// Posto del passeggero (`Presence.seat`, `BoardPost.seat`): trim + maiuscole, `^[0-9]{1,3}[A-K]$`
+/// (fila 1...999, lettera A...K). Tutto il resto vale "posto non condiviso".
+enum SeatCode {
+
+    /// Posto valido normalizzato ("14c " -> "14C"), altrimenti nil.
+    static func normalized(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard (2...4).contains(value.count), let letter = value.last, ("A"..."K").contains(letter) else { return nil }
+        let digits = value.dropLast()
+        guard digits.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+        return value
+    }
+
+    /// Fila del posto ("14C" -> 14), nil se non valido.
+    static func row(_ seat: String) -> Int? {
+        normalized(seat).flatMap { Int($0.dropLast()) }
+    }
+
+    /// Lettera del posto ("14C" -> "C"), nil se non valido.
+    static func letter(_ seat: String) -> Character? {
+        normalized(seat)?.last
+    }
+}
+
 /// Passeggero annunciato da un PRESENCE (solo in memoria, mai nel DB).
 struct NearbyPerson: Sendable, Equatable, Identifiable, Hashable {
     let nodeID: Data
@@ -57,8 +108,16 @@ struct NearbyPerson: Sendable, Equatable, Identifiable, Hashable {
     var openToGames: Bool
     var rssi: Int?
     var lastSeen: Date
+    /// Posto dichiarato (`Presence.seat`, gia' validato), solo se annunciato insieme a un volo.
+    var seat: String? = nil
 
     var id: Data { nodeID }
+
+    /// Posto da mostrare: vale solo nella Cabina dello stesso volo.
+    func seatOnFlight(_ flightCode: String?) -> String? {
+        guard let flightCode, !flightCode.isEmpty, self.flightCode == flightCode else { return nil }
+        return seat
+    }
 
     var asPeerRecord: PeerRecord {
         PeerRecord(nodeID: nodeID, x25519Pub: x25519Pub, ed25519Pub: ed25519Pub, nickname: nickname)

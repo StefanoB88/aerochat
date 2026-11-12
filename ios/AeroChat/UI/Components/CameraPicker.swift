@@ -17,14 +17,6 @@ struct CameraPicker: UIViewControllerRepresentable {
         UIImagePickerController.isSourceTypeAvailable(.camera)
     }
 
-    /// `true` se l'utente ha negato (o un profilo ha bloccato) l'accesso alla fotocamera.
-    static var isAccessDenied: Bool {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .denied, .restricted: return true
-        default: return false
-        }
-    }
-
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.sourceType = .camera

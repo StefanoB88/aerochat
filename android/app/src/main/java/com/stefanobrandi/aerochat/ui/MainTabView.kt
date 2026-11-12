@@ -1,5 +1,13 @@
 package com.stefanobrandi.aerochat.ui
 
+import com.stefanobrandi.aerochat.ui.components.findActivity
+import com.stefanobrandi.aerochat.ui.components.InAppReview
+import com.stefanobrandi.aerochat.ui.flight.badgeTitle
+import com.stefanobrandi.aerochat.ui.flight.PassportSheet
+import com.stefanobrandi.aerochat.ui.pairing.QRPairingSheet
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import com.stefanobrandi.aerochat.ui.components.PermissionSettingsDialogHost
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -153,6 +161,18 @@ object AppNavigator {
     internal fun consumeNearby() {
         _pendingNearby.value = false
     }
+
+    /** "Invita amici" richiesto da fuori (tocco sul promemoria del giorno del volo). */
+    private val _pendingInvite = MutableStateFlow(false)
+    val pendingInvite: StateFlow<Boolean> = _pendingInvite.asStateFlow()
+
+    fun openInvite() {
+        _pendingInvite.value = true
+    }
+
+    internal fun consumeInvite() {
+        _pendingInvite.value = false
+    }
 }
 
 /** Modello chat ibrido: Tab 1 permanente (Chat & Gruppi), Tab 2 temporanea (Cabina Pubblica 12 h). */
@@ -188,6 +208,19 @@ fun MainTabView() {
         }
     }
     val pendingTripCard by environment.pendingTripCard.collectAsStateWithLifecycle()
+    val pendingInvite by AppNavigator.pendingInvite.collectAsStateWithLifecycle()
+    val referralUnlocked by environment.referralUnlocked.collectAsStateWithLifecycle()
+    val newBadges by environment.newBadges.collectAsStateWithLifecycle()
+    var showPassport by remember { mutableStateOf(false) }
+
+    // Momento felice (cartolina, partita vinta) con le condizioni soddisfatte: Play In-App Review.
+    val reviewRequest by environment.reviewRequest.collectAsStateWithLifecycle()
+    val activityContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(reviewRequest) {
+        if (reviewRequest == null) return@LaunchedEffect
+        environment.consumeReviewRequest()
+        activityContext.findActivity()?.let { InAppReview.launch(it) }
+    }
 
     // Nuovo messaggio con l'app attiva: tocco leggero.
     LaunchedEffect(environment) {
@@ -200,6 +233,8 @@ fun MainTabView() {
 
     // Primo avvio: permessi BLE (+ notifiche su Android 13+). Non negli screenshot (radio simulata).
     if (!StoreScreenshots.isActive) MeshPermissionsGate()
+    // Permesso negato in passato: "Apri Impostazioni" a ogni tentativo (fotocamera, microfono, Bluetooth...).
+    PermissionSettingsDialogHost()
 
     CompositionLocalProvider(LocalNavController provides navController) {
         Box(Modifier.fillMaxSize().background(AeroTheme.background)) {
@@ -261,6 +296,43 @@ fun MainTabView() {
     pendingTripCard?.let { trip ->
         FlightCardSheet(onDismiss = { environment.dismissTripCard() }, trip = trip)
     }
+    // Promemoria del giorno del volo: "Invita amici".
+    if (pendingInvite) QRPairingSheet(onDismiss = { AppNavigator.consumeInvite() })
+    // Premio inviti appena sbloccato: 24 h di Pass solo per noi.
+    if (referralUnlocked) {
+        AlertDialog(
+            onDismissRequest = { environment.dismissReferralUnlocked() },
+            title = { Text(stringResource(R.string.growth14_referral_unlocked_title)) },
+            text = { Text(stringResource(R.string.growth14_referral_unlocked_message), color = AeroTheme.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = { environment.dismissReferralUnlocked() }) {
+                    Text(stringResource(R.string.flight_ok), color = AeroTheme.accentCyan)
+                }
+            },
+            containerColor = AeroTheme.surface,
+        )
+    }
+    // Nuovi badge del passaporto alla fine di un volo.
+    if (newBadges.isNotEmpty() && !referralUnlocked) {
+        AlertDialog(
+            onDismissRequest = { environment.dismissNewBadges() },
+            title = { Text(stringResource(R.string.growth14_badges_new_title)) },
+            text = { Text(newBadges.map { badgeTitle(it) }.joinToString("\n") { "🏅 $it" }, color = AeroTheme.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    environment.dismissNewBadges()
+                    showPassport = true
+                }) { Text(stringResource(R.string.growth14_badges_open), color = AeroTheme.accentCyan) }
+            },
+            dismissButton = {
+                TextButton(onClick = { environment.dismissNewBadges() }) {
+                    Text(stringResource(R.string.flight_ok), color = AeroTheme.textSecondary)
+                }
+            },
+            containerColor = AeroTheme.surface,
+        )
+    }
+    if (showPassport) PassportSheet(onDismiss = { showPassport = false })
     // Screenshot degli store (solo debug): tavolo da gioco o cartolina del volo.
     StoreScreenshots.Overlay()
 }

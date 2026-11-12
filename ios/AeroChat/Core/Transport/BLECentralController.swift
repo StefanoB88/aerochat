@@ -60,7 +60,8 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
     static let connectTimeout: TimeInterval = 12
     static let handshakeTimeout: TimeInterval = 15
     static let scanRefreshInterval: TimeInterval = 20
-    static let rssiPollInterval: TimeInterval = 4
+    /// Con il radar a schermo: una lettura al secondo alimenta il filtro dell'RSSI (vedi `RSSIFilter`).
+    static let rssiPollInterval: TimeInterval = 1
     static let minimumScanRestartInterval: TimeInterval = 2
     static let maximumReconnectBackoff: TimeInterval = 60
 
@@ -229,7 +230,7 @@ final class BLECentralController: NSObject, CBCentralManagerDelegate, CBPeripher
     private func startRSSIPolling() {
         guard wantsRSSIPolling, rssiTimer == nil else { return }
         let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + Self.rssiPollInterval, repeating: Self.rssiPollInterval, leeway: .seconds(1))
+        timer.schedule(deadline: .now() + Self.rssiPollInterval, repeating: Self.rssiPollInterval, leeway: .milliseconds(200))
         timer.setEventHandler { [weak self] in self?.pollRSSI() }
         timer.resume()
         rssiTimer = timer

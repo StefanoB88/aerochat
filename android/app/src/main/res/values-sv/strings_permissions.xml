@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Permessi negati: avviso con "Apri Impostazioni" (PermissionSettingsDialogHost). -->
+    <string name="permission_open_settings">Öppna Inställningar</string>
+    <string name="permission_not_now">Inte nu</string>
+    <string name="permission_bluetooth_title">Bluetooth behövs</string>
+    <string name="permission_bluetooth_message">AeroChat pratar med telefoner i närheten bara via Bluetooth: utan ”Enheter i närheten” fungerar inte chattar, spel och radar. Tillåt det för AeroChat i Inställningar.</string>
+    <string name="permission_camera_title">Kameran behövs</string>
+    <string name="permission_camera_message">Kameran används för att ta foton och skanna QR-koder och boardingkort. Tillåt den för AeroChat i Inställningar.</string>
+    <string name="permission_microphone_title">Mikrofonen behövs</string>
+    <string name="permission_microphone_message">Mikrofonen används för röstmeddelanden och samtal. Tillåt den för AeroChat i Inställningar.</string>
+    <string name="permission_location_title">Platsen behövs</string>
+    <string name="permission_location_message">Platsen används bara för att bifogas till ett nödlarm. Tillåt den för AeroChat i Inställningar.</string>
+    <string name="permission_notifications_title">Aviseringar avstängda</string>
+    <string name="permission_notifications_message">Utan aviseringar vet du inte när ett meddelande kommer medan appen är stängd. Slå på dem för AeroChat i Inställningar.</string>
+</resources>

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.FlightTakeoff
+import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -106,6 +107,8 @@ internal fun formatDepartureDay(epochMs: Long): String =
 fun BoardingPassSheet(
     onDismiss: () -> Unit,
     onJoined: (ConversationRecord) -> Unit = {},
+    /** "Invita chi viaggia con te" nel foglio di conferma (chi presenta il foglio apre "Invita amici"). */
+    onInvite: (() -> Unit)? = null,
 ) {
     val environment = LocalAppEnvironment.current
     val context = LocalContext.current
@@ -118,6 +121,8 @@ fun BoardingPassSheet(
     var isError by remember { mutableStateOf(false) }
     var isBusy by remember { mutableStateOf(false) }
     var detected by remember { mutableStateOf<BoardingPass?>(null) }
+    /** Cabina appena raggiunta: conferma con "Apri la Cabina" e "Invita chi viaggia con te". */
+    var joined by remember { mutableStateOf<ConversationRecord?>(null) }
 
     AeroSheet(
         onDismiss = onDismiss,
@@ -134,9 +139,14 @@ fun BoardingPassSheet(
                     Haptics.success()
                     isError = false
                     status = context.getString(R.string.flight_joined, pass.flightCode)
-                    delay(1_000)
                     onJoined(lounge)
-                    dismiss()
+                    if (onInvite == null) {
+                        delay(1_000)
+                        dismiss()
+                    } else {
+                        // Conferma: si resta sul foglio per invitare chi viaggia con noi (in aereo non potra' scaricare l'app).
+                        joined = lounge
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -150,7 +160,7 @@ fun BoardingPassSheet(
         }
 
         fun handle(code: String) {
-            if (isBusy) return
+            if (isBusy || joined != null) return
             val pass = try {
                 BoardingPass.fromBCBP(code)
             } catch (_: BoardingPass.ParseError) {
@@ -217,6 +227,35 @@ fun BoardingPassSheet(
             }
 
             detected?.let { DetectedCard(it) }
+
+            val invite = onInvite
+            if (joined != null && invite != null) {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Button(
+                        onClick = { Haptics.tap(); invite(); dismiss() },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AeroTheme.accentEmerald, contentColor = Color.Black),
+                    ) {
+                        Icon(Icons.Filled.GroupAdd, contentDescription = null)
+                        Spacer(Modifier.size(8.dp))
+                        Text(stringResource(R.string.growth14_invite_travel_companions), style = AeroTheme.title(17f, FontWeight.Bold))
+                    }
+                    Text(
+                        stringResource(R.string.growth14_invite_travel_hint),
+                        style = AeroTheme.footnote,
+                        color = AeroTheme.textSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    TextButton(onClick = { Haptics.tap(); dismiss() }, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.nearby_home_enter_lounge), color = AeroTheme.accentCyan)
+                    }
+                }
+            }
 
             status?.let {
                 Text(

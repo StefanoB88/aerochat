@@ -1,5 +1,12 @@
 package com.stefanobrandi.aerochat.ui.flight
 
+import com.stefanobrandi.aerochat.core.growth.ReviewPrompt
+import com.stefanobrandi.aerochat.core.qr.QRCodeGenerator
+import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.foundation.Image
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
@@ -94,13 +101,13 @@ import java.io.File
 import java.io.FileOutputStream
 
 /** Dimensioni della cartolina: 360x640 dp resi a densita' 3 = 1080x1920 px (formato Storie). */
-private const val cardWidthDp = 360
-private const val cardHeightDp = 640
-private const val cardRenderDensity = 3f
+internal const val cardWidthDp = 360
+internal const val cardHeightDp = 640
+internal const val cardRenderDensity = 3f
 
 /** Anteprima nel foglio (Swift `.scaleEffect(0.72)` di 360x640). */
-private const val previewWidthDp = 260
-private const val previewHeightDp = 462
+internal const val previewWidthDp = 260
+internal const val previewHeightDp = 462
 
 /**
  * Cartolina di volo: i numeri del viaggio in formato Storie (1080x1920) da condividere.
@@ -120,6 +127,11 @@ fun FlightCardSheet(onDismiss: () -> Unit, trip: FlightTrip? = null, tripStats: 
     val layer = rememberGraphicsLayer()
 
     val activeTrip by environment.activeTrip.collectAsStateWithLifecycle()
+    var showPassport by remember { mutableStateOf(false) }
+    // Cartolina di fine volo mostrata: momento felice per chiedere una recensione (con i limiti di frequenza).
+    LaunchedEffect(trip?.key) {
+        if (trip != null) environment.requestReviewIfAppropriate(ReviewPrompt.Moment.tripCardShown)
+    }
     LaunchedEffect(database, period, trip) {
         // Cartolina di fine volo: i contatori del viaggio, gia' pronti.
         if (trip != null) {
@@ -239,6 +251,11 @@ fun FlightCardSheet(onDismiss: () -> Unit, trip: FlightTrip? = null, tripStats: 
                     CircularProgressIndicator(color = AeroTheme.accentCyan)
                 }
             }
+            TextButton(onClick = { Haptics.tap(); showPassport = true }) {
+                Icon(Icons.Filled.Badge, contentDescription = null, tint = AeroTheme.accentEmerald, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.size(6.dp))
+                Text(stringResource(R.string.growth14_passport_title), color = AeroTheme.accentEmerald, fontWeight = FontWeight.SemiBold)
+            }
             Text(
                 stringResource(R.string.flight_card_privacy),
                 style = AeroTheme.caption,
@@ -248,17 +265,18 @@ fun FlightCardSheet(onDismiss: () -> Unit, trip: FlightTrip? = null, tripStats: 
             )
         }
     }
+    if (showPassport) PassportSheet(onDismiss = { showPassport = false })
 }
 
 /** Salva la cartolina in `cache/camera/` (percorso gia' esposto dal FileProvider `${applicationId}.camera`). */
-private fun writeCard(context: Context, bitmap: Bitmap): File {
+internal fun writeCard(context: Context, bitmap: Bitmap, name: String = "flight_card.png"): File {
     val dir = File(context.cacheDir, "camera").apply { mkdirs() }
-    val file = File(dir, "flight_card.png")
+    val file = File(dir, name)
     FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     return file
 }
 
-private fun shareCard(context: Context, file: File, title: String) {
+internal fun shareCard(context: Context, file: File, title: String) {
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.camera", file)
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "image/png"
@@ -273,7 +291,7 @@ private fun shareCard(context: Context, file: File, title: String) {
     context.startActivity(chooser)
 }
 
-private fun rounded(size: Float, weight: FontWeight, color: Color = Color.White): TextStyle =
+internal fun rounded(size: Float, weight: FontWeight, color: Color = Color.White): TextStyle =
     TextStyle(fontSize = size.sp, fontWeight = weight, color = color)
 
 /** Grafica della cartolina (sempre scura: e' un'immagine condivisibile, indipendente dal tema) (360x640 dp; resa a densita' 3 = 1080x1920 px). */
@@ -347,12 +365,34 @@ private fun FlightCardContent(stats: FlightStats, nickname: String, modifier: Mo
                     Text(stringResource(R.string.flight_card_slogan), style = rounded(20f, FontWeight.Bold))
                     Text(stringResource(R.string.flight_card_slogan2), style = rounded(13f, FontWeight.Medium, Color.White.copy(alpha = 0.7f)))
                 }
-                Text(
-                    "aeromesh.app",
-                    style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, color = AeroColors.Dark.accentCyan),
-                )
+                // QR verso la pagina degli store: chi vede la cartolina scarica l'app.
+                StoreQRBadge()
             }
         }
+    }
+}
+
+/** QR `https://aeromesh.app/get` con "Scarica AeroChat" in basso a destra della cartolina. */
+@Composable
+internal fun StoreQRBadge() {
+    val qr = remember { QRCodeGenerator.image(QRCodeGenerator.storeLandingURL, scale = 8)?.asImageBitmap() }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (qr != null) {
+            Image(
+                bitmap = qr,
+                contentDescription = null,
+                filterQuality = FilterQuality.None,
+                modifier = Modifier
+                    .size(96.dp)
+                    .background(Color.White, RoundedCornerShape(10.dp))
+                    .padding(6.dp),
+            )
+        }
+        Text(stringResource(R.string.growth14_card_download), style = rounded(12f, FontWeight.Bold, AeroColors.Dark.accentCyan))
+        Text(
+            "aeromesh.app/get",
+            style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, color = Color.White.copy(alpha = 0.7f)),
+        )
     }
 }
 

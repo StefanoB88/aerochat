@@ -16,6 +16,8 @@ struct ComposerBar: View {
     var availableGames: [GameKind] = [.ticTacToe, .battleship]
     /// Apre la fotocamera per scattare e inviare una foto; nil dove le foto non sono previste.
     var onTakePhoto: (() -> Void)? = nil
+    /// Condivide la posizione (una lettura GPS, inviata come testo); nil dove non e' prevista (Cabina, Lounge).
+    var onShareLocation: (() -> Void)? = nil
     /// Modifica di un messaggio gia' inviato: striscia "Modifica messaggio" con la X per annullare,
     /// niente allegati ne' microfono, l'invio manda la revisione.
     var isEditing = false
@@ -82,7 +84,26 @@ struct ComposerBar: View {
                 }
                 .accessibilityLabel("Mini-giochi")
 
-                if let onTakePhoto, CameraPicker.isAvailable {
+                if let onShareLocation {
+                    // Allegati: foto (scatto o libreria) e posizione.
+                    Menu {
+                        if let onTakePhoto, CameraPicker.isAvailable {
+                            Button { Haptics.tap(); onTakePhoto() } label: { Label("Scatta foto", systemImage: "camera") }
+                        }
+                        Button { Haptics.tap(); showsLibrary = true } label: {
+                            Label("Scegli dalla libreria", systemImage: "photo.on.rectangle")
+                        }
+                        Button { Haptics.tap(); onShareLocation() } label: {
+                            Label("Posizione", systemImage: "location.fill")
+                        }
+                    } label: {
+                        Image(systemName: "paperclip")
+                            .font(.title2)
+                            .frame(width: 44, height: 44)
+                            .foregroundStyle(AeroTheme.accentCyan)
+                    }
+                    .accessibilityLabel("Allegati")
+                } else if let onTakePhoto, CameraPicker.isAvailable {
                     // Con la fotocamera disponibile il pulsante offre scatto o libreria.
                     Menu {
                         Button { Haptics.tap(); onTakePhoto() } label: { Label("Scatta foto", systemImage: "camera") }

@@ -63,6 +63,8 @@ struct QRPairingSheet: View {
         }
         .task {
             mode = initialMode
+            // Il compagno si collega via Bluetooth: se e' negato, lo diciamo subito.
+            if environment.radioState == .unauthorized { PermissionPrompt.showDenied(.bluetooth) }
             await loadPayload()
         }
     }
@@ -102,6 +104,10 @@ struct QRPairingSheet: View {
                 .buttonStyle(.bordered)
                 .tint(AeroTheme.accentCyan)
             }
+            if group == nil {
+                ReferralProgressView(state: environment.referral)
+                    .padding(.horizontal, 20)
+            }
         }
     }
 
@@ -121,6 +127,7 @@ struct QRPairingSheet: View {
             QRScannerView(onCode: { code in
                 Task { await handle(code: code) }
             }, onError: { error in
+                if error == .permissionDenied { PermissionPrompt.showDenied(.camera) }
                 status = error == .permissionDenied
                     ? String(localized: "Consenti la fotocamera in Impostazioni per scansionare.")
                     : String(localized: "Fotocamera non disponibile.")
@@ -179,6 +186,7 @@ struct StoreQRSheet: View {
         NavigationStack {
             ZStack {
                 AeroTheme.background.ignoresSafeArea()
+                ScrollView {
                 VStack(spacing: 20) {
                     if let image = QRCodeGenerator.image(for: QRCodeGenerator.storeLandingURL) {
                         Image(uiImage: image)
@@ -197,9 +205,24 @@ struct StoreQRSheet: View {
                     Text(verbatim: QRCodeGenerator.storeLandingURL)
                         .font(AeroTheme.monospaced())
                         .foregroundStyle(AeroTheme.accentCyan)
+                    // Gia' in volo: su Android l'app si passa senza internet, su iPhone no.
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Già in volo?", systemImage: "airplane")
+                            .font(AeroTheme.title(16, weight: .semibold))
+                            .foregroundStyle(AeroTheme.textPrimary)
+                        Text("Android: puoi passare l'app senza internet con Quick Share. Apri il Play Store › il tuo profilo › Gestisci app e dispositivo › Condividi app, scegli AeroChat e il telefono vicino.")
+                        Text("iPhone: non è possibile installare app senza internet. AeroChat va scaricata prima dell'imbarco.")
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(AeroTheme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .background(AeroTheme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .padding(.horizontal, 20)
                     Spacer()
                 }
                 .padding(.top, 24)
+                }
             }
             .navigationTitle("Scarica al gate")
             .navigationBarTitleDisplayMode(.inline)

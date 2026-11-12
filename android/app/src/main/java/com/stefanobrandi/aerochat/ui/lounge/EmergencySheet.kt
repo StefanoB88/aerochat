@@ -1,5 +1,7 @@
 package com.stefanobrandi.aerochat.ui.lounge
 
+import com.stefanobrandi.aerochat.ui.components.rememberPermissionRequest
+import com.stefanobrandi.aerochat.ui.components.DeniedPermission
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
@@ -61,6 +63,7 @@ import com.stefanobrandi.aerochat.R
 import com.stefanobrandi.aerochat.app.LocalAppEnvironment
 import com.stefanobrandi.aerochat.core.emergency.EmergencyAlert
 import com.stefanobrandi.aerochat.core.emergency.EmergencyService
+import com.stefanobrandi.aerochat.core.moderation.AppSettings
 import com.stefanobrandi.aerochat.proto.EmergencyStatus
 import com.stefanobrandi.aerochat.ui.AeroTheme
 import com.stefanobrandi.aerochat.ui.components.AeroSheet
@@ -88,6 +91,17 @@ fun EmergencySheet(onDismiss: () -> Unit) {
     var coordinate by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var isDenied by remember { mutableStateOf(false) }
     val statuses = remember { listOf(EmergencyStatus.OK, EmergencyStatus.NEED_HELP, EmergencyStatus.ALL_CLEAR) }
+    // In volo (Cabina del volo attiva o modalita' aereo probabile): l'equipaggio prima di tutto.
+    val airplaneMode by environment.airplaneMode.collectAsStateWithLifecycle()
+    val database by environment.database.collectAsStateWithLifecycle()
+    val hasFlightLounge by androidx.compose.runtime.produceState(false, database) {
+        val db = database ?: return@produceState
+        db.conversations.observeActiveFlightLounges().collect { value = it.isNotEmpty() }
+    }
+    val inFlight = airplaneMode || hasFlightLounge
+    var confirmHelp by remember { mutableStateOf(false) }
+    val needsLongerText = inFlight && status == EmergencyStatus.NEED_HELP &&
+        text.trim().codePointCount(0, text.trim().length) < EmergencySafety.minimumHelpTextLength
 
     /** Una sola lettura della posizione; senza fix l'interruttore si spegne e l'avviso parte senza coordinate. */
     fun locate() {
@@ -101,22 +115,30 @@ fun EmergencySheet(onDismiss: () -> Unit) {
             }
         }
     }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result.values.any { it }) {
-            isDenied = false
-            locate()
-        } else {
-            isDenied = true
-        }
-    }
+    // Negata in passato: di nuovo il dialogo di sistema se possibile, altrimenti "Apri Impostazioni".
+    val locationPermission = rememberPermissionRequest(
+        DeniedPermission.location,
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+        anyOf = true,
+    )
 
     fun send(dismiss: () -> Unit) {
         val service = emergency ?: return
+        val now = System.currentTimeMillis()
+        // In volo: al massimo un avviso ogni 10 minuti, qualunque sia lo stato.
+        if (inFlight && !EmergencySafety.canSend(AppSettings.lastEmergencyAtMs, now)) {
+            Haptics.error()
+            val minutes = EmergencySafety.minutesUntilNext(AppSettings.lastEmergencyAtMs, now)
+            errorMessage = context.resources.getQuantityString(R.plurals.growth14_emergency_wait, minutes, minutes)
+            return
+        }
         isSending = true
         scope.launch {
             try {
                 val point = if (includeLocation) coordinate else null
                 service.broadcast(status = status, text = text, latitude = point?.first, longitude = point?.second)
+                if (inFlight) AppSettings.lastEmergencyAtMs = System.currentTimeMillis()
                 Haptics.success()
                 dismiss()
             } catch (e: CancellationException) {
@@ -141,10 +163,32 @@ fun EmergencySheet(onDismiss: () -> Unit) {
             } else {
                 SheetBarButton(
                     stringResource(R.string.lounge11_send),
-                    onClick = { send(dismiss) },
-                    enabled = emergency != null && !(includeLocation && coordinate == null && !isDenied),
+                    onClick = {
+                        // "Ho bisogno di aiuto" in volo: prima l'equipaggio, poi una conferma esplicita.
+                        if (inFlight && status == EmergencyStatus.NEED_HELP) confirmHelp = true else send(dismiss)
+                    },
+                    enabled = emergency != null && !(includeLocation && coordinate == null && !isDenied) && !needsLongerText,
                     bold = true,
                 )
+                if (confirmHelp) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { confirmHelp = false },
+                        title = { Text(stringResource(R.string.growth14_emergency_confirm_title)) },
+                        text = { Text(stringResource(R.string.growth14_emergency_confirm_message), color = AeroTheme.textSecondary) },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = {
+                                confirmHelp = false
+                                send(dismiss)
+                            }) { Text(stringResource(R.string.growth14_emergency_confirm_send), color = Color(0xFFFF453A)) }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { confirmHelp = false }) {
+                                Text(stringResource(R.string.lounge11_cancel), color = AeroTheme.accentCyan)
+                            }
+                        },
+                        containerColor = AeroTheme.surface,
+                    )
+                }
             }
         },
     ) {
@@ -158,6 +202,19 @@ fun EmergencySheet(onDismiss: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (inFlight) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFFF9F0A).copy(alpha = 0.18f), RoundedCornerShape(14.dp))
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text("🧑‍✈️", style = AeroTheme.body)
+                    Text(stringResource(R.string.growth14_emergency_crew_banner), style = AeroTheme.footnote, color = AeroTheme.textPrimary)
+                }
+            }
             SectionHeader(stringResource(R.string.lounge11_emergency_status))
             SectionCard {
                 statuses.forEachIndexed { index, candidate ->
@@ -227,13 +284,9 @@ fun EmergencySheet(onDismiss: () -> Unit) {
                             includeLocation = enabled
                             if (!enabled) return@Switch
                             // Il permesso si chiede solo adesso, quando l'utente vuole allegare la posizione.
-                            if (OneShotLocator.hasPermission(context)) {
+                            locationPermission.run(onDenied = { isDenied = true }) {
                                 isDenied = false
                                 locate()
-                            } else {
-                                permissionLauncher.launch(
-                                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-                                )
                             }
                         },
                         colors = SwitchDefaults.colors(checkedTrackColor = AeroTheme.accentCyan),
@@ -267,9 +320,33 @@ fun EmergencySheet(onDismiss: () -> Unit) {
                 }
             }
             SectionFooter(stringResource(R.string.lounge11_emergency_location_footer))
+            if (needsLongerText) {
+                Text(
+                    stringResource(R.string.growth14_emergency_min_text, EmergencySafety.minimumHelpTextLength),
+                    style = AeroTheme.footnote,
+                    color = Color(0xFFFF9F0A),
+                )
+            }
 
             errorMessage?.let { Text(it, style = AeroTheme.footnote, color = Color.Red) }
         }
+    }
+}
+
+/**
+ * Regole dell'emergenza in volo (RELEASE_1_4_SPEC.md §B12): "Ho bisogno di aiuto" con almeno 10 caratteri e
+ * conferma esplicita, al massimo un avviso ogni 10 minuti per qualunque stato. Tempi in epoch ms.
+ */
+internal object EmergencySafety {
+    const val minimumHelpTextLength = 10
+    const val cooldown: Long = 10 * 60_000L
+
+    fun canSend(lastSentAtMs: Long, now: Long): Boolean = lastSentAtMs <= 0L || now - lastSentAtMs >= cooldown
+
+    /** Minuti (arrotondati per eccesso, almeno 1) prima del prossimo avviso. */
+    fun minutesUntilNext(lastSentAtMs: Long, now: Long): Int {
+        val remaining = cooldown - (now - lastSentAtMs)
+        return maxOf(1, ((remaining + 59_999L) / 60_000L).toInt())
     }
 }
 

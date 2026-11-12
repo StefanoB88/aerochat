@@ -1,5 +1,9 @@
 package com.stefanobrandi.aerochat.core.qr
 
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.Lifecycle
+import com.stefanobrandi.aerochat.ui.components.rememberPermissionRequest
+import com.stefanobrandi.aerochat.ui.components.DeniedPermission
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -71,12 +75,20 @@ fun QRScannerView(
     val currentOnCode by rememberUpdatedState(onCode)
     val currentOnError by rememberUpdatedState(onError)
     var granted by remember { mutableStateOf(hasCameraPermission(context)) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        granted = ok
-        if (!ok) currentOnError?.invoke(QRScannerError.permissionDenied)
-    }
+    // Negata in passato: di nuovo il dialogo di sistema se possibile, altrimenti "Apri Impostazioni".
+    val cameraPermission = rememberPermissionRequest(DeniedPermission.camera, Manifest.permission.CAMERA)
     LaunchedEffect(Unit) {
-        if (!granted) launcher.launch(Manifest.permission.CAMERA)
+        if (!granted) {
+            cameraPermission.run(onDenied = { currentOnError?.invoke(QRScannerError.permissionDenied) }) { granted = true }
+        }
+    }
+    // Di ritorno dalle Impostazioni con il permesso concesso, l'anteprima parte da sola.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && !granted && hasCameraPermission(context)) granted = true
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val previewView = remember {

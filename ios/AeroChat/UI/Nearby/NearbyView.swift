@@ -5,6 +5,7 @@ import SwiftUI
 struct NearbySheet: View {
 
     var initialFilter: NearbyFilter = .all
+    var initialSegment: NearbySegment = .people
 
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
@@ -14,6 +15,8 @@ struct NearbySheet: View {
     @State private var challengeTarget: NearbyPerson?
     @State private var info: String?
     @State private var showPairing = false
+    @State private var segment: NearbySegment = .people
+    @State private var showDiagnosis = false
 
     private var myFlightCode: String? { environment.activeFlightLounge?.flightCode }
 
@@ -43,29 +46,19 @@ struct NearbySheet: View {
                     .listRowBackground(AeroTheme.surface)
                 }
                 Section {
-                    Picker("Mostra", selection: $filter) {
-                        ForEach(NearbyFilter.allCases) { Text($0.title).tag($0) }
+                    Picker("Sezione", selection: $segment) {
+                        ForEach(NearbySegment.allCases) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.segmented)
+                    .controlSize(.large)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                 }
-                Section {
-                    if visiblePeople.isEmpty {
-                        emptyState
-                    } else {
-                        ForEach(visiblePeople) { person in
-                            personRow(person)
-                        }
-                    }
-                } footer: {
-                    if !isVisible {
-                        Text("Sei invisibile: vedi gli altri, ma nessuno vede te. Puoi cambiarlo in Impostazioni › Privacy.")
-                    } else {
-                        Text("Vedi solo chi è a portata di Bluetooth e ha AeroChat aperta. Nessuno diventa tuo contatto finché non accetta.")
-                    }
+                switch segment {
+                case .people: peopleSections
+                case .map: SeatMapSection(onInfo: { info = $0 }, onOpenedChat: { dismiss() })
+                case .board: CabinBoardSection(onInfo: { info = $0 }, onOpenedChat: { dismiss() })
                 }
-                .listRowBackground(AeroTheme.surface)
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
@@ -84,39 +77,55 @@ struct NearbySheet: View {
                     .accessibilityLabel("Invita con il QR")
                 }
             }
-            .confirmationDialog("A cosa vuoi giocare?", isPresented: Binding(get: { challengeTarget != nil },
-                                                                           set: { if !$0 { challengeTarget = nil } }),
-                                titleVisibility: .visible, presenting: challengeTarget) { person in
-                ForEach(NearbyProtocol.challengeKinds, id: \.rawValue) { kind in
-                    Button(GameService.title(for: kind)) { greet(person, game: kind) }
-                }
-                Button("Annulla", role: .cancel) {}
-            } message: { person in
-                Text("\(person.nickname) riceverà la sfida: se accetta, la partita parte subito.")
-            }
-            .overlay(alignment: .bottom) {
-                if let info {
-                    Text(info)
-                        .font(.footnote)
-                        .foregroundStyle(AeroTheme.textPrimary)
-                        .padding(12)
-                        .background(AeroTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .padding()
-                        .task(id: info) {
-                            try? await Task.sleep(for: .seconds(3))
-                            self.info = nil
-                        }
-                }
-            }
+            .modifier(NearbyOverlays(challengeTarget: $challengeTarget, info: $info, greet: greet))
             .sheet(isPresented: $showPairing) { QRPairingSheet() }
+            .sheet(isPresented: $showDiagnosis) { NobodyNearbySheet() }
         }
-        .onAppear { filter = initialFilter }
+        .onAppear {
+            filter = initialFilter
+            segment = initialSegment
+            // Senza Bluetooth non si vede nessuno: spieghiamo subito come riattivarlo.
+            if environment.radioState == .unauthorized { PermissionPrompt.showDenied(.bluetooth) }
+        }
         .task {
             guard let database = environment.database else { return }
             for await list in database.peers.observeAll() {
                 peers = Dictionary(list.map { ($0.nodeID, $0) }, uniquingKeysWith: { first, _ in first })
             }
         }
+    }
+
+    @ViewBuilder
+    private var peopleSections: some View {
+                Section {
+                    Toggle(isOn: $isVisible) {
+                        Label("Visibile alle persone vicine", systemImage: "person.wave.2")
+                    }
+                    .tint(AeroTheme.accentCyan)
+                    .foregroundStyle(AeroTheme.textPrimary)
+                    .onChange(of: isVisible) { _, _ in environment.nearbySettingsChanged() }
+                    Picker("Mostra", selection: $filter) {
+                        ForEach(NearbyFilter.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                .listRowBackground(AeroTheme.surface)
+                Section {
+                    if visiblePeople.isEmpty {
+                        emptyState
+                    } else {
+                        ForEach(visiblePeople) { person in
+                            personRow(person)
+                        }
+                    }
+                } footer: {
+                    if !isVisible {
+                        Text("Sei invisibile: non comparirai agli altri, ma continui a vederli.")
+                    } else {
+                        Text("Vedi solo chi è a portata di Bluetooth e ha AeroChat aperta. Nessuno diventa tuo contatto finché non accetta.")
+                    }
+                }
+                .listRowBackground(AeroTheme.surface)
     }
 
     // MARK: Righe
@@ -172,6 +181,9 @@ struct NearbySheet: View {
                     HStack(spacing: 6) {
                         if myFlightCode != nil, person.flightCode == myFlightCode {
                             badge("Sul tuo volo", systemImage: "airplane", color: AeroTheme.accentCyan)
+                        }
+                        if let seat = person.seatOnFlight(myFlightCode) {
+                            badge("posto \(seat)", systemImage: "carseat.right.fill", color: .purple)
                         }
                         if isContact {
                             badge("Già nei contatti", systemImage: "person.crop.circle.badge.checkmark", color: AeroTheme.accentEmerald)
@@ -276,6 +288,15 @@ struct NearbySheet: View {
             }
             .buttonStyle(.bordered)
             .tint(AeroTheme.accentCyan)
+            Button {
+                Haptics.tap()
+                showDiagnosis = true
+            } label: {
+                Label("Perché non vedo nessuno?", systemImage: "questionmark.circle")
+                    .font(.footnote.weight(.semibold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(AeroTheme.accentEmerald)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
@@ -301,6 +322,42 @@ struct NearbySheet: View {
                 info = String(localized: "Non raggiungibile in questo momento: riprova tra poco.")
             }
         }
+    }
+}
+
+/// Dialogo "A cosa vuoi giocare?" e avviso in basso di "Persone vicine" (comuni ai tre segmenti).
+private struct NearbyOverlays: ViewModifier {
+
+    @Binding var challengeTarget: NearbyPerson?
+    @Binding var info: String?
+    let greet: (NearbyPerson, GameKind?) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog("A cosa vuoi giocare?", isPresented: Binding(get: { challengeTarget != nil },
+                                                                           set: { if !$0 { challengeTarget = nil } }),
+                                titleVisibility: .visible, presenting: challengeTarget) { person in
+                ForEach(NearbyProtocol.challengeKinds, id: \.rawValue) { kind in
+                    Button(GameService.title(for: kind)) { greet(person, kind) }
+                }
+                Button("Annulla", role: .cancel) {}
+            } message: { person in
+                Text("\(person.nickname) riceverà la sfida: se accetta, la partita parte subito.")
+            }
+            .overlay(alignment: .bottom) {
+                if let info {
+                    Text(info)
+                        .font(.footnote)
+                        .foregroundStyle(AeroTheme.textPrimary)
+                        .padding(12)
+                        .background(AeroTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding()
+                        .task(id: info) {
+                            try? await Task.sleep(for: .seconds(3))
+                            self.info = nil
+                        }
+                }
+            }
     }
 }
 

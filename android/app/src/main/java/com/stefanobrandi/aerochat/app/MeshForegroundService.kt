@@ -102,7 +102,12 @@ class MeshForegroundService : Service() {
 
     companion object {
         private const val tag = "MeshForegroundService"
-        const val channelID = "mesh_service"
+        /**
+         * Release 1.4: canale a importanza minima (silenzioso, senza icona nella barra di stato dove il sistema
+         * lo consente). L'importanza di un canale esistente non si puo' abbassare: nuovo id, il vecchio si elimina.
+         */
+        const val channelID = "mesh_service_min"
+        private const val legacyChannelID = "mesh_service"
         private const val notificationID = 0x4D45
         private const val extraCallActive = "callActive"
 
@@ -142,7 +147,7 @@ class MeshForegroundService : Service() {
                 .setOnlyAlertOnce(true)
                 .setSilent(true)
                 .setShowWhen(false)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
                 .setContentIntent(
@@ -217,9 +222,15 @@ class MeshForegroundService : Service() {
             val channel = NotificationChannel(
                 channelID,
                 context.getString(R.string.shell_fgs_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply { setShowBadge(false) }
-            NotificationManagerCompat.from(context).createNotificationChannel(channel)
+                NotificationManager.IMPORTANCE_MIN,
+            ).apply {
+                setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
+            }
+            val manager = NotificationManagerCompat.from(context)
+            manager.createNotificationChannel(channel)
+            runCatching { manager.deleteNotificationChannel(legacyChannelID) }
         }
     }
 }

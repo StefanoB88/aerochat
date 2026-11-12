@@ -1,1 +1,1 @@
-offline,tryb samolotowy,mesh,lot,podróż,festiwal,szyfrowany,w pobliżu,samolot,pociąg,rejs,p2p
+offline,tryb,samolotowy,samolot,lot,walkie,talkie,rejs,festiwal,mesh,wifi,podróż,zasięg,gry,sms

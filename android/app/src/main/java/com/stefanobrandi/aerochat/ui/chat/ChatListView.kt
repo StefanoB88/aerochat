@@ -37,7 +37,6 @@ import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.SmartToy
-import androidx.compose.material.icons.outlined.WavingHand
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.WavingHand
 import androidx.compose.foundation.rememberScrollState
@@ -86,6 +85,7 @@ import com.stefanobrandi.aerochat.core.mesh.Reachability
 import com.stefanobrandi.aerochat.core.protocol.toHex
 import com.stefanobrandi.aerochat.data.records.ConversationRecord
 import com.stefanobrandi.aerochat.data.records.ConversationType
+import com.stefanobrandi.aerochat.core.review.DemoPeerService
 import com.stefanobrandi.aerochat.data.records.PeerRecord
 import com.stefanobrandi.aerochat.ui.AeroRoutes
 import com.stefanobrandi.aerochat.ui.AeroTheme
@@ -253,6 +253,12 @@ fun ChatListView() {
     /** Cabina del volo appena creata: aperta subito dopo la chiusura del foglio. */
     var pendingFlightLounge by remember { mutableStateOf<ConversationRecord?>(null) }
     var conversationToDelete by remember { mutableStateOf<ConversationRecord?>(null) }
+    var showRadar by remember { mutableStateOf(false) }
+    var showEmergency by remember { mutableStateOf(false) }
+    var showDiagnosis by remember { mutableStateOf(false) }
+    var showTranslationHelp by remember { mutableStateOf(false) }
+    /** "Invita chi viaggia con te" dal foglio della carta d'imbarco: "Invita amici" dopo la sua chiusura. */
+    var inviteAfterBoarding by remember { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
 
     // Ciclo di vita, non composizione: in background il polling ogni 4 s (query DB per ogni chat) e gli
@@ -309,6 +315,17 @@ fun ChatListView() {
         inviteFriends = { showPairing = true },
         createGroup = { showNewGroup = true },
         openNearby = { navController.navigate(AeroRoutes.nearby()) },
+        openRadar = { showRadar = true },
+        // Montagna: la chat (o il gruppo) piu' recente, dove allegare la posizione; altrimenti un gruppo nuovo.
+        shareLocation = {
+            val chat = conversations?.firstOrNull {
+                (it.type == ConversationType.direct || (it.type == ConversationType.group && !it.isFlightLounge)) &&
+                    !DemoPeerService.isDemoConversation(it)
+            }
+            if (chat != null) navController.navigate(AeroRoutes.conversation(chat.id)) else showNewGroup = true
+        },
+        showTranslationHelp = { showTranslationHelp = true },
+        openDiagnosis = { showDiagnosis = true },
     )
 
     Scaffold(
@@ -350,6 +367,12 @@ fun ChatListView() {
                 actions = {
                     IconButton(onClick = {
                         Haptics.tap()
+                        navController.navigate(AeroRoutes.nearby())
+                    }) {
+                        Icon(Icons.Filled.WavingHand, contentDescription = stringResource(R.string.nearby_title))
+                    }
+                    IconButton(onClick = {
+                        Haptics.tap()
                         showPairing = true
                     }) {
                         Icon(Icons.Filled.QrCodeScanner, contentDescription = stringResource(R.string.chat_add_buddy_qr))
@@ -363,11 +386,6 @@ fun ChatListView() {
                             onDismissRequest = { showAddMenu = false },
                             // Le voci piu' usate in alto; condivisione dell'app, cartolina e prova in fondo.
                             items = listOf(
-                                AeroMenuItem(stringResource(R.string.nearby_title), Icons.Outlined.WavingHand) {
-                                    Haptics.tap()
-                                    showAddMenu = false
-                                    navController.navigate(AeroRoutes.nearby())
-                                },
                                 AeroMenuItem(stringResource(R.string.chat_new_travel_group), Icons.Outlined.Groups) {
                                     Haptics.tap()
                                     showAddMenu = false
@@ -463,11 +481,29 @@ fun ChatListView() {
                 }
             },
             onJoined = { pendingFlightLounge = it },
+            onInvite = {
+                // La Cabina resta pronta: si apre dopo, dal foglio "Invita amici" chiuso.
+                pendingFlightLounge = null
+                inviteAfterBoarding = true
+            },
+        )
+    }
+    if (inviteAfterBoarding && !showBoardingPass) {
+        QRPairingSheet(onDismiss = { inviteAfterBoarding = false })
+    }
+    if (showDiagnosis) com.stefanobrandi.aerochat.ui.nearby.NobodyNearbySheet(onDismiss = { showDiagnosis = false })
+    if (showTranslationHelp) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showTranslationHelp = false },
+            title = { Text(stringResource(R.string.growth14_mode_abroad_translate)) },
+            text = { Text(stringResource(R.string.growth14_translation_help), color = AeroTheme.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = { showTranslationHelp = false }) { Text(stringResource(R.string.flight_ok), color = AeroTheme.accentCyan) }
+            },
+            containerColor = AeroTheme.surface,
         )
     }
     if (showFlightCard) FlightCardSheet(onDismiss = { showFlightCard = false })
-    var showRadar by remember { mutableStateOf(false) }
-    var showEmergency by remember { mutableStateOf(false) }
     if (showRadar) com.stefanobrandi.aerochat.ui.lounge.RadarSheet(onDismiss = { showRadar = false })
     if (showEmergency) com.stefanobrandi.aerochat.ui.lounge.EmergencySheet(onDismiss = { showEmergency = false })
     if (showProfile) {

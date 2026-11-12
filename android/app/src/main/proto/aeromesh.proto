@@ -29,6 +29,7 @@ enum PacketType {
   TYPING = 16;        // "sta scrivendo": diretto o di gruppo (mai Cabina Pubblica/del volo), ttl 2, mai in coda: extra_data = TypingIndicator
   PRESENCE = 17;      // "chi e' vicino": recipient = Lounge (8 zeri), chiave della Lounge, ttl 1, mai in coda/DB/notifiche: extra_data = Presence
   CONTACT_REQUEST = 18; // "Saluta"/"Sfida": diretto, chiave diretta, ttl 2, mai in coda, niente ACK: extra_data = ContactRequest
+  BOARD_POST = 20;    // bacheca della cabina: recipient = Lounge (8 zeri), chiave della Lounge, ttl 3, relay consentito, mai in coda/DB: extra_data = BoardPost
 }
 
 message MeshEnvelope {

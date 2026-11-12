@@ -10,6 +10,7 @@ struct PaywallView: View {
     @State private var purchasing: String?
     @State private var message: String?
     @State private var legalDocument: LegalDocument?
+    @State private var showOfferCode = false
 
     private struct Offer: Identifiable {
         let id: String
@@ -48,6 +49,14 @@ struct PaywallView: View {
                         if let message {
                             Text(message).font(.footnote).foregroundStyle(AeroTheme.textSecondary)
                         }
+                        ReferralProgressView(state: environment.referral)
+                        Button("Hai un codice?") {
+                            Haptics.tap()
+                            showOfferCode = true
+                        }
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(AeroTheme.accentCyan)
+                        .frame(maxWidth: .infinity)
                         Button("Ripristina acquisti") {
                             Task {
                                 await environment.restorePurchases()
@@ -94,6 +103,15 @@ struct PaywallView: View {
             }
         }
         .sheet(item: $legalDocument) { LegalView(document: $0) }
+        // Codici promozionali: foglio di sistema di riscatto dei codici offerta (gli acquisti arrivano da
+        // `Transaction.updates`, gia' ascoltato da `EntitlementManager`).
+        .offerCodeRedemption(isPresented: $showOfferCode) { result in
+            if case .failure = result {
+                message = String(localized: "Codice non riscattato: serve la connessione a internet.")
+            } else {
+                Task { await environment.restorePurchases() }
+            }
+        }
     }
 
     private var header: some View {
@@ -171,5 +189,37 @@ struct PaywallView: View {
             Haptics.error()
             message = String(localized: "Acquisto non completato: \(error.localizedDescription)")
         }
+    }
+}
+
+/// Premio inviti: "2 su 3 amici invitati", poi Pass inviti attivo / gia' ottenuto.
+struct ReferralProgressView: View {
+
+    let state: ReferralProgram.State
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "gift.fill").foregroundStyle(AeroTheme.accentEmerald)
+                Text("\(state.progress) su \(ReferralProgram.goal) amici invitati")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AeroTheme.textPrimary)
+            }
+            ProgressView(value: Double(state.progress), total: Double(ReferralProgram.goal))
+                .tint(AeroTheme.accentEmerald)
+            Group {
+                if state.isPassActive() {
+                    Text("Pass inviti attivo fino al \(Date(unixMilliseconds: state.passUntilMs).formatted(date: .abbreviated, time: .shortened)) (solo per te)")
+                } else if state.rewardGranted {
+                    Text("Premio inviti già ottenuto: grazie per aver portato i tuoi amici a bordo!")
+                } else {
+                    Text("Quando 3 amici nuovi si aggiungono con il tuo QR o il tuo link, ricevi 24 ore di Pass gratis (solo per te, una volta).")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(AeroTheme.textSecondary)
+        }
+        .padding(14)
+        .background(AeroTheme.surface, in: RoundedRectangle(cornerRadius: AeroTheme.cornerRadius, style: .continuous))
     }
 }

@@ -64,3 +64,26 @@ message ContactRequest {
 ## 3. Cose solo locali (nessun wire)
 - Ricordo del viaggio, classifica del volo (partite vinte durante il volo), testi di consegna "umani",
   schermata principale contestuale, modalita' prova col passeggero virtuale: vedi README delle due app.
+
+## 4. RADAR_PING = 19 (radar di prossimita' piu' preciso)
+
+> Stato (2026-11-11): implementato su iOS. Android lo ignora (PacketType sconosciuto) senza problemi;
+> per parita' basta rispondere con l'RSSI (campo 2) e applicare lo stesso filtro/modello di distanza.
+
+- Envelope: `recipient_id` = 8 zeri (Lounge), chiave della Lounge, `ttl` = 1, inviato con `send(toNode:)`
+  **a un solo vicino diretto**, ogni 2 s finche' il radar e' a schermo e l'app in primo piano. Mai in coda,
+  mai nel DB (gestito subito dopo la dedup in memoria, prima di `seen_packets`), niente ACK.
+- `extra_data` = `RadarPing` (`aeromesh_ext.proto`):
+  `target_node_id` (8 byte, il ricevente scarta se non e' il proprio), `rssi_dbm` (**sint32**, RSSI filtrato
+  misurato dal mittente su quel link; 0 = non disponibile), `ni_discovery_token` (solo iPhone UWB:
+  `NIDiscoveryToken` archiviato con `NSKeyedArchiver` secure coding, max 1024 byte), `is_active`
+  (false = radar chiuso, il ricevente ferma la sessione UWB).
+- Accettato solo con `hop_count == 0`, dal `node_id` gia' identificato su quel link, mittente non bloccato.
+- RSSI remoto: chi e' peripheral non conosce l'RSSI del central collegato; usa quello del ping se non ne
+  ha uno proprio, valido 8 s.
+- RSSI locale: polling a 1 s con il radar aperto + filtro di Kalman 1D (rumore misura 16 dBm², processo
+  2 dBm²/s, picchi > 15 dB pesati 4 volte meno). Distanza: `d = 10^((-59 - rssi) / (10 * 2.3))` m, limitata
+  a 0,3…60 m, mostrata arrotondata ("≈ 3 m"). Radar in scala logaritmica 0,3 m (centro) … 30 m (bordo),
+  anelli a 1, 5 e 30 m.
+- UWB (iPhone 11+): una `NISession` per vicino; quando entrambi hanno il radar aperto e si sono scambiati
+  i token, distanza al centimetro e direzione (se il chip la fornisce) sostituiscono la stima Bluetooth.

@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 /// Impostazioni in 5 sezioni: Profilo, Privacy, Notifiche, Abbonamento, Info e legale (stesse funzioni di prima,
 /// meno righe in primo piano: strumenti di viaggio, filtri e documenti legali stanno in sotto-pagine).
@@ -17,6 +18,11 @@ struct SettingsView: View {
     @State private var showPaywall = false
     @State private var showFlightCard = false
     @State private var showRadar = false
+    @State private var showPassport = false
+    @AppStorage(AppSettings.Key.liveActivity) private var liveActivity = true
+    /// Notifiche negate in passato: la riga lo dice e porta alle Impostazioni.
+    @State private var notificationStatus: UNAuthorizationStatus?
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showEmergency = false
     @AppStorage(AppSettings.Key.smartReplies) private var smartReplies = true
     @State private var blockedCount = 0
@@ -47,7 +53,17 @@ struct SettingsView: View {
             .sheet(isPresented: $showFlightCard) { FlightCardSheet() }
             .sheet(isPresented: $showRadar) { RadarSheet() }
             .sheet(isPresented: $showEmergency) { EmergencySheet() }
-            .task { await refreshCounts() }
+            .sheet(isPresented: $showPassport) { PassportSheet() }
+            .onChange(of: liveActivity) { _, _ in environment.liveActivitySettingChanged() }
+            .task {
+                await refreshCounts()
+                notificationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            }
+            // Di ritorno dalle Impostazioni di iOS la riga si aggiorna da sola.
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                Task { notificationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus }
+            }
             .onChange(of: demoMode) { _, enabled in
                 Task { await environment.setDemoMode(enabled) }
             }
@@ -91,6 +107,7 @@ struct SettingsView: View {
         List {
             Section {
                 settingsRow("Cartolina di volo", systemImage: "sparkles.rectangle.stack") { showFlightCard = true }
+                settingsRow("Passaporto di viaggio", systemImage: "book.closed.fill") { showPassport = true }
                 settingsRow("Radar di prossimità", systemImage: "dot.radiowaves.left.and.right") { showRadar = true }
                 settingsRow("Avviso di emergenza", systemImage: "exclamationmark.triangle") { showEmergency = true }
                 if CabinAssistant.isAvailable {
@@ -200,19 +217,37 @@ struct SettingsView: View {
         Section {
             Button {
                 Haptics.tap()
-                if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
+                // Mai chieste: la richiesta di sistema; altrimenti le Impostazioni di iOS.
+                if notificationStatus == .notDetermined {
+                    Task {
+                        _ = await LocalNotificationCenter().requestAuthorization()
+                        notificationStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+                    }
+                } else if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                    openURL(url)
+                }
             } label: {
                 HStack {
                     Label("Notifiche di AeroChat", systemImage: "bell.badge")
                         .foregroundStyle(AeroTheme.textPrimary)
                     Spacer()
+                    if notificationStatus == .denied {
+                        Text("Disattivate")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.red)
+                    }
                     Image(systemName: "arrow.up.forward.app").font(.caption.weight(.semibold)).foregroundStyle(AeroTheme.textSecondary)
                 }
             }
+            Toggle(isOn: $liveActivity) {
+                Label("Attività in tempo reale", systemImage: "airplane.circle")
+                    .foregroundStyle(AeroTheme.textPrimary)
+            }
+            .tint(AeroTheme.accentCyan)
         } header: {
             Text("Notifiche")
         } footer: {
-            Text("Messaggi, richieste di persone vicine e la cartolina a fine volo arrivano anche a schermo spento.")
+            Text("Messaggi, richieste di persone vicine e la cartolina a fine volo arrivano anche a schermo spento. L'attività in tempo reale «A bordo» compare sulla schermata di blocco solo durante il volo.")
         }
         .listRowBackground(AeroTheme.surface)
     }

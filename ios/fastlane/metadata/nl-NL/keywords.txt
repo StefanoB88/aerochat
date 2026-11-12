@@ -1,1 +1,1 @@
-vliegtuigmodus,geen internet,vlucht,reizen,festival,versleuteld,dichtbij,cruise,trein,p2p,wifi
+internet,vliegtuigmodus,vliegtuig,vlucht,walkie,talkie,cruise,festival,wifi,reizen,bereik,chat,spel

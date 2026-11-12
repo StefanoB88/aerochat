@@ -84,6 +84,11 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice|microphone" />
 
+        <!-- Promemoria del giorno di partenza (07:00), programmato con AlarmManager. -->
+        <receiver
+            android:name=".core.flight.FlightReminderReceiver"
+            android:exported="false" />
+
         <!-- La fotocamera di sistema scrive lo scatto in cache/camera tramite questo URI. -->
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -101,6 +106,11 @@
     <queries>
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <!-- "Traduci" nel menu di un messaggio: traduttori installati (ACTION_PROCESS_TEXT). -->
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
         </intent>
     </queries>
 

@@ -46,6 +46,8 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
   case typing // = 16
   case presence // = 17
   case contactRequest // = 18
+  case radarPing // = 19
+  case boardPost // = 20
   case UNRECOGNIZED(Int)
 
   init() {
@@ -73,6 +75,8 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
     case 16: self = .typing
     case 17: self = .presence
     case 18: self = .contactRequest
+    case 19: self = .radarPing
+    case 20: self = .boardPost
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -98,6 +102,8 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
     case .typing: return 16
     case .presence: return 17
     case .contactRequest: return 18
+    case .radarPing: return 19
+    case .boardPost: return 20
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -123,6 +129,8 @@ nonisolated enum Aeromesh_V1_PacketType: SwiftProtobuf.Enum, Swift.CaseIterable 
     .typing,
     .presence,
     .contactRequest,
+    .radarPing,
+    .boardPost,
   ]
 
 }
@@ -222,6 +230,8 @@ nonisolated extension Aeromesh_V1_PacketType: SwiftProtobuf._ProtoNameProviding 
     16: .same(proto: "TYPING"),
     17: .same(proto: "PRESENCE"),
     18: .same(proto: "CONTACT_REQUEST"),
+    19: .same(proto: "RADAR_PING"),
+    20: .same(proto: "BOARD_POST"),
   ]
 }
 

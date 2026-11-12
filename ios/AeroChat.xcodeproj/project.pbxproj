@@ -470,8 +470,9 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "AeroChat usa il Bluetooth per scambiare messaggi cifrati con i compagni di volo vicini, anche senza Wi-Fi o rete cellulare.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AeroChat usa la fotocamera per inquadrare il QR Code dei compagni di volo e per scattare le foto da inviare.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AeroChat usa la posizione solo quando lo chiedi tu, per allegarla a un messaggio di emergenza ai telefoni vicini. Non viene mai inviata a server.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AeroChat usa la posizione solo quando lo chiedi tu: per condividerla in una chat o allegarla a un messaggio di emergenza ai telefoni vicini. Non viene mai inviata a server.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AeroChat usa il microfono per registrare le note vocali da inviare ai compagni di volo.";
+				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "AeroChat misura con il chip UWB la distanza e la direzione degli iPhone vicini che hanno il radar aperto, per aiutarti a ritrovare i tuoi compagni di viaggio.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "AeroChat salva nel rullino le foto ricevute in chat quando lo chiedi tu.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AeroChat accede alle foto che scegli di condividere con i compagni di volo.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
@@ -524,8 +525,9 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "AeroChat usa il Bluetooth per scambiare messaggi cifrati con i compagni di volo vicini, anche senza Wi-Fi o rete cellulare.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AeroChat usa la fotocamera per inquadrare il QR Code dei compagni di volo e per scattare le foto da inviare.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AeroChat usa la posizione solo quando lo chiedi tu, per allegarla a un messaggio di emergenza ai telefoni vicini. Non viene mai inviata a server.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AeroChat usa la posizione solo quando lo chiedi tu: per condividerla in una chat o allegarla a un messaggio di emergenza ai telefoni vicini. Non viene mai inviata a server.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AeroChat usa il microfono per registrare le note vocali da inviare ai compagni di volo.";
+				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "AeroChat misura con il chip UWB la distanza e la direzione degli iPhone vicini che hanno il radar aperto, per aiutarti a ritrovare i tuoi compagni di viaggio.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "AeroChat salva nel rullino le foto ricevute in chat quando lo chiedi tu.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AeroChat accede alle foto che scegli di condividere con i compagni di volo.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
