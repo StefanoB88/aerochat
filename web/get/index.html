@@ -42,14 +42,8 @@
         <p id="stay-wrap" hidden><button type="button" id="stay" class="badge" style="min-width:0;justify-content:center;margin:0 auto">Resta su questa pagina</button></p>
 
         <div class="badges" style="margin-top:1.2rem">
-          <a class="badge" id="ios" href="https://apps.apple.com/app/idXXXXXXXXX" rel="noopener">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1 5h2v6.6l2.3-2.3 1.4 1.4L12 17.4l-4.7-4.7 1.4-1.4L11 13.6V7Z"/></svg>
-            <span><small id="ios-small">Scarica su</small><strong>App Store</strong></span>
-          </a>
-          <a class="badge" id="android" href="https://play.google.com/store/apps/details?id=com.stefanobrandi.aerochat" rel="noopener">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3.5v17a1 1 0 0 0 1.5.86l14.7-8.5a1 1 0 0 0 0-1.72L5.5 2.64A1 1 0 0 0 4 3.5Z"/></svg>
-            <span><small id="android-small">Disponibile su</small><strong>Google Play</strong></span>
-          </a>
+          <a class="store-badge" id="ios" href="https://apps.apple.com/app/idXXXXXXXXX" rel="noopener"><img id="ios-img" src="/aerochatwebsite/badges/app-store-it.svg" alt="Scarica su App Store" width="162" height="54"></a>
+          <a class="store-badge" id="android" href="https://play.google.com/store/apps/details?id=com.stefanobrandi.aerochat" rel="noopener"><img id="android-img" src="/aerochatwebsite/badges/google-play-it.png" alt="Disponibile su Google Play" width="182" height="54"></a>
         </div>
         <p class="note" id="tip">Installala prima di partire: a bordo basterà il Bluetooth.</p>
         <p class="note"><a href="/aerochatwebsite/" id="home">Scopri AeroChat</a></p>
@@ -100,11 +94,17 @@
       setText("copy", "Copy code");
       setText("code-hint", "After installing, open Settings › Flight Group Pass and tap “Have a code?”.");
       setText("stay", "Stay on this page");
-      setText("ios-small", "Download on the");
-      setText("android-small", "Get it on");
+      setBadge("ios-img", "app-store-en.svg", "Download on the App Store");
+      setBadge("android-img", "google-play-en.png", "Get it on Google Play");
       setText("tip", "Install it before you leave: on board, Bluetooth is all you need.");
       setText("home", "Discover AeroChat");
-      document.getElementById("home").setAttribute("href", "/en/");
+      document.getElementById("home").setAttribute("href", "/aerochatwebsite/en/");
+    }
+
+    // Badge ufficiali degli store nella lingua giusta (file locali in /badges).
+    function setBadge(id, file, alt) {
+      var el = document.getElementById(id);
+      if (el) { el.src = "/aerochatwebsite/badges/" + file; el.alt = alt; }
     }
 
     function setText(id, text) {

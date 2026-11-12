@@ -33,9 +33,10 @@ L'app apre `…/aerochatwebsite/privacy`, `/terms` e `/get` **senza** estensione
   legale** (c'è un commento HTML in testa) e vanno tenute allineate con `ios/AeroChat/UI/Settings/LegalView.swift`
   e la controparte Android.
 - Contatto unico (supporto e segnalazioni): `aerochat.help@gmail.com`.
-- I badge degli store sono pulsanti disegnati in CSS. Per la massima fedeltà alle linee guida si possono
-  sostituire con i badge ufficiali (Apple Marketing Resources, Google Play badge generator) salvati in locale
-  in `web/` come SVG/PNG, senza linkarli da CDN.
+- Badge degli store: quelli ufficiali, salvati in `badges/` (nessun CDN), in italiano e inglese.
+  App Store: SVG nero da toolbox.marketingtools.apple.com (`/api/v2/badges/download-on-the-app-store/black/it-it`).
+  Google Play: PNG da play.google.com/intl/en_us/badges (`it_badge_web_generic.png`), ritagliato del margine
+  trasparente per avere la stessa altezza del badge Apple. Non modificarne colori o proporzioni.
 - Le card "Scambio posto" e "Bacheca della cabina" sono marcate "In arrivo": togliere il tag quando esce la 1.4.
 
 ## Pagina `/get`

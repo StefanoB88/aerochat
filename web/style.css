@@ -165,6 +165,13 @@ h3 { font-size: 1.15rem; font-weight: 700; }
 .badge small { font-size: .72rem; color: var(--text-2); }
 .badge strong { font-size: 1.1rem; font-weight: 700; }
 
+/* Badge ufficiali degli store (Apple Marketing Tools, Google Play badges), salvati in /badges. Stessa altezza per entrambi. */
+.badges { align-items: center; }
+.store-badge { display: inline-flex; border-radius: 10px; transition: transform .15s; }
+.store-badge img { display: block; width: auto; height: 54px; }
+.store-badge:hover { transform: translateY(-1px); }
+.store-badge:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+
 .btn {
   display: inline-flex;
   align-items: center;
