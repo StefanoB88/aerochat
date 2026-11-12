@@ -116,7 +116,7 @@
 
 ## 5. Email e supporto
 
-- [ ] Caselle `aerochat.help@gmail.com` e `aerochat.help@gmail.com` attive (inoltro o casella dedicata), con SPF, DKIM, DMARC.
+- [x] Casella `aerochat.help@gmail.com` attiva (supporto e segnalazioni).
 - [ ] Risposta automatica con link alle FAQ e tempi di risposta (48 h supporto, 24 h segnalazioni come dichiarato
       nei termini).
 - [ ] Procedura segnalazioni: registro, decisione, cancellazione dei dati entro 90 giorni (come da informativa).
